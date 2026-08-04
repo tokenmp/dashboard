@@ -1,0 +1,21 @@
+# TokenMP Dashboard —— FrankenPHP (Caddy + PHP) 运行时配置
+# https://frankenphp.dev/docs/config
+
+{
+	skip_install_trust
+	frankenphp
+}
+
+{$SERVER_NAME::80} {
+	root {$SERVER_ROOT:/app/public}
+	encode zstd br gzip
+
+	# ThinkPHP 兼容模式：
+	# 已存在的静态文件（含 /static/assets/*）直接返回；其余内部重写到
+	# /index.php?s=<path>，由 ThinkPHP 经 $_GET['s'] 解析 pathinfo。
+	# 这绕开了 FrankenPHP 未设置 PATH_INFO、而 ThinkPHP 非 CLI 又不读
+	# REQUEST_URI 导致路由失配的问题。
+	try_files {path} /index.php?s={path}&{query}
+
+	php_server
+}

@@ -1,0 +1,28 @@
+# TokenMP Dashboard —— FrankenPHP（Caddy + PHP）单容器
+#
+# 一键起：  docker compose up --build
+# 访问：    http://localhost:${PORT:-8080}
+#
+# 配置通过环境变量注入（ThinkPHP 的 env() 读取 $_ENV）。
+services:
+  app:
+    build: .
+    image: tokenmp-dashboard:latest
+    container_name: tokenmp-dashboard
+    ports:
+      - "${PORT:-8080}:80"
+    environment:
+      # ⚠️ 生产务必改为强随机值！可通过宿主机环境变量覆盖：
+      #   export JWT_SECRET=$(openssl rand -hex 32)
+      JWT_SECRET: ${JWT_SECRET:-please-change-this-to-a-random-string}
+      JWT_EXPIRE: "604800"
+      JWT_PREFIX: Bearer
+      APP_DEBUG: "false"
+      # 接入数据库时按需补充（需镜像含对应扩展，当前已装 pdo_mysql）：
+      # DB_TYPE: mysql
+      # DB_HOST: db
+      # DB_NAME: tokenmp
+      # DB_USER: root
+      # DB_PASS: secret
+      # DB_PORT: "3306"
+    restart: unless-stopped
