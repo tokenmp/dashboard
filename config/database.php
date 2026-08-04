@@ -58,6 +58,46 @@ return [
             'fields_cache'    => false,
         ],
 
+        // PostgreSQL 连接（app\model 下的模型通过 $connection = 'pgsql' 使用）
+        // 连接信息通过环境变量注入，参考 .example.env 中的 PG_* 配置。
+        'pgsql' => [
+            // 数据库类型
+            'type'            => 'pgsql',
+            // 服务器地址
+            'hostname'        => env('PG_HOST', '127.0.0.1'),
+            // 数据库名
+            'database'        => env('PG_DB', 'tokenmp_prod'),
+            // 用户名
+            'username'        => env('PG_USER', 'postgres'),
+            // 密码
+            'password'        => env('PG_PASS', ''),
+            // 端口
+            'hostport'        => env('PG_PORT', '5432'),
+            // 数据库连接参数
+            'params'          => [],
+            // 数据库编码
+            'charset'         => env('PG_CHARSET', 'utf8'),
+            // 数据库表前缀
+            'prefix'          => env('PG_PREFIX', ''),
+
+            // 数据库部署方式:0 集中式(单一服务器),1 分布式(主从服务器)
+            'deploy'          => 0,
+            // 数据库读写是否分离 主从式有效
+            'rw_separate'     => false,
+            // 读写分离后 主服务器数量
+            'master_num'      => 1,
+            // 指定从服务器序号
+            'slave_no'        => '',
+            // 是否严格检查字段是否存在
+            'fields_strict'   => true,
+            // 是否需要断线重连
+            'break_reconnect' => false,
+            // 监听SQL
+            'trigger_sql'     => env('APP_DEBUG', true),
+            // 开启字段缓存
+            'fields_cache'    => false,
+        ],
+
         // 更多的数据库配置信息
     ],
 ];

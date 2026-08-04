@@ -13,3 +13,6 @@ Thumbs.db
 
 # Node
 node_modules
+
+# 本地数据库结构导出（服务器快照，勿提交）
+/db-backup
