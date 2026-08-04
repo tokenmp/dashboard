@@ -29,14 +29,17 @@ client.interceptors.request.use((config) => {
   return config;
 });
 
-// 响应拦截：401 清 token 并跳登录
+// 响应拦截：401 清 token 并跳登录，带上来源地址便于登录后返回
 client.interceptors.response.use(
   (response) => response,
   (error) => {
     if (error.response?.status === 401) {
       localStorage.removeItem(TOKEN_KEY);
       if (window.location.pathname !== '/login') {
-        window.location.href = '/login';
+        const from = encodeURIComponent(
+          window.location.pathname + window.location.search,
+        );
+        window.location.href = `/login?redirect=${from}`;
       }
     }
     return Promise.reject(error);
