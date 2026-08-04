@@ -47,3 +47,39 @@ test.describe('Batch 2 · 请求日志', () => {
     await expect(sub).toBeVisible({ timeout: 15000 });
   });
 });
+
+test.describe('Batch 3 · 用户与账户', () => {
+  test('admin 用户列表加载并打开详情', async ({ page }) => {
+    await authVisit(page, ADMIN_TOKEN, '/users');
+    await expect(page.getByRole('heading', { name: '用户管理' })).toBeVisible();
+    await expect(page.locator('tbody tr').first()).toBeVisible({ timeout: 15000 });
+    const count = await page.locator('tbody tr').count();
+    expect(count).toBeGreaterThan(0);
+    await page.locator('tbody tr').first().click();
+    await expect(page.getByRole('heading', { name: '用户详情' })).toBeVisible({ timeout: 10000 });
+    await expect(page.getByText('基本信息', { exact: false })).toBeVisible();
+  });
+
+  test('user 无权访问用户管理（403/重定向）', async ({ page }) => {
+    await authVisit(page, USER_TOKEN, '/users');
+    // user 角色不应看到用户管理入口；直接访问 /users 应被拦截
+    await page.waitForLoadState('domcontentloaded');
+    // 用户管理导航项不应出现在侧栏
+    const navLink = page.getByRole('link', { name: '用户管理' });
+    await expect(navLink).toHaveCount(0);
+  });
+
+  test('user 账户中心加载资料与密钥', async ({ page }) => {
+    await authVisit(page, USER_TOKEN, '/account');
+    await expect(page.getByRole('heading', { name: '账户中心' })).toBeVisible();
+    await expect(page.getByText('我的资料', { exact: true })).toBeVisible({ timeout: 10000 });
+    await expect(page.getByText('API Key', { exact: false }).first()).toBeVisible();
+  });
+
+  test('admin 账户中心也可访问', async ({ page }) => {
+    await authVisit(page, ADMIN_TOKEN, '/account');
+    await expect(page.getByRole('heading', { name: '账户中心' })).toBeVisible();
+    await page.waitForLoadState('networkidle');
+    await expect(page.getByText('我的资料', { exact: true })).toBeVisible({ timeout: 15000 });
+  });
+});

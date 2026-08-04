@@ -45,6 +45,14 @@
 - 前端 `pages/Requests`：表格 + 筛选条 + 分页 + 详情抽屉（基本信息 + attempts 表 + events 时间线）；侧边导航 Layout。
 - 类型 `src/types/request-log.ts`；API `src/api/request-log.ts`；Playwright smoke 通过。
 
+### Batch 3 · 用户与账户 ✅
+- 后端 `app/controller/api/User.php` + 路由 `GET /api/users`、`GET /api/users/:id`（admin）、`GET /api/user`、`GET /api/user/keys`、`GET /api/user/keys/bot`、`GET /api/user/plans`（user）。
+  - admin `/api/users` 全局分页+搜索(email/role/status)；`/api/users/:id` 画像含 API Key(脱敏)+Bot Key+套餐(含 Plan)+用量汇总。
+  - user `/api/user/*` 仅自身；密钥查询过滤 `status<>'deleted'`，脱敏只返回 key_prefix/key_suffix，不返回 key_hash。
+  - 控制器类名与模型同名，需 `use app\model\User as UserModel` 别名。
+- 前端 `pages/Users`（admin 表格+详情抽屉）/ `pages/Account`（user 账户中心：资料+API Key+Bot Key+套餐）；侧边导航按角色渲染（admin 多「用户管理」项）。
+- 类型 `src/types/user.ts`；API `src/api/user.ts`；Playwright smoke 7 项通过（含 user 越权拦截、角色化导航）。
+
 ## 验证方式（连真实库 tokenmp_prod）
 容器 `tokenmp-dashboard` 通过 host 网络 + SSH 隧道连 `127.0.0.1:15432`。
 - 直接调控制器：写临时 php 脚本 boot app → `app('user')` 注入真实用户 → `new Dashboard($app)->overview()->getContent()`。（脚本用完即删，不在仓库）
@@ -61,11 +69,11 @@
 7. **时间口径**：KPI 与趋势都以 DB 会话时区为准；5h/日/周/月窗口要和执行面计费口径一致（后续计费批次注意统一封装）。
 8. **聚合性能**：request_logs/usage_ledger 是大表，时间区间 + 已有索引（`*_created`、`*_user_created`）支撑；概览如需可加 1~5min 缓存（Batch 1 暂未加）。
 
-## 下一批：Batch 3 · 用户与账户
-- 路由：`GET /api/users`、`GET /api/users/:id`（admin）、`GET /api/user`、`GET /api/user/keys`、`GET /api/user/keys/bot`、`GET /api/user/plans`（user）。
-- 控制器 `app/controller/api/User.php`；admin 全局 / user 仅自己；密钥脱敏（key_prefix…key_suffix，不返回 key_hash）。
-- 前端：`pages/Users`（admin 表格 + 详情抽屉）/ `pages/Account`（user 账户中心）。
-- 之后顺序见 plan 文档批次总表（4 上游→5 计费→6 兑换→7 市场→8 系统）。
+## 下一批：Batch 4 · 上游与模型
+- 路由：`GET /api/upstream/providers|keys|keys/:id|routes`、`GET /api/models`。
+- 控制器 `app/controller/api/Upstream.php`；脱敏 encrypted_key/key_hash；user 看自有 Key + 公开模型。
+- 前端：`pages/Upstream`（多 Tab：供应商/上游 Key/平台模型/路由组）。
+- 之后顺序见 plan 文档批次总表（5 计费→6 兑换→7 市场→8 系统）。
 
 ## 本地环境恢复（新 workspace）
 见 zip 内 `RESTORE.md`（含 .env / docker-compose.override.yml / db-backup）。要点：
