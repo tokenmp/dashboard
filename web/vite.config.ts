@@ -4,12 +4,12 @@ import path from 'node:path';
 
 // https://vite.dev/config/
 export default defineConfig(({ mode }) => {
-  const env = loadEnv(mode, __dirname, '');
+  const env = loadEnv(mode, import.meta.dirname, '');
   return {
     plugins: [react()],
     resolve: {
       alias: {
-        '@': path.resolve(__dirname, 'src'),
+        '@': path.resolve(import.meta.dirname, 'src'),
       },
     },
     server: {
@@ -23,8 +23,10 @@ export default defineConfig(({ mode }) => {
       },
     },
     build: {
-      outDir: path.resolve(__dirname, '../public/static'),
-      emptyOutDir: true,
+      outDir: path.resolve(import.meta.dirname, '../public/static'),
+      // 不清空目录，避免误删 public/static/.gitignore
+      // （该目录整体被 git 忽略，构建产物由部署流程负责清理）
+      emptyOutDir: false,
       assetsDir: 'assets',
       sourcemap: false,
     },
