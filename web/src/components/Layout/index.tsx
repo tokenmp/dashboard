@@ -1,6 +1,6 @@
 import { useEffect } from 'react';
 import { NavLink, Outlet, useNavigate } from 'react-router-dom';
-import { LayoutDashboard, ScrollText, Users, UserCircle, LogOut } from 'lucide-react';
+import { LayoutDashboard, ScrollText, Users, UserCircle, Network, LogOut } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useAuthStore } from '@/store/auth';
 import { useRole } from '@/hooks/useRole';
@@ -10,6 +10,7 @@ const NAV_ITEMS = [
   { to: '/dashboard', label: '概览', icon: LayoutDashboard, adminOnly: false },
   { to: '/requests', label: '请求日志', icon: ScrollText, adminOnly: false },
   { to: '/users', label: '用户管理', icon: Users, adminOnly: true },
+  { to: '/upstream', label: '上游与模型', icon: Network, adminOnly: false },
   { to: '/account', label: '账户中心', icon: UserCircle, adminOnly: false },
 ];
 

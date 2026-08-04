@@ -4,6 +4,7 @@ import Dashboard from '@/pages/Dashboard';
 import Requests from '@/pages/Requests';
 import Users from '@/pages/Users';
 import Account from '@/pages/Account';
+import Upstream from '@/pages/Upstream';
 import NotFound from '@/pages/NotFound';
 import RequireAuth from '@/components/RequireAuth';
 import Layout from '@/components/Layout';
@@ -30,6 +31,7 @@ export const router = createBrowserRouter([
       { path: 'dashboard', element: <Dashboard /> },
       { path: 'requests', element: <Requests /> },
       { path: 'users', element: <Users /> },
+      { path: 'upstream', element: <Upstream /> },
       { path: 'account', element: <Account /> },
     ],
   },
