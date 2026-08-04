@@ -63,6 +63,15 @@ Route::group('api', function () {
             Route::get('routes', 'api/Upstream/routes');
         });
         Route::get('models', 'api/Upstream/models');
+
+        // 计费用量
+        Route::group('usage', function () {
+            Route::get('ledger', 'api/Usage/ledger');
+            Route::get('quota', 'api/Usage/quota');
+        });
+        Route::group('price', function () {
+            Route::get('rules', 'api/Usage/rules');
+        });
     })->middleware(Auth::class);
 });
 

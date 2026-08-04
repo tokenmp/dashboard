@@ -62,6 +62,14 @@
 - 前端 `pages/Upstream`（多 Tab：上游 Key / 供应商 / 路由组 / 平台模型）；`KeysTab` 独立文件含详情抽屉 + 用量进度条。
 - 类型 `src/types/upstream.ts`；API `src/api/upstream.ts`；Playwright smoke 11 项通过。
 
+### Batch 5 · 计费用量 ✅
+- 后端 `app/controller/api/Usage.php` + 路由 `GET /api/usage/ledger|quota`、`GET /api/price/rules`。
+  · ledger 分页+筛选（ledgerType/billingPlan/userId/时间），user 仅自己。
+  · quota admin：全平台额度池（按 billing_plan 汇总）+ Top-N 用户；user：自身各类型 已充/已用/预扣/可用。
+  · price rules admin 全局；PostgreSQL `integer[]`（days_of_week）用 `parseIntArray` 转真数组。
+- 前端 `pages/Usage`（多 Tab：账本流水 / 额度总览 / 计费规则）；token_delta/request_delta 带正负色。
+- 类型 `src/types/usage.ts`；API `src/api/usage.ts`；Playwright smoke 15 项通过。
+
 ## 验证方式（连真实库 tokenmp_prod）
 容器 `tokenmp-dashboard` 通过 host 网络 + SSH 隧道连 `127.0.0.1:15432`。
 - 直接调控制器：写临时 php 脚本 boot app → `app('user')` 注入真实用户 → `new Dashboard($app)->overview()->getContent()`。（脚本用完即删，不在仓库）
@@ -78,11 +86,11 @@
 7. **时间口径**：KPI 与趋势都以 DB 会话时区为准；5h/日/周/月窗口要和执行面计费口径一致（后续计费批次注意统一封装）。
 8. **聚合性能**：request_logs/usage_ledger 是大表，时间区间 + 已有索引（`*_created`、`*_user_created`）支撑；概览如需可加 1~5min 缓存（Batch 1 暂未加）。
 
-## 下一批：Batch 5 · 计费用量
-- 路由：`GET /api/usage/ledger`、`/api/usage/quota`、`/api/price/rules`。
-- 控制器 `app/controller/api/Usage.php`；ledger user 仅自己；quota admin/user 不同视图；price rules admin 全局。
-- 前端：`pages/Usage`（多 Tab：账本流水 / 额度总览 / 计费规则）。
-- 之后顺序见 plan 文档批次总表（6 兑换→7 市场→8 系统）。
+## 下一批：Batch 6 · 兑换码
+- 路由：`GET /api/redeem/codes`、`/api/redeem/codes/:id/redemptions`（admin）、`GET /api/user/redemptions`（user）。
+- 控制器 `app/controller/api/RedeemCode.php`；脱敏 code_hash/code_plaintext，user 看不到码本身。
+- 前端：`pages/RedeemCodes`（admin）/ `pages/MyRedemptions`（user）。
+- 之后顺序见 plan 文档批次总表（7 市场→8 系统）。
 
 ## 本地环境恢复（新 workspace）
 见 zip 内 `RESTORE.md`（含 .env / docker-compose.override.yml / db-backup）。要点：
