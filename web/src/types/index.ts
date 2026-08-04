@@ -19,6 +19,8 @@ export interface LoginResult {
  * 当前登录用户
  */
 export interface UserInfo {
-  id: number;
+  id: string;
   username: string;
+  email: string;
+  role: string;
 }
