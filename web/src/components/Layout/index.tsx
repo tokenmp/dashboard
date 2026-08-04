@@ -1,6 +1,6 @@
 import { useEffect } from 'react';
 import { NavLink, Outlet, useNavigate } from 'react-router-dom';
-import { LayoutDashboard, ScrollText, Users, UserCircle, Network, Gauge, LogOut } from 'lucide-react';
+import { LayoutDashboard, ScrollText, Users, UserCircle, Network, Gauge, Ticket, Gift, LogOut } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useAuthStore } from '@/store/auth';
 import { useRole } from '@/hooks/useRole';
@@ -12,6 +12,8 @@ const NAV_ITEMS = [
   { to: '/users', label: '用户管理', icon: Users, adminOnly: true },
   { to: '/upstream', label: '上游与模型', icon: Network, adminOnly: false },
   { to: '/usage', label: '计费用量', icon: Gauge, adminOnly: false },
+  { to: '/redeem/codes', label: '兑换码管理', icon: Ticket, adminOnly: true },
+  { to: '/my/redemptions', label: '我的兑换', icon: Gift, adminOnly: false, userOnly: true },
   { to: '/account', label: '账户中心', icon: UserCircle, adminOnly: false },
 ];
 
@@ -34,7 +36,7 @@ function Layout() {
     navigate('/login', { replace: true });
   };
 
-  const items = NAV_ITEMS.filter((i) => !i.adminOnly || isAdmin);
+  const items = NAV_ITEMS.filter((i) => (!i.adminOnly || isAdmin) && (!('userOnly' in i && i.userOnly) || !isAdmin));
 
   return (
     <div className="flex min-h-screen bg-background">

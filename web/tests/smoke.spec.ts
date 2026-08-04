@@ -158,3 +158,33 @@ test.describe('Batch 5 · 计费用量', () => {
     await expect(page.getByText('我的额度', { exact: false })).toBeVisible({ timeout: 10000 });
   });
 });
+
+test.describe('Batch 6 · 兑换码', () => {
+  test('admin 兑换码列表与兑换记录', async ({ page }) => {
+    await authVisit(page, ADMIN_TOKEN, '/redeem/codes');
+    await expect(page.getByRole('heading', { name: '兑换码管理' })).toBeVisible();
+    await expect(page.locator('tbody tr').first()).toBeVisible({ timeout: 15000 });
+    const count = await page.locator('tbody tr').count();
+    expect(count).toBeGreaterThan(0);
+    // 点击第一行打开兑换记录抽屉
+    await page.locator('tbody tr').first().click();
+    await expect(page.getByRole('heading', { name: '兑换记录' })).toBeVisible({ timeout: 10000 });
+    // code_hash/code_plaintext 不应出现
+    const body = await page.locator('body').innerText();
+    expect(body).not.toContain('code_hash');
+    expect(body).not.toContain('code_plaintext');
+  });
+
+  test('user 无权看到兑换码管理入口', async ({ page }) => {
+    await authVisit(page, USER_TOKEN, '/dashboard');
+    await page.waitForLoadState('networkidle');
+    const nav = page.getByRole('link', { name: '兑换码管理' });
+    await expect(nav).toHaveCount(0);
+  });
+
+  test('user 我的兑换记录页', async ({ page }) => {
+    await authVisit(page, USER_TOKEN, '/my/redemptions');
+    await expect(page.getByRole('heading', { name: '我的兑换记录' })).toBeVisible();
+    await page.waitForLoadState('networkidle');
+  });
+});
