@@ -16,3 +16,7 @@ node_modules
 
 # 本地数据库结构导出（服务器快照，勿提交）
 /db-backup
+
+# 本地 docker compose 覆盖文件（含环境/网络覆盖，勿提交）
+/docker-compose.override.yml
+/docker-compose.*.override.yml
