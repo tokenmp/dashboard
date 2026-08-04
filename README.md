@@ -20,9 +20,10 @@ dashboard/
 ├── public/         # Web 根目录
 │   └── static/     # 前端构建产物（由 Vite 输出，被 git 忽略）
 ├── view/           # SPA 入口 HTML 模板
-├── web/            # React 前端源码（不直接对外访问）
-└── package.json    # 根脚本（统一启动前后端）
+└── web/            # React 前端源码（不直接对外访问，所有 npm 命令在此执行）
 ```
+
+> 项目根目录不使用 npm；前端命令一律在 `web/` 下执行，后端命令用 `php think`。
 
 ## 环境要求
 
@@ -36,43 +37,41 @@ dashboard/
 
 ```bash
 composer install          # 后端依赖
-npm install               # 根脚本依赖（concurrently）
-npm run install:web       # 前端依赖（web/ 目录）
+cd web && npm install     # 前端依赖
 ```
 
-### 2. 开发模式
+### 2. 开发模式（开两个终端）
 
 ```bash
-npm run dev
+# 终端 1：后端
+php think run                          # http://localhost:8000
+
+# 终端 2：前端
+cd web && npm run dev                  # http://localhost:5173
 ```
 
-该命令会同时启动：
-
-- ThinkPHP 开发服务器：`http://localhost:8000`（API）
-- Vite 开发服务器：`http://localhost:5173`（前端）
-
-👉 **浏览器请访问 `http://localhost:5173`**，Vite 会自动把 `/api/*` 请求代理到 8000 端口。
-
-也可以单独启动：
-
-```bash
-npm run dev:api    # 仅后端
-npm run dev:web    # 仅前端
-```
+👉 **浏览器访问 `http://localhost:5173`**，Vite 会自动把 `/api/*`、`/tokenmp.svg`、
+`/favicon.ico` 代理到 8000 端口，前后端同源，无需处理跨域。
 
 ### 3. 生产构建
 
 ```bash
-npm run build
+cd web && npm run build
 ```
 
 构建产物输出到 `public/static/`（`index.html` + `assets/*`），由 Web 服务器直接提供。
 
 ## 环境变量
 
-前端环境变量位于 `web/`：
+前端环境变量位于 `web/`，**均不提交**（已 gitignore），按模板复制：
 
-| 文件 | 用途 |
-|---|---|
-| `.env.development` | 开发环境（`VITE_API_BASE_URL=/api`，`VITE_API_TARGET=http://localhost:8000`） |
-| `.env.production` | 生产环境（`VITE_API_BASE_URL=/api`） |
+```bash
+cd web
+cp .env.example .env.development   # 开发模式
+cp .env.example .env.production    # 生产构建（可选，变量均有默认值）
+```
+
+| 变量 | 用途 | 默认值 |
+|---|---|---|
+| `VITE_API_BASE_URL` | axios 请求基础路径 | `/api` |
+| `VITE_API_TARGET` | 开发期 Vite 代理目标（指向 ThinkPHP） | `http://localhost:8000` |
