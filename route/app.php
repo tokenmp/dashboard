@@ -20,6 +20,7 @@ Route::group('api', function () {
     Route::group('auth', function () {
         // 公开接口
         Route::post('login', 'api/Auth/login');
+        Route::get('public-key', 'api/Auth/publicKey');
 
         // 需鉴权的接口
         Route::group(function () {

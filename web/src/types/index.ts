@@ -16,6 +16,16 @@ export interface LoginResult {
 }
 
 /**
+ * 一次性加密公钥
+ */
+export interface PublicKeyResult {
+  keyId: string;
+  alg: string;
+  publicKey: string;
+  expiresIn: number;
+}
+
+/**
  * 当前登录用户
  */
 export interface UserInfo {

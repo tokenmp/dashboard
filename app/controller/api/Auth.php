@@ -4,6 +4,7 @@ namespace app\controller\api;
 use app\BaseController;
 use app\model\User;
 use app\service\Jwt;
+use app\service\SecretCrypto;
 
 /**
  * 认证接口
@@ -22,6 +23,9 @@ class Auth extends BaseController
      * 登录：校验管理员账号密码并签发 JWT
      * POST /api/auth/login
      *
+     * 密码为前端用一次性公钥 RSA-OAEP 加密后的 base64 密文，需带 keyId；
+     * 解密失败(密钥已用/过期/无效)返回 code:2(HTTP 410)，前端重取 key 重试。
+     *
      * 仅 role=admin 且 status=active 的用户可登录管理后台。
      * - 登录标识为邮箱（前端字段名沿用 username）；
      * - 密码哈希为 bcrypt（$2a$/$2b$），password_verify 直接兼容；
@@ -29,11 +33,19 @@ class Auth extends BaseController
      */
     public function login()
     {
-        $account  = (string) $this->request->post('username', '');
-        $password = (string) $this->request->post('password', '');
+        $account     = (string) $this->request->post('username', '');
+        $encPassword = (string) $this->request->post('password', ''); // RSA-OAEP 密文(base64)
+        $keyId       = (string) $this->request->post('keyId', '');
 
-        if ($account === '' || $password === '') {
+        if ($account === '' || $encPassword === '' || $keyId === '') {
             return fail('账号和密码不能为空', 1, 422);
+        }
+
+        // 一次性私钥解密；失败(密钥已用/过期/无效)→ 专用错误，前端重取 key 重试。
+        // 此步骤发生在密码校验之前，不泄露密码对错。
+        $password = SecretCrypto::decrypt($encPassword, $keyId);
+        if ($password === null) {
+            return fail('加密凭证已失效，请重试', 2, 410);
         }
 
         // 仅管理员可登录；按邮箱查找
@@ -59,6 +71,26 @@ class Auth extends BaseController
             'token'    => $token,
             'username' => $user->email, // 前端展示用
         ], '登录成功');
+    }
+
+    /**
+     * 签发一次性公钥（前端用 RSA-OAEP 加密密码类字段）
+     * GET /api/auth/public-key（公开，按 IP 限流防 RSA keygen DoS）
+     */
+    public function publicKey()
+    {
+        if (!SecretCrypto::acquireKeySlot((string) $this->request->ip())) {
+            return fail('请求过于频繁，请稍后再试', 1, 429);
+        }
+
+        [$keyId, $publicKey, $expiresIn] = SecretCrypto::issueKey();
+
+        return success([
+            'keyId'     => $keyId,
+            'alg'       => 'RSA-OAEP',
+            'publicKey' => $publicKey, // SPKI DER base64
+            'expiresIn' => $expiresIn,
+        ]);
     }
 
     /**
