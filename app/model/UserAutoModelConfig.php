@@ -6,13 +6,17 @@ namespace app\model;
 use think\Model;
 
 /**
- * UserAutoModelConfig —— 对应数据表 user_auto_model_configs
+ * 自动模型路由主模型配置（user_auto_model_configs）—— 用户的自动模型路由偏好
  *
- * @property string $id
- * @property string $user_id
- * @property string $primary_model_name
- * @property string $created_at
- * @property string $updated_at
+ * 用户设置的「自动模型路由」偏好，指定一个主模型，配合按顺序排列的备选模型列表（存于 user_auto_model_fallbacks）。
+ * 执行器优先使用主模型，不可用时按备选顺序降级。
+ * 每用户至多一条，属个人偏好，与套餐配额无关。
+ *
+ * @property string $id                  配置记录唯一标识
+ * @property string $user_id             所属用户，每用户至多一条
+ * @property string $primary_model_name  用户选择的主模型名
+ * @property string $created_at          创建时间
+ * @property string $updated_at          最近更新时间
  *
  * @mixin \think\Model
  */

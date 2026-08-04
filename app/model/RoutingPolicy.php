@@ -6,20 +6,25 @@ namespace app\model;
 use think\Model;
 
 /**
- * RoutingPolicy —— 对应数据表 routing_policies
+ * 路由策略（routing_policies）—— 加权打分配置
  *
- * @property string $id
- * @property string $name
- * @property float $price_weight
- * @property float $speed_weight
- * @property float $success_weight
- * @property float $availability_weight
- * @property float $concurrency_weight
- * @property float $quota_weight
- * @property float $temperature
- * @property string $status
- * @property string $created_at
- * @property string $updated_at
+ * 执行器在多条候选路由间做加权打分排序时使用的权重配置。
+ * 同一时刻全局只有一条 active 策略生效；
+ * 各维度权重取值在 0~1 之间。
+ * 纯配置表，无外键关联。
+ *
+ * @property string $id                   策略 ID（UUID 主键）
+ * @property string $name                 策略名，仅作展示
+ * @property float  $price_weight         价格维度权重（单价越低越优），默认 0.3
+ * @property float  $speed_weight         速度维度权重（延迟/首字延迟），默认 0.2
+ * @property float  $success_weight       成功率维度权重，默认 0.2
+ * @property float  $availability_weight  可用性维度权重，默认 0.15
+ * @property float  $concurrency_weight   并发余量维度权重，默认 0.1
+ * @property float  $quota_weight         配额余量维度权重，默认 0.05
+ * @property float  $temperature          打分温度/随机度，用于引入选择多样性，默认 0.1
+ * @property string $status               状态：active / disabled（全局仅一条 active）
+ * @property string $created_at           创建时间
+ * @property string $updated_at           更新时间
  *
  * @mixin \think\Model
  */

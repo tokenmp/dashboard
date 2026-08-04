@@ -6,19 +6,23 @@ namespace app\model;
 use think\Model;
 
 /**
- * UpstreamModelMapping —— 对应数据表 upstream_model_mappings
+ * 上游模型映射（upstream_model_mappings）—— 上游密钥与平台模型的桥接
  *
- * @property string $id
- * @property string $upstream_key_id
- * @property string $model_id
- * @property string|null $upstream_model_name
- * @property float|null $input_price_per_token
- * @property float|null $output_price_per_token
- * @property int|null $max_tokens
- * @property string $status
- * @property string $created_at
- * @property string $updated_at
- * @property string|null $provider_endpoint_id
+ * 定义「一条上游密钥能用上游模型名去服务哪个平台模型」的核心映射，是路由连接的中心。
+ * 同一条（上游密钥、平台模型、端点）三元组在未软删范围内唯一；
+ * 输入/输出 token 单价与最大输出长度也落在映射上。
+ *
+ * @property string      $id                      映射 ID（UUID 主键）
+ * @property string      $upstream_key_id         所用的上游密钥 ID
+ * @property string      $model_id                服务的平台模型 ID
+ * @property string|null $upstream_model_name     转发到上游时实际用的模型名（如平台模型叫 gpt-4o，上游可能要发 gpt-4o-2024-08-06）；为空时回退平台模型名
+ * @property float|null  $input_price_per_token   输入 token 单价，用于计费；可空
+ * @property float|null  $output_price_per_token  输出 token 单价，用于计费；可空
+ * @property int|null    $max_tokens              该映射上的最大输出 token 数，参与 /v1/models 的平均上下文窗口聚合；可空
+ * @property string      $status                  状态：active（默认）/ disabled / deleted（软删）
+ * @property string      $created_at              创建时间
+ * @property string      $updated_at              更新时间
+ * @property string|null $provider_endpoint_id    显式绑定的接入端点；为空时执行器按协议在该供应商的端点中自动匹配
  *
  * @mixin \think\Model
  */

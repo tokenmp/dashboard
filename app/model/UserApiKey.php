@@ -6,17 +6,22 @@ namespace app\model;
 use think\Model;
 
 /**
- * UserApiKey —— 对应数据表 user_api_keys
+ * 用户 API 密钥表（user_api_keys）—— 调用执行面接口的标准鉴权密钥
  *
- * @property string $id
- * @property string $user_id
- * @property string $name
- * @property string $key_prefix
- * @property string $key_suffix
- * @property string $key_hash
- * @property string $status
- * @property string|null $last_used_at
- * @property string $created_at
+ * 用户在管理端创建、以 OpenAI 兼容协议调用 executor 的密钥表。
+ * 创建时仅存密钥哈希（加 pepper），明文只在创建或重置那一次回显；
+ * 鉴权时按哈希反查活跃密钥定位用户。
+ * 状态支持软删除。
+ *
+ * @property string      $id            API 密钥 ID（UUID 主键）
+ * @property string      $user_id       所属用户 ID
+ * @property string      $name          密钥显示名称（用户自命名）
+ * @property string      $key_prefix    明文密钥前缀，脱敏展示用
+ * @property string      $key_suffix    明文密钥后缀，脱敏展示用
+ * @property string      $key_hash      密钥哈希，鉴权按哈希查表，明文不落库
+ * @property string      $status        状态：active（默认）/ disabled / deleted
+ * @property string|null $last_used_at  最近使用时间，由关联请求日志聚合得出
+ * @property string      $created_at    创建时间
  *
  * @mixin \think\Model
  */

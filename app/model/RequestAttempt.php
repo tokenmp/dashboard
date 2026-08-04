@@ -6,26 +6,32 @@ namespace app\model;
 use think\Model;
 
 /**
- * RequestAttempt —— 对应数据表 request_attempts
+ * request_attempts —— 请求尝试明细（同一请求向不同上游或 Key 的逐次尝试）
  *
- * @property string $id
- * @property string $request_log_id
- * @property string|null $upstream_key_id
- * @property string|null $provider_id
- * @property string|null $upstream_url
- * @property int|null $status_code
- * @property int|null $latency_ms
- * @property string|null $error_code
- * @property string|null $error_message
- * @property int $attempt_index
- * @property string $created_at
- * @property string|null $request_id
- * @property string|null $trace_id
- * @property string|null $response_body
- * @property string|null $provider_error_code
- * @property string|null $provider_error_type
- * @property int|null $provider_http_status
- * @property array $metadata
+ * 一次请求可能因路由重试而触发多次上游尝试，每次尝试都会写一行。
+ * 它记录每一次用了哪把上游 Key、走哪个供应商与上游 URL、返回的 HTTP 状态、耗时以及错误，用于还原请求的重试链路与排障。
+ * 执行过程中的路由评分等运行时信息会被合并进元数据字段，按尝试序号升序即可还原尝试顺序。
+ * 请求归档时，这些明细会随主日志一并删除。
+ * 相比 request_logs 的一次请求完整画像，这里更偏重单次上游尝试的细节。
+ *
+ * @property string      $id                    尝试主键，全局唯一标识
+ * @property string      $request_log_id        所属的请求日志；请求归档时会一并删除
+ * @property string|null $upstream_key_id       本次尝试使用的上游 Key
+ * @property string|null $provider_id           本次尝试使用的供应商
+ * @property string|null $upstream_url          本次实际请求的上游 URL
+ * @property int|null    $status_code           本次尝试返回的 HTTP 状态码
+ * @property int|null    $latency_ms            本次尝试的耗时（毫秒）；客户端取消风控会按它是否超过阈值来判定「疑似已产生成本」
+ * @property string|null $error_code            本次尝试的平台错误码
+ * @property string|null $error_message         本次尝试的错误文案
+ * @property int         $attempt_index         尝试序号，从 0 或 1 起递增，用于排序与定位元数据
+ * @property string      $created_at            创建时间
+ * @property string|null $request_id            冗余存储的 request_id，便于跨表追踪
+ * @property string|null $trace_id              冗余存储的 trace_id，便于跨表追踪
+ * @property string|null $response_body         本次上游响应的正文，用于调试
+ * @property string|null $provider_error_code   上游返回的原始错误 code
+ * @property string|null $provider_error_type   上游返回的原始错误 type
+ * @property int|null    $provider_http_status  上游返回的 HTTP 状态
+ * @property array       $metadata              排障元数据，例如路由评分的变化等运行时信息
  *
  * @mixin \think\Model
  */

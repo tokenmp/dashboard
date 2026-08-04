@@ -6,16 +6,20 @@ namespace app\model;
 use think\Model;
 
 /**
- * UserPlan —— 对应数据表 user_plans
+ * 用户套餐绑定（user_plans）—— 用户实际持有的套餐实例
  *
- * @property string $id
- * @property string $user_id
- * @property string $plan_id
- * @property string $plan_type
- * @property string $status
- * @property string $activated_at
- * @property string|null $expires_at
- * @property string $created_at
+ * 把某个套餐发放给用户后产生的一条绑定记录，代表用户持有的一个套餐实例，记录其生效状态与起止时间。
+ * Token 类套餐对同一用户互斥（分配新套餐会先停用旧的同类绑定），编程类与图像类可叠加持有多个有效实例；
+ * 过期时间为空表示永久有效。
+ *
+ * @property string      $id            绑定记录唯一标识
+ * @property string      $user_id       持有该套餐的用户
+ * @property string      $plan_id       关联的套餐模板
+ * @property string      $plan_type     冗余存储的套餐类型：coding / token / image，便于按类型筛选与替换
+ * @property string      $status        绑定状态：active（默认，当前生效）/ disabled（已取消或被替换）/ expired（已过期）
+ * @property string      $activated_at  生效起始时间，续期或批量改期时可重设
+ * @property string|null $expires_at    过期时间，为空表示永久有效
+ * @property string      $created_at    绑定创建时间
  *
  * @mixin \think\Model
  */

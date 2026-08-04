@@ -6,17 +6,22 @@ namespace app\model;
 use think\Model;
 
 /**
- * UsageLedger —— 对应数据表 usage_ledger
+ * usage_ledger —— 用户用量与余额流水账本
  *
- * @property string $id
- * @property string $user_id
- * @property string|null $request_log_id
- * @property string $ledger_type
- * @property string $billing_plan
- * @property string $token_delta
- * @property int $request_delta
- * @property string|null $reason
- * @property string $created_at
+ * 这是平台唯一的「余额变动流水」表，按用户和计费套餐类型两个维度记账。
+ * 凡是 token 充值、请求扣费、配额预留与退还、套餐发放／升级／续期／替换，都会写入一行带正负号的增减量。
+ * 统计与用量概览通过对这些增量求和，就能还原出用户「已用／已充／剩余」。
+ * 约定上扣费写负数，充值、退还与各类套餐操作写正数。
+ *
+ * @property string      $id              流水主键，全局唯一标识这笔变动
+ * @property string      $user_id         这笔流水归属的用户，是记账的第一个维度
+ * @property string|null $request_log_id  关联的请求日志；充值、套餐类等非请求场景为空
+ * @property string      $ledger_type     流水类型，说明本次变动的方向与原因：reserve 为预扣预留，charge 为实际扣费，refund 为退还，recharge 为 token 充值，adjustment 为人工调整，plan_grant 为套餐到账，plan_upgrade 为套餐升级，plan_renew 为套餐续期，plan_replace 为套餐替换
+ * @property string      $billing_plan    计费套餐类型，是记账的第二个维度：coding 为按请求次数计费的编码套餐，token 为按 token 量计费，image 为图像生成类（同样按 token 计费）
+ * @property string      $token_delta     本次流水的 token 增减量，带符号，负数表示扣减
+ * @property int         $request_delta   本次流水的请求次数增减量，主要由 coding 套餐使用，带符号，负数表示扣减
+ * @property string|null $reason          人类可读的变动说明，例如「quota charge」「quota release」「quota reservation expired」或兑换码赠送套餐的到账备注
+ * @property string      $created_at      流水产生时间；5 小时滚动窗口、日、周、月、总量等用量窗口都以此列划定
  *
  * @mixin \think\Model
  */

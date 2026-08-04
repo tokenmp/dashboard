@@ -6,15 +6,18 @@ namespace app\model;
 use think\Model;
 
 /**
- * UserRiskReset —— 对应数据表 user_risk_resets
+ * 用户风险重置（user_risk_resets）—— 风控赦免审计记录
  *
- * @property string $id
- * @property string $user_id
- * @property string $risk_type
- * @property string $reset_at
- * @property string|null $admin_user_id
- * @property string $reason
- * @property string $created_at
+ * 管理员对某用户某类派生风险执行重置时留下的审计标记，作用是一个时间分界点：风控判定时只统计该时间点之后的同类风险日志，相当于赦免其历史风险。
+ * 当前已知风险类型为 client_cancel（客户端频繁取消）。
+ *
+ * @property string      $id             记录唯一标识
+ * @property string      $user_id        被重置风险的用户
+ * @property string      $risk_type      风险类型，已知取值为 client_cancel（客户端取消风险）
+ * @property string      $reset_at       重置生效时间点，早于此点的同类风险日志不再计入风控
+ * @property string|null $admin_user_id  执行重置的管理员，可为空
+ * @property string      $reason         重置原因或备注，默认为「manual admin unblock」
+ * @property string      $created_at     记录创建时间
  *
  * @mixin \think\Model
  */

@@ -6,21 +6,24 @@ namespace app\model;
 use think\Model;
 
 /**
- * ProviderEndpoint —— 对应数据表 provider_endpoints
+ * 供应商接入端点（provider_endpoints）—— 协议与转发地址
  *
- * @property string $id
- * @property string $provider_id
- * @property string $protocol
- * @property string $path
- * @property string $status
- * @property string $created_at
- * @property string $updated_at
- * @property string|null $kind
- * @property string|null $adapter
- * @property string $method
- * @property string $auth_type
- * @property array $headers
- * @property string $request_mode
+ * 描述某供应商下「用哪个协议、走哪个 HTTP 路径、用什么适配器」的接入点，是路由链路中匹配请求协议并选出可转发 URL 的一环。
+ * 每条端点都挂在 provider 之下，并可被上游模型映射显式绑定（不绑定时由执行器按协议自动选）。
+ *
+ * @property string      $id            端点 ID（UUID 主键）
+ * @property string      $provider_id   所属供应商 ID
+ * @property string      $protocol      上游协议族，决定如何匹配路由。取值：openai / anthropic / openai_chat / openai_responses / anthropic_messages / image_generation / tokenmp_gateway / custom
+ * @property string      $path          该协议下的 HTTP 路径（如 /v1/chat/completions），与供应商 base_url 拼成最终上游 URL
+ * @property string      $status        状态：active（默认）/ disabled / deleted（软删）
+ * @property string      $created_at    创建时间
+ * @property string      $updated_at    更新时间
+ * @property string|null $kind          端点功能分类（高层语义），路由过滤用，如 llm.chat、llm.message、image.generate；可空
+ * @property string|null $adapter       具体适配器标识，如 openai.chat、anthropic.messages、openai.images、zhipu.images、volcengine.visual.images；可空
+ * @property string      $method        HTTP 方法，默认 POST，支持 GET / POST / PUT / PATCH / DELETE
+ * @property string      $auth_type     认证头类型，默认 bearer；anthropic 系列用 x-api-key
+ * @property array       $headers       附加请求头，默认空对象
+ * @property string      $request_mode  请求转发模式，默认 passthrough
  *
  * @mixin \think\Model
  */

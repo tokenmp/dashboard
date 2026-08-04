@@ -6,23 +6,29 @@ namespace app\model;
 use think\Model;
 
 /**
- * RequestLogEvent —— 对应数据表 request_log_events
+ * request_log_events —— 请求日志事件与时间线（一次请求内各阶段的结构化事件流）
  *
- * @property string $id
- * @property string $request_log_id
- * @property string|null $request_id
- * @property string|null $trace_id
- * @property string $stage
- * @property string $status
- * @property string|null $message
- * @property string|null $upstream_key_id
- * @property string|null $provider_id
- * @property string|null $upstream_url
- * @property int|null $attempt_index
- * @property int|null $status_code
- * @property int|null $duration_ms
- * @property array $metadata
- * @property string $created_at
+ * 以「时间线」的形式记录一次请求经过的每个阶段——建连、选路由、上游提交、回流、重试、风控等，用于在详情页还原整个执行过程。
+ * 每条事件都挂在所属请求日志上，并冗余 request_id 与 trace_id 便于跨表查询。
+ * 状态字段标记该阶段是信息提示、成功、失败还是被跳过。
+ * 请求归档时，事件流会随主日志级联删除。
+ * 它和 request_attempts 的区别在于：attempts 是逐次上游尝试的明细，而这里是阶段级的事件流。
+ *
+ * @property string      $id               事件主键，全局唯一标识
+ * @property string      $request_log_id   所属的请求日志，删除时级联删除其事件
+ * @property string|null $request_id       冗余存储的 request_id，便于跨表查询
+ * @property string|null $trace_id         冗余存储的 trace_id，便于跨表查询
+ * @property string      $stage            阶段标识，例如 upstream_request、upstream_body、stream_response、upstream_poll 等
+ * @property string      $status           本事件的结果状态：info 为信息提示，success 为成功，failed 为失败，skipped 为被跳过
+ * @property string|null $message          事件说明文案
+ * @property string|null $upstream_key_id  本阶段涉及的上游 Key
+ * @property string|null $provider_id      本阶段涉及的供应商
+ * @property string|null $upstream_url     本阶段涉及的上游 URL
+ * @property int|null    $attempt_index    关联的尝试序号，指向 request_attempts 的对应行
+ * @property int|null    $status_code      本阶段的 HTTP 状态码
+ * @property int|null    $duration_ms      本阶段耗时（毫秒）
+ * @property array       $metadata         本阶段的附加结构化数据
+ * @property string      $created_at       事件发生时间，按本列升序再按 id 升序即可还原阶段顺序
  *
  * @mixin \think\Model
  */

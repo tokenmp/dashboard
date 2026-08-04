@@ -6,10 +6,14 @@ namespace app\model;
 use think\Model;
 
 /**
- * SchemaMigration —— 对应数据表 schema_migrations
+ * schema_migrations —— 数据库迁移记录（记录已应用的迁移文件名与时间）
  *
- * @property string $filename
- * @property string $applied_at
+ * golang-migrate 风格的迁移台账。
+ * 每执行一个迁移脚本就写入一行文件名与应用时间，文件名作为主键用于判断某个迁移是否已被应用。
+ * dashboard 侧只读这张表用于展示与对账。
+ *
+ * @property string $filename    迁移文件名，作为唯一标识，用于判断该迁移是否已应用
+ * @property string $applied_at  迁移应用时间
  *
  * @mixin \think\Model
  */

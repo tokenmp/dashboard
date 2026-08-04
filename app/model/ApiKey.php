@@ -6,20 +6,23 @@ namespace app\model;
 use think\Model;
 
 /**
- * ApiKey —— 对应数据表 api_keys
+ * API 密钥遗留表（api_keys）—— 早期 API 密钥存储（现役已弃用）
  *
- * @property string $id
- * @property string $user_id
- * @property string $name
- * @property string $key_prefix
- * @property string $key_suffix
- * @property string $key_hash
- * @property string $status
- * @property array|null $permissions
- * @property string|null $last_used_at
- * @property string|null $expires_at
- * @property string $created_at
- * @property string $updated_at
+ * 这张遗留表在现役 Go 代码与迁移文件中均无任何引用，是平台早期的 API 密钥存储结构，DDL 残留在生产库中。
+ * 当前真正在用的用户 API 密钥表是 user_api_keys，本表可视为待清理的历史结构。
+ *
+ * @property string      $id            密钥记录 ID（UUID 主键）
+ * @property string      $user_id       所属用户 ID
+ * @property string      $name          密钥显示名称，便于区分多个 key
+ * @property string      $key_prefix    明文密钥前缀，脱敏展示用
+ * @property string      $key_suffix    明文密钥后缀，脱敏展示用
+ * @property string      $key_hash      密钥哈希，鉴权按哈希查表，明文不落库
+ * @property string      $status        密钥状态，默认 active
+ * @property array|null  $permissions   密钥级权限配置（旧设计遗留）
+ * @property string|null $last_used_at  最近一次使用该密钥的时间
+ * @property string|null $expires_at    密钥过期时间（旧设计支持密钥级有效期）
+ * @property string      $created_at    创建时间
+ * @property string      $updated_at    更新时间
  *
  * @mixin \think\Model
  */

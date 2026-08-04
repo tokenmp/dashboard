@@ -6,12 +6,15 @@ namespace app\model;
 use think\Model;
 
 /**
- * UserReleaseRead —— 对应数据表 user_release_reads
+ * 版本发布已读记录（user_release_reads）—— 更新日志的已读标记
  *
- * @property string $id
- * @property string $user_id
- * @property string $release_id
- * @property string $read_at
+ * 记录每个用户已读过哪些版本发布条目，用于前端更新日志的已读/未读与红点提示。
+ * 同一用户对同一发布至多一条，再次阅读通过覆盖更新刷新阅读时间。
+ *
+ * @property string $id          记录唯一标识
+ * @property string $user_id     阅读用户
+ * @property string $release_id  被阅读的版本发布标识
+ * @property string $read_at     阅读时间点
  *
  * @mixin \think\Model
  */

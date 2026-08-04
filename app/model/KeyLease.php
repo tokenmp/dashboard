@@ -6,15 +6,19 @@ namespace app\model;
 use think\Model;
 
 /**
- * KeyLease —— 对应数据表 key_leases
+ * 上游密钥租约表（key_leases）—— 控制单把上游密钥的在途并发数
  *
- * @property string $id
- * @property string $upstream_key_id
- * @property string|null $request_log_id
- * @property string $status
- * @property string $expires_at
- * @property string $created_at
- * @property string|null $released_at
+ * 执行面转发请求到上游前，向目标上游密钥申请租约：活跃且未过期的租约数达到并发上限则拒绝，否则写入一条带 TTL 的新租约。
+ * 请求完成置 released，超时由后台批量置 expired。
+ * 本质是上游并发节流的运行时账本。
+ *
+ * @property string      $id               租约 ID（UUID 主键）
+ * @property string      $upstream_key_id  占用的上游渠道密钥 ID
+ * @property string|null $request_log_id   触发该租约的请求日志 ID（软关联）
+ * @property string      $status           状态：active（在用）/ released / expired
+ * @property string      $expires_at       租约自动过期时间（创建时按 TTL 设定）
+ * @property string      $created_at       租约创建时间
+ * @property string|null $released_at      实际释放或过期清理时回写的时间
  *
  * @mixin \think\Model
  */

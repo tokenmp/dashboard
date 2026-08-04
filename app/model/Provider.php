@@ -6,15 +6,19 @@ namespace app\model;
 use think\Model;
 
 /**
- * Provider —— 对应数据表 providers
+ * 供应商（providers）—— AI 上游供应方
  *
- * @property string $id
- * @property string $name
- * @property string|null $display_name
- * @property string $base_url
- * @property string $status
- * @property string $created_at
- * @property string $updated_at
+ * 平台对接的外部 AI 服务方（如 openai、anthropic）。
+ * 是上游侧顶层归属实体，provider_endpoints 与 upstream_keys 都挂在它之下；
+ * 软删用 status=deleted，且 name 在未软删记录内大小写不敏感且唯一。
+ *
+ * @property string      $id            供应商 ID（UUID 主键）
+ * @property string      $name          供应商标识名，路由选择时按它过滤；在未软删记录内大小写不敏感且全局唯一
+ * @property string|null $display_name  展示名（友好/中文名）；可空
+ * @property string      $base_url      供应商根地址，与端点路径拼成最终上游 URL
+ * @property string      $status        状态：active（默认）/ disabled / deleted（软删）
+ * @property string      $created_at    创建时间
+ * @property string      $updated_at    最近更新时间，改资料或状态时刷新
  *
  * @mixin \think\Model
  */

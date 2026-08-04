@@ -6,33 +6,36 @@ namespace app\model;
 use think\Model;
 
 /**
- * UpstreamKey —— 对应数据表 upstream_keys
+ * 上游密钥（upstream_keys）—— 上游 API Key 凭据
  *
- * @property string $id
- * @property string $provider_id
- * @property string $name
- * @property string|null $key_prefix
- * @property string|null $key_suffix
- * @property string $encrypted_key
- * @property int $encryption_version
- * @property int $max_concurrency
- * @property int $priority
- * @property int|null $quota_total
- * @property string $quota_used
- * @property float|null $cost
- * @property string|null $expires_at
- * @property string $status
- * @property string|null $notes
- * @property string $created_at
- * @property string $updated_at
- * @property string $quota_type
- * @property string|null $owner_user_id
- * @property string $source_type
- * @property string $visibility
- * @property string $review_status
- * @property string $market_status
- * @property string|null $verified_at
- * @property string|null $last_validation_error
+ * 某供应商下的一条真实上游 API Key（加密存储），携带并发上限、优先级、配额、计费类型等执行期控制信息，是路由选中后真正用来「发请求 + 算并发 + 算用量」的实体。
+ * 挂在 provider 之下，可被上游模型映射、价格倍率规则、并发租约等引用。
+ *
+ * @property string      $id                     上游密钥 ID（UUID 主键）
+ * @property string      $provider_id            所属供应商 ID
+ * @property string      $name                   密钥展示名（管理端命名，仅作展示）
+ * @property string|null $key_prefix             明文密钥前缀，脱敏展示用；可空
+ * @property string|null $key_suffix             明文密钥后缀，脱敏展示用；可空
+ * @property string      $encrypted_key          加密后的真实密钥，执行器解密后转发
+ * @property int         $encryption_version     加密方案版本，默认 1
+ * @property int         $max_concurrency        允许的最大并发租约数，默认 10；并发计数达到上限时拒绝新请求
+ * @property int         $priority               路由优先级，越大越先选，同级按创建时间升序，默认 0
+ * @property int|null    $quota_total            配额上限；为空表示不限
+ * @property string      $quota_used             已用配额，默认 0
+ * @property float|null  $cost                   该密钥的成本单价，用于成本核算；可空
+ * @property string|null $expires_at             密钥到期时间；可空
+ * @property string      $status                 状态：active（默认）/ disabled / deleted（软删）
+ * @property string|null $notes                  备注；可空
+ * @property string      $created_at             创建时间
+ * @property string      $updated_at             更新时间
+ * @property string      $quota_type             配额/计费类别，决定用量计到哪种套餐。取值：token_plan（默认）/ coding_plan / image_plan
+ * @property string|null $owner_user_id          用户自带密钥时的归属用户；平台密钥必须为空
+ * @property string      $source_type            来源类型：platform（默认，平台官方密钥）/ user（用户自带密钥）
+ * @property string      $visibility             可见范围：private（默认）/ marketplace
+ * @property string      $review_status          审核/上架状态：draft / pending / approved（默认）/ rejected
+ * @property string      $market_status          市场上架后的健康/交易状态：offline / online（默认）/ paused / degraded / exhausted / suspended
+ * @property string|null $verified_at            最近一次校验通过时间；可空
+ * @property string|null $last_validation_error  最近一次校验失败的错误描述；可空
  *
  * @mixin \think\Model
  */

@@ -6,20 +6,26 @@ namespace app\model;
 use think\Model;
 
 /**
- * RedeemCodeRedemption —— 对应数据表 redeem_code_redemptions
+ * 兑换记录
  *
- * @property string $id
- * @property string $redeem_code_id
- * @property string $user_id
- * @property int $token_amount
- * @property string|null $ledger_id
- * @property string $created_at
- * @property string|null $coding_plan_id
- * @property string|null $token_plan_id
- * @property string|null $coding_user_plan_id
- * @property string|null $token_user_plan_id
- * @property string|null $image_plan_id
- * @property string|null $image_user_plan_id
+ * 用户成功兑换兑换码后落一条记录，记录本次实发奖励的快照。
+ * 同一用户对同一码只能兑一次。
+ * 它既快照码上配置的套餐，又指向本次实际新建、续期或替换后的用户套餐行，便于追溯到底改了哪条套餐。
+ * 它是兑换码充值与发套餐链路的末端审计凭证；
+ * 本表无状态字段，一次成功兑换即一条不可变记录，撤销或冲正走用量流水的反向记录，不在此标记。
+ *
+ * @property string      $id                   兑换记录唯一主键。
+ * @property string      $redeem_code_id       被兑换的码。
+ * @property string      $user_id              兑换人。
+ * @property int         $token_amount         本次实充的 token 数，快照自码上的配置，默认为零。
+ * @property string|null $ledger_id            本次兑换在用量流水中的代表流水，优先取 token 充值流水，无充值则取首条套餐入账流水。
+ * @property string      $created_at           兑换时间。
+ * @property string|null $coding_plan_id       快照下来的码上 coding 套餐。
+ * @property string|null $token_plan_id        快照下来的码上 token 套餐。
+ * @property string|null $coding_user_plan_id  本次实际生效的 coding 用户套餐行。
+ * @property string|null $token_user_plan_id   本次实际生效的 token 用户套餐行。
+ * @property string|null $image_plan_id        快照下来的码上 image 套餐。
+ * @property string|null $image_user_plan_id   本次实际生效的 image 用户套餐行。
  *
  * @mixin \think\Model
  */

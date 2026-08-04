@@ -6,16 +6,20 @@ namespace app\model;
 use think\Model;
 
 /**
- * RouteGroup —— 对应数据表 route_groups
+ * 路由组（route_groups）—— 命名路由池
  *
- * @property string $id
- * @property string $name
- * @property string|null $display_name
- * @property string|null $description
- * @property bool $is_system
- * @property string $status
- * @property string $created_at
- * @property string $updated_at
+ * 把同一批上游模型映射归到命名的池子里，让请求通过路由组名选择不同池子（如 default、灰度组、专用组）。
+ * 系统内置组（如 default，is_system=true）受保护，不可随意删除；
+ * 组名在未软删记录内大小写不敏感且唯一。
+ *
+ * @property string      $id            路由组 ID（UUID 主键）
+ * @property string      $name          组标识名，路由按其命中；为空时执行器回退 default，在未软删记录内大小写不敏感且唯一
+ * @property string|null $display_name  展示名；可空
+ * @property string|null $description   描述；可空
+ * @property bool        $is_system     是否系统内置组（如 default，受保护），默认否
+ * @property string      $status        状态：active（默认）/ disabled / deleted（软删）
+ * @property string      $created_at    创建时间
+ * @property string      $updated_at    更新时间
  *
  * @mixin \think\Model
  */

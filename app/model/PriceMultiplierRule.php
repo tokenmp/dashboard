@@ -6,26 +6,29 @@ namespace app\model;
 use think\Model;
 
 /**
- * PriceMultiplierRule —— 对应数据表 price_multiplier_rules
+ * 价格倍率规则（price_multiplier_rules）—— 计费调价规则
  *
- * @property string $id
- * @property string|null $provider_id
- * @property string|null $upstream_key_id
- * @property string|null $model_id
- * @property string|null $protocol
- * @property string $timezone
- * @property int $days_of_week
- * @property string $start_time
- * @property string $end_time
- * @property float $multiplier
- * @property int $priority
- * @property string $status
- * @property string $created_at
- * @property string $updated_at
- * @property string $compose_mode
- * @property string|null $effective_from
- * @property string|null $effective_until
- * @property string|null $exclusive_group
+ * 在路由选中后，对最终计费单价做「乘以倍率」调整的规则集。
+ * 支持按供应商、上游密钥、模型、协议、时区、星期、时段、生效区间多维匹配，并用优先级、叠加方式、互斥组控制多条规则如何叠加。
+ *
+ * @property string      $id               规则 ID（UUID 主键）
+ * @property string|null $provider_id      命中范围：供应商；为空表示不限
+ * @property string|null $upstream_key_id  命中范围：上游密钥；为空表示不限
+ * @property string|null $model_id         命中范围：平台模型；为空表示不限
+ * @property string|null $protocol         命中范围：协议；为空表示不限。取值：openai / anthropic / openai_chat / openai_responses / anthropic_messages / image_generation / tokenmp_gateway / custom
+ * @property string      $timezone         时段判断所用时区，默认 UTC
+ * @property int         $days_of_week     生效星期，1=周一至 7=周日，空数组表示每天
+ * @property string      $start_time       每日生效起始时刻（HH:MM）
+ * @property string      $end_time         每日生效结束时刻（HH:MM）
+ * @property float       $multiplier       价格倍率，乘到单价上，须大于 0
+ * @property int         $priority         优先级，越大越优，默认 0
+ * @property string      $status           状态：active（默认）/ disabled / deleted（软删）
+ * @property string      $created_at       创建时间
+ * @property string      $updated_at       更新时间
+ * @property string      $compose_mode     多规则叠加方式：set（默认，取最高优先级规则直接设定倍率）/ multiply（多条命中倍率相乘）
+ * @property string|null $effective_from   生效起始时间；可空，与 effective_until 同时给定时要早于后者
+ * @property string|null $effective_until  生效结束时间；可空
+ * @property string|null $exclusive_group  互斥组名，同组规则只取一条；可空
  *
  * @mixin \think\Model
  */

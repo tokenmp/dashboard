@@ -6,22 +6,26 @@ namespace app\model;
 use think\Model;
 
 /**
- * Plan —— 对应数据表 plans
+ * 套餐目录（plans）—— 管理员维护的可售卖套餐模板
  *
- * @property string $id
- * @property string $name
- * @property string $plan_type
- * @property int|null $hourly_5h_limit
- * @property int|null $weekly_limit
- * @property int|null $monthly_limit
- * @property int|null $token_limit
- * @property float $price
- * @property string $status
- * @property string $created_at
- * @property string $updated_at
- * @property int|null $default_duration_days
- * @property array $allowed_model_names
- * @property string|null $category
+ * 由管理员在后台维护的套餐目录，每条记录定义一个套餐的计费类型、各类配额上限、价格、默认有效期，以及编程类套餐可调用的模型白名单。
+ * 共分 coding、token、image 三类，计费口径与生效的配额字段各不相同。
+ * 用户实际持有的是 user_plans 绑定，兑换码奖励也会指向这里的套餐。
+ *
+ * @property string      $id                     套餐唯一标识
+ * @property string      $name                   套餐显示名，如「Coding Pro」
+ * @property string      $plan_type              套餐计费类型，决定哪些配额字段生效：coding / token / image
+ * @property int|null    $hourly_5h_limit        编程类套餐在 5 小时滚动窗口内的最大请求数，为空表示不限
+ * @property int|null    $weekly_limit           编程类套餐每周最大请求数，为空表示不限
+ * @property int|null    $monthly_limit          原「月限」，现已弃用，仅作总限的兼容别名
+ * @property int|null    $token_limit            Token 类套餐的 token 额度上限
+ * @property float       $price                  套餐价格，默认为 0
+ * @property string      $status                 上下架状态：active（默认，可分配）/ disabled（下架）/ deleted（软删除）
+ * @property string      $created_at             套餐创建时间
+ * @property string      $updated_at             套餐最近更新时间
+ * @property int|null    $default_duration_days  默认有效天数，用于计算用户绑定的过期时间，为空表示永久
+ * @property array       $allowed_model_names    编程类套餐允许调用的模型名数组（白名单），其它类型为空数组
+ * @property string|null $category               分类标签，历史遗留字段，当前业务未使用
  *
  * @mixin \think\Model
  */

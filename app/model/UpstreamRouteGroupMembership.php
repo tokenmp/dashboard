@@ -6,14 +6,18 @@ namespace app\model;
 use think\Model;
 
 /**
- * UpstreamRouteGroupMembership —— 对应数据表 upstream_route_group_memberships
+ * 上游映射归属路由组（upstream_route_group_memberships）—— 多对多归属
  *
- * @property string $id
- * @property string $upstream_model_mapping_id
- * @property string $route_group_id
- * @property string $status
- * @property string $created_at
- * @property string $updated_at
+ * 描述「某条上游模型映射属于哪些路由组」的多对多归属关系。
+ * 路由只有同时命中活跃的映射与活跃的路由组才会被选中——即一个映射若不归属任何活跃路由组则永远不可达；
+ * 同一（映射、路由组）在未软删记录内唯一，重复加入会自动重新启用。
+ *
+ * @property string $id                         归属关系 ID（UUID 主键）
+ * @property string $upstream_model_mapping_id  归属的上游模型映射 ID
+ * @property string $route_group_id             归属的路由组 ID
+ * @property string $status                     状态：active（默认）/ disabled / deleted（软删）
+ * @property string $created_at                 创建时间
+ * @property string $updated_at                 更新时间
  *
  * @mixin \think\Model
  */

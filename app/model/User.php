@@ -6,18 +6,22 @@ namespace app\model;
 use think\Model;
 
 /**
- * User —— 对应数据表 users
+ * 用户表（users）—— 平台终端用户账户主表
  *
- * @property string $id
- * @property string $email
- * @property string $password_hash
- * @property string $role
- * @property string $status
- * @property string $preferred_billing
- * @property bool $fallback_enabled
- * @property string $created_at
- * @property string $updated_at
- * @property int $token_version
+ * 每个用户可用邮箱+密码登录管理端，并用 API 密钥或 Bot 密钥调用执行面（executor）。
+ * 它承载用户的角色、账号状态与计费偏好。
+ * token_version 每次改密码/状态/角色时自增，使该用户已签发的所有 JWT 立即失效。
+ *
+ * @property string $id                 用户 ID（UUID 主键）
+ * @property string $email              登录邮箱，全局唯一
+ * @property string $password_hash      密码哈希（单向），永不对外返回
+ * @property string $role               角色：user（默认）/ admin
+ * @property string $status             状态：active（默认）/ disabled
+ * @property string $preferred_billing  首选计费方式：coding（默认）/ token
+ * @property bool   $fallback_enabled   首选额度不足时是否回退另一种计费（默认开）
+ * @property string $created_at         账号创建时间
+ * @property string $updated_at         最近更新时间（改资料/密码/状态时刷新）
+ * @property int    $token_version      令牌版本号；改密码/状态/角色时自增以吊销所有 JWT
  *
  * @mixin \think\Model
  */

@@ -6,21 +6,24 @@ namespace app\model;
 use think\Model;
 
 /**
- * Announcement —— 对应数据表 announcements
+ * announcements —— 站内公告（管理端发布、面向全站或指定范围展示的横幅通知）
  *
- * @property string $id
- * @property string $title
- * @property string $body
- * @property string $severity
- * @property string $scope
- * @property bool $dismissible
- * @property string $status
- * @property int $sort_order
- * @property string $publish_from
- * @property string|null $publish_until
- * @property string|null $created_by
- * @property string $created_at
- * @property string $updated_at
+ * 由管理后台维护的公告条目，前端按发布状态、展示范围、生效时间窗与排序权重拉取展示。
+ * 严重级别决定前端样式，是否可关闭决定用户能否手动消除横幅。
+ *
+ * @property string      $id             公告主键，全局唯一标识
+ * @property string      $title          公告标题
+ * @property string      $body           公告正文
+ * @property string      $severity       严重级别，决定前端样式，例如 info、warning、urgent
+ * @property string      $scope          展示范围，例如 all 表示全站，也可指定特定页面
+ * @property bool        $dismissible    用户是否可手动关闭该公告
+ * @property string      $status         发布状态，例如 draft（草稿）、published（已发布）、archived（已归档）
+ * @property int         $sort_order     排序权重，数值越小越靠前
+ * @property string      $publish_from   生效起始时间
+ * @property string|null $publish_until  生效截止时间，留空表示长期有效
+ * @property string|null $created_by     创建人，即发布该公告的管理员
+ * @property string      $created_at     创建时间
+ * @property string      $updated_at     最近更新时间
  *
  * @mixin \think\Model
  */

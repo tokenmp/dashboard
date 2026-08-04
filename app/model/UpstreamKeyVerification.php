@@ -6,17 +6,20 @@ namespace app\model;
 use think\Model;
 
 /**
- * UpstreamKeyVerification —— 对应数据表 upstream_key_verifications
+ * 上游密钥校验记录（upstream_key_verifications）—— 健康探测结果
  *
- * @property string $id
- * @property string $upstream_key_id
- * @property string $status
- * @property int|null $http_status
- * @property int|null $latency_ms
- * @property string|null $error_code
- * @property string|null $error_message
- * @property array $verified_models
- * @property string $created_at
+ * 对上游密钥做连通性/模型可用性探测的一次结果记录，与上游密钥的 verified_at、last_validation_error 配套；
+ * 删除上游密钥时会级联清除其校验记录。
+ *
+ * @property string      $id               校验记录 ID（UUID 主键）
+ * @property string      $upstream_key_id  被校验的上游密钥 ID
+ * @property string      $status           校验结果状态：pending / success / failed
+ * @property int|null    $http_status      探测请求返回的 HTTP 状态码；可空
+ * @property int|null    $latency_ms       探测请求耗时（毫秒）；可空
+ * @property string|null $error_code       失败时的错误码；可空
+ * @property string|null $error_message    失败时的错误描述；可空
+ * @property array       $verified_models  本次确认可用的模型清单（JSON 数组，如 gpt-4o、claude-3-5-sonnet），默认为空数组
+ * @property string      $created_at       校验时间
  *
  * @mixin \think\Model
  */
