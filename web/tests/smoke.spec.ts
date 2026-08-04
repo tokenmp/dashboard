@@ -188,3 +188,30 @@ test.describe('Batch 6 · 兑换码', () => {
     await page.waitForLoadState('networkidle');
   });
 });
+
+test.describe('Batch 7 · 市场分账', () => {
+  test('admin 上架管理 Tab（空态）', async ({ page }) => {
+    await authVisit(page, ADMIN_TOKEN, '/marketplace');
+    await expect(page.getByRole('heading', { name: '市场分账' })).toBeVisible();
+    await page.waitForLoadState('networkidle');
+    // 上架管理默认 Tab，可能空态（市场未启用）
+    await expect(page.getByRole('tab', { name: '上架管理' })).toBeVisible();
+  });
+
+  test('admin 切换到结算流水与分账账本', async ({ page }) => {
+    await authVisit(page, ADMIN_TOKEN, '/marketplace');
+    await page.waitForLoadState('networkidle');
+    await page.getByRole('tab', { name: '结算流水' }).click();
+    await page.waitForLoadState('networkidle');
+    await page.getByRole('tab', { name: '分账账本' }).click();
+    await page.waitForLoadState('networkidle');
+    // 页面不应报错
+    await expect(page.getByRole('heading', { name: '市场分账' })).toBeVisible();
+  });
+
+  test('user 可访问市场分账（空态）', async ({ page }) => {
+    await authVisit(page, USER_TOKEN, '/marketplace');
+    await expect(page.getByRole('heading', { name: '市场分账' })).toBeVisible();
+    await page.waitForLoadState('networkidle');
+  });
+});

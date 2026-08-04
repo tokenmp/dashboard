@@ -77,6 +77,14 @@
 - 前端 `pages/RedeemCodes`（admin 表格+进度条+兑换记录抽屉）/ `pages/MyRedemptions`（user 凭证+套餐快照）。
   · Layout 角色化导航：admin 看「兑换码管理」，user 看「我的兑换」。
 - 类型 `src/types/redeem.ts`；API `src/api/redeem.ts`；Playwright smoke 18 项通过。
+### Batch 7 · 市场分账 ✅
+- 后端 `app/controller/api/Marketplace.php` + 路由 `GET /api/marketplace/listings|settlements|ledger`。
+  · listings：挂单含卖家(sellerUser)、映射；user 仅看 seller_user_id=self。
+  · settlements：结算单含买家/卖家/挂单；user 仅看 consumer/supplier_user_id=self；admin 可按 userId 筛选。
+  · ledger：账本流水含挂单；user 仅看 user_id=self，admin 可按 userId 筛选。
+  · marketplace_* 对 request_log 无 relation，本批只读列表，不做聚合图表。
+- 前端 `pages/Marketplace`（多 Tab：上架管理 / 结算流水 / 分账账本）；金额正负色、解冻时间高亮、状态徽章。
+- 类型 `src/types/marketplace.ts`；API `src/api/marketplace.ts`；Playwright smoke 21 项通过。
 
 ## 验证方式（连真实库 tokenmp_prod）
 容器 `tokenmp-dashboard` 通过 host 网络 + SSH 隧道连 `127.0.0.1:15432`。
@@ -94,11 +102,10 @@
 7. **时间口径**：KPI 与趋势都以 DB 会话时区为准；5h/日/周/月窗口要和执行面计费口径一致（后续计费批次注意统一封装）。
 8. **聚合性能**：request_logs/usage_ledger 是大表，时间区间 + 已有索引（`*_created`、`*_user_created`）支撑；概览如需可加 1~5min 缓存（Batch 1 暂未加）。
 
-## 下一批：Batch 7 · 市场分账
-- 路由：`GET /api/marketplace/listings|settlements|ledger`。
-- 控制器 `app/controller/api/Marketplace.php`；admin 全部，user 仅 seller/consumer/supplier/user_id=self。
-- 前端：`pages/Marketplace`（多 Tab：上架管理 / 结算流水 / 分账账本）。
-- 之后顺序见 plan 文档批次总表（8 系统）。
+## 下一批：Batch 8 · 系统与通知
+- 路由：`GET /api/system/notices|releases|config|migrations`、`GET /api/user/notifications`、`GET /api/users/:id/notifications`。
+- 控制器 `app/controller/api/System.php`；admin 全量，user 仅 published + 自身通知。
+- 前端：`pages/System`（admin）+ 通知中心（铃铛下拉）+ 版本日志（带新红点）。
 
 ## 本地环境恢复（新 workspace）
 见 zip 内 `RESTORE.md`（含 .env / docker-compose.override.yml / db-backup）。要点：

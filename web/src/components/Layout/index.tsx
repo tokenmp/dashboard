@@ -1,6 +1,6 @@
 import { useEffect } from 'react';
 import { NavLink, Outlet, useNavigate } from 'react-router-dom';
-import { LayoutDashboard, ScrollText, Users, UserCircle, Network, Gauge, Ticket, Gift, LogOut } from 'lucide-react';
+import { LayoutDashboard, ScrollText, Users, UserCircle, Network, Gauge, Ticket, Gift, Store, LogOut } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useAuthStore } from '@/store/auth';
 import { useRole } from '@/hooks/useRole';
@@ -13,6 +13,7 @@ const NAV_ITEMS = [
   { to: '/upstream', label: '上游与模型', icon: Network, adminOnly: false },
   { to: '/usage', label: '计费用量', icon: Gauge, adminOnly: false },
   { to: '/redeem/codes', label: '兑换码管理', icon: Ticket, adminOnly: true },
+  { to: '/marketplace', label: '市场分账', icon: Store, adminOnly: false },
   { to: '/my/redemptions', label: '我的兑换', icon: Gift, adminOnly: false, userOnly: true },
   { to: '/account', label: '账户中心', icon: UserCircle, adminOnly: false },
 ];

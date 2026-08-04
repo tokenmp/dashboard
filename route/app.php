@@ -74,6 +74,13 @@ Route::group('api', function () {
             Route::get('rules', 'api/Usage/rules');
         });
 
+        // 市场分账
+        Route::group('marketplace', function () {
+            Route::get('listings', 'api/Marketplace/listings');
+            Route::get('settlements', 'api/Marketplace/settlements');
+            Route::get('ledger', 'api/Marketplace/ledger');
+        });
+
         // 兑换码
         Route::group('redeem', function () {
             Route::group('codes', function () {

@@ -8,6 +8,7 @@ import Upstream from '@/pages/Upstream';
 import Usage from '@/pages/Usage';
 import RedeemCodes from '@/pages/RedeemCodes';
 import MyRedemptions from '@/pages/MyRedemptions';
+import Marketplace from '@/pages/Marketplace';
 import NotFound from '@/pages/NotFound';
 import RequireAuth from '@/components/RequireAuth';
 import Layout from '@/components/Layout';
@@ -37,6 +38,7 @@ export const router = createBrowserRouter([
       { path: 'upstream', element: <Upstream /> },
       { path: 'usage', element: <Usage /> },
       { path: 'redeem/codes', element: <RedeemCodes /> },
+      { path: 'marketplace', element: <Marketplace /> },
       { path: 'my/redemptions', element: <MyRedemptions /> },
       { path: 'account', element: <Account /> },
     ],
