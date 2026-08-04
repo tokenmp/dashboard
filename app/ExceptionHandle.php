@@ -66,9 +66,9 @@ class ExceptionHandle extends Handle
                 default                         => 500,
             };
             return json([
-                'code' => 1,
-                'msg'  => $e->getMessage() ?: '服务器错误',
-                'data' => null,
+                'code'    => 1,
+                'message' => $e->getMessage() ?: '服务器错误',
+                'data'    => null,
             ], $httpStatus);
         }
 

@@ -1,14 +1,20 @@
+import { useEffect } from 'react';
 import { Outlet, useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { useAuthStore } from '@/store/auth';
 
 /**
  * 主布局：顶部 Header（含登出）+ 内容区 Outlet
- * 用于登录后受保护的路由。
+ * 用于登录后受保护的路由。挂载时拉取当前用户信息写入 store，供全站角色化渲染使用。
  */
 function Layout() {
   const navigate = useNavigate();
   const logout = useAuthStore((s) => s.logout);
+  const fetchUser = useAuthStore((s) => s.fetchUser);
+
+  useEffect(() => {
+    fetchUser();
+  }, [fetchUser]);
 
   const handleLogout = () => {
     logout();
