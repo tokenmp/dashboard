@@ -50,7 +50,27 @@ class ExceptionHandle extends Handle
      */
     public function render($request, Throwable $e): Response
     {
-        // 添加自定义异常处理机制
+        // 主动抛出的 HTTP 响应异常（如 redirect）直接返回
+        if ($e instanceof HttpResponseException) {
+            return $e->getResponse();
+        }
+
+        $path   = $request->pathinfo();
+        $isApi  = $path === 'api' || str_starts_with($path, 'api/');
+
+        // API 请求统一返回 JSON 错误
+        if ($isApi) {
+            $httpStatus = match (true) {
+                $e instanceof ValidateException => 422,
+                $e instanceof HttpException     => $e->getStatusCode() ?: 500,
+                default                         => 500,
+            };
+            return json([
+                'code' => 1,
+                'msg'  => $e->getMessage() ?: '服务器错误',
+                'data' => null,
+            ], $httpStatus);
+        }
 
         // 其他错误交给系统处理
         return parent::render($request, $e);
