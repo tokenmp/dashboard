@@ -17,6 +17,9 @@ dist-ssr
 .env.*
 !.env.example
 
+# 统一使用 npm（package-lock.json）作为锁文件，忽略 pnpm-lock.yaml 避免双锁文件漂移
+pnpm-lock.yaml
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json
