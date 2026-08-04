@@ -215,3 +215,58 @@ test.describe('Batch 7 · 市场分账', () => {
     await page.waitForLoadState('networkidle');
   });
 });
+
+test.describe('Batch 8 · 系统与通知', () => {
+  test('admin 公告 Tab', async ({ page }) => {
+    await authVisit(page, ADMIN_TOKEN, '/system');
+    await expect(page.getByRole('heading', { name: '系统' })).toBeVisible();
+    await expect(page.getByRole('tab', { name: '公告' })).toBeVisible();
+    await page.waitForLoadState('networkidle');
+    // 公告卡片或空态
+    await expect(page.locator('body')).toBeVisible();
+  });
+
+  test('admin 切换到系统配置（敏感脱敏）', async ({ page }) => {
+    await authVisit(page, ADMIN_TOKEN, '/system');
+    await page.getByRole('tab', { name: '系统配置' }).click();
+    await page.waitForLoadState('networkidle');
+    // 配置表应出现，敏感值显示 ******
+    const body = await page.locator('body').innerText();
+    // captcha_access_key_secret 或 smtp_password 应显示 ****** 而非明文
+    if (body.includes('captcha_access_key_secret') || body.includes('smtp_password')) {
+      expect(body).toContain('******');
+    }
+  });
+
+  test('admin 迁移台账 Tab', async ({ page }) => {
+    await authVisit(page, ADMIN_TOKEN, '/system');
+    await page.getByRole('tab', { name: '迁移台账' }).click();
+    await page.waitForLoadState('networkidle');
+    await expect(page.locator('tbody tr').first()).toBeVisible({ timeout: 10000 });
+  });
+
+  test('user 无权访问系统页', async ({ page }) => {
+    await authVisit(page, USER_TOKEN, '/dashboard');
+    await page.waitForLoadState('networkidle');
+    const nav = page.getByRole('link', { name: '系统' });
+    await expect(nav).toHaveCount(0);
+  });
+
+  test('更新日志页加载', async ({ page }) => {
+    await authVisit(page, ADMIN_TOKEN, '/releases');
+    await expect(page.getByRole('heading', { name: '更新日志' })).toBeVisible();
+    await page.waitForLoadState('networkidle');
+    // 版本卡片或空态
+    await expect(page.locator('body')).toBeVisible();
+  });
+
+  test('通知铃铛可点击展开', async ({ page }) => {
+    await authVisit(page, ADMIN_TOKEN, '/dashboard');
+    await expect(page.getByRole('heading', { name: '概览' })).toBeVisible({ timeout: 10000 });
+    const bell = page.getByRole('button', { name: '通知' });
+    await bell.click();
+    await page.waitForTimeout(1000);
+    // 下拉出现「通知」标题
+    await expect(page.getByText('通知', { exact: true }).first()).toBeVisible({ timeout: 5000 });
+  });
+});

@@ -44,6 +44,7 @@ Route::group('api', function () {
         Route::group('users', function () {
             Route::get('', 'api/User/list');
             Route::get(':id', 'api/User/detail')->pattern(['id' => '[\w\-]+']);
+            Route::get(':id/notifications', 'api/System/userNotifications')->pattern(['id' => '[\w\-]+']);
         });
         // 当前用户账户中心（单数 user）
         Route::group('user', function () {
@@ -52,6 +53,7 @@ Route::group('api', function () {
             Route::get('keys/bot', 'api/User/botKeys');
             Route::get('plans', 'api/User/plans');
             Route::get('redemptions', 'api/RedeemCode/myRedemptions');
+            Route::get('notifications', 'api/System/myNotifications');
         });
 
         // 上游与模型
@@ -79,6 +81,17 @@ Route::group('api', function () {
             Route::get('listings', 'api/Marketplace/listings');
             Route::get('settlements', 'api/Marketplace/settlements');
             Route::get('ledger', 'api/Marketplace/ledger');
+        });
+
+        // 系统与通知
+        Route::group('system', function () {
+            Route::get('notices', 'api/System/notices');
+            Route::group('releases', function () {
+                Route::get('', 'api/System/releases');
+                Route::get(':id', 'api/System/releaseDetail')->pattern(['id' => '[\w\-]+']);
+            });
+            Route::get('config', 'api/System/config');
+            Route::get('migrations', 'api/System/migrations');
         });
 
         // 兑换码
