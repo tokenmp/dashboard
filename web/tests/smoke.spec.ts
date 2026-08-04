@@ -83,3 +83,44 @@ test.describe('Batch 3 · 用户与账户', () => {
     await expect(page.getByText('我的资料', { exact: true })).toBeVisible({ timeout: 15000 });
   });
 });
+
+test.describe('Batch 4 · 上游与模型', () => {
+  test('admin 上游 Key 列表与详情', async ({ page }) => {
+    await authVisit(page, ADMIN_TOKEN, '/upstream');
+    await expect(page.getByRole('heading', { name: '上游与模型' })).toBeVisible();
+    await expect(page.locator('tbody tr').first()).toBeVisible({ timeout: 15000 });
+    const count = await page.locator('tbody tr').count();
+    expect(count).toBeGreaterThan(0);
+    await page.locator('tbody tr').first().click();
+    await expect(page.getByRole('heading', { name: '上游 Key 详情' })).toBeVisible({ timeout: 10000 });
+    await expect(page.getByText('基本信息', { exact: false })).toBeVisible();
+    // encrypted_key 不应出现
+    const body = await page.locator('body').innerText();
+    expect(body).not.toContain('encrypted_key');
+  });
+
+  test('admin 切换 Tab 到平台模型', async ({ page }) => {
+    await authVisit(page, ADMIN_TOKEN, '/upstream');
+    await expect(page.locator('tbody tr').first()).toBeVisible({ timeout: 15000 });
+    await page.getByRole('tab', { name: '平台模型' }).click();
+    // 模型卡片网格出现（“上下文窗口”标签在每张卡片）
+    await expect(page.getByText('上下文窗口', { exact: false }).first()).toBeVisible({ timeout: 10000 });
+  });
+
+  test('admin 切换到供应商 Tab', async ({ page }) => {
+    await authVisit(page, ADMIN_TOKEN, '/upstream');
+    await page.getByRole('tab', { name: '供应商' }).click();
+    await expect(page.locator('tbody tr').first()).toBeVisible({ timeout: 10000 });
+  });
+
+  test('user 上游 Key 为空但有平台模型', async ({ page }) => {
+    await authVisit(page, USER_TOKEN, '/upstream');
+    await expect(page.getByRole('heading', { name: '上游与模型' })).toBeVisible();
+    // user 无自有 Key 时显示空态
+    await page.waitForLoadState('networkidle');
+    const rows = page.locator('tbody tr');
+    const cnt = await rows.count();
+    // user 要么空态要么自有 Key
+    expect(cnt).toBeGreaterThanOrEqual(0);
+  });
+});

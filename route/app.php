@@ -52,6 +52,17 @@ Route::group('api', function () {
             Route::get('keys/bot', 'api/User/botKeys');
             Route::get('plans', 'api/User/plans');
         });
+
+        // 上游与模型
+        Route::group('upstream', function () {
+            Route::get('providers', 'api/Upstream/providers');
+            Route::group('keys', function () {
+                Route::get('', 'api/Upstream/keys');
+                Route::get(':id', 'api/Upstream/keyDetail')->pattern(['id' => '[\w\-]+']);
+            });
+            Route::get('routes', 'api/Upstream/routes');
+        });
+        Route::get('models', 'api/Upstream/models');
     })->middleware(Auth::class);
 });
 
