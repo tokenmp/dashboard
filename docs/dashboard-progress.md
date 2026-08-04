@@ -85,6 +85,19 @@
   · marketplace_* 对 request_log 无 relation，本批只读列表，不做聚合图表。
 - 前端 `pages/Marketplace`（多 Tab：上架管理 / 结算流水 / 分账账本）；金额正负色、解冻时间高亮、状态徽章。
 - 类型 `src/types/marketplace.ts`；API `src/api/marketplace.ts`；Playwright smoke 21 项通过。
+### Batch 8 · 系统与通知 ✅
+- 后端 `app/controller/api/System.php` + 路由 `GET /api/system/notices|releases|releases/:id|config|migrations`、`GET /api/user/notifications`、`GET /api/users/:id/notifications`。
+  · notices：admin 全部（含 draft）；user 仅 published 且在 publish_from/until 区间内。
+  · notifications：我的通知支持 ?unread=1；admin 可查指定用户通知（403 隔离）。
+  · releases：admin 全部；user 仅 published；detail 附当前用户是否已读（readAt）。
+  · config：admin 全量，敏感 key（captcha_access_key_secret、smtp_password）value 脱敏为 `******`；用原生 Db 查询避免模型 json 类型转换器对标量值报 foreach 错。
+  · migrations：迁移台账（count 先于 order 避免 PG grouping error）。
+- 前端 `pages/System`（多 Tab：公告 / 系统配置 / 迁移台账）/ `pages/Releases`（版本日志 + 详情抽屉，已读标记）/ 通知铃铛（Header 下拉，未读计数徽章）。
+- 类型 `src/types/system.ts`；API `src/api/system.ts`；Playwright smoke 27 项通过。
+
+## 全部 8 批已完成 ✅
+Batch 0~8 全部交付：概览 → 请求日志 → 用户与账户 → 上游与模型 → 计费用量 → 兑换码 → 市场分账 → 系统与通知。
+所有只读 API（30+ 接口）+ 前端页面（含多 Tab/详情抽屉/角色化导航/通知铃铛/版本日志）均已落地，连真实库 tokenmp_prod 验证通过。
 
 ## 验证方式（连真实库 tokenmp_prod）
 容器 `tokenmp-dashboard` 通过 host 网络 + SSH 隧道连 `127.0.0.1:15432`。
@@ -101,11 +114,6 @@
 6. **前端容器不挂载构建目录**：改完前端必须 `./scripts/dev-sync-web.sh`（build + docker cp 进容器），否则浏览器看到的是旧包。详见脚本注释。
 7. **时间口径**：KPI 与趋势都以 DB 会话时区为准；5h/日/周/月窗口要和执行面计费口径一致（后续计费批次注意统一封装）。
 8. **聚合性能**：request_logs/usage_ledger 是大表，时间区间 + 已有索引（`*_created`、`*_user_created`）支撑；概览如需可加 1~5min 缓存（Batch 1 暂未加）。
-
-## 下一批：Batch 8 · 系统与通知
-- 路由：`GET /api/system/notices|releases|config|migrations`、`GET /api/user/notifications`、`GET /api/users/:id/notifications`。
-- 控制器 `app/controller/api/System.php`；admin 全量，user 仅 published + 自身通知。
-- 前端：`pages/System`（admin）+ 通知中心（铃铛下拉）+ 版本日志（带新红点）。
 
 ## 本地环境恢复（新 workspace）
 见 zip 内 `RESTORE.md`（含 .env / docker-compose.override.yml / db-backup）。要点：
