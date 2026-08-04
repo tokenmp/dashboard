@@ -1,13 +1,16 @@
 import { useEffect } from 'react';
 import { NavLink, Outlet, useNavigate } from 'react-router-dom';
-import { LayoutDashboard, ScrollText, LogOut } from 'lucide-react';
+import { LayoutDashboard, ScrollText, Users, UserCircle, LogOut } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useAuthStore } from '@/store/auth';
+import { useRole } from '@/hooks/useRole';
 import { cn } from '@/lib/utils';
 
 const NAV_ITEMS = [
-  { to: '/dashboard', label: '概览', icon: LayoutDashboard },
-  { to: '/requests', label: '请求日志', icon: ScrollText },
+  { to: '/dashboard', label: '概览', icon: LayoutDashboard, adminOnly: false },
+  { to: '/requests', label: '请求日志', icon: ScrollText, adminOnly: false },
+  { to: '/users', label: '用户管理', icon: Users, adminOnly: true },
+  { to: '/account', label: '账户中心', icon: UserCircle, adminOnly: false },
 ];
 
 /**
@@ -18,6 +21,7 @@ function Layout() {
   const navigate = useNavigate();
   const logout = useAuthStore((s) => s.logout);
   const fetchUser = useAuthStore((s) => s.fetchUser);
+  const { isAdmin } = useRole();
 
   useEffect(() => {
     fetchUser();
@@ -28,6 +32,8 @@ function Layout() {
     navigate('/login', { replace: true });
   };
 
+  const items = NAV_ITEMS.filter((i) => !i.adminOnly || isAdmin);
+
   return (
     <div className="flex min-h-screen bg-background">
       {/* 侧边导航 */}
@@ -36,7 +42,7 @@ function Layout() {
           <span className="text-base font-semibold">TokenMP</span>
         </div>
         <nav className="flex-1 space-y-1 p-3">
-          {NAV_ITEMS.map((item) => (
+          {items.map((item) => (
             <NavLink
               key={item.to}
               to={item.to}

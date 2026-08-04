@@ -2,6 +2,8 @@ import { createBrowserRouter, Navigate } from 'react-router-dom';
 import Login from '@/pages/Login';
 import Dashboard from '@/pages/Dashboard';
 import Requests from '@/pages/Requests';
+import Users from '@/pages/Users';
+import Account from '@/pages/Account';
 import NotFound from '@/pages/NotFound';
 import RequireAuth from '@/components/RequireAuth';
 import Layout from '@/components/Layout';
@@ -27,6 +29,8 @@ export const router = createBrowserRouter([
       { index: true, element: <Navigate to="/dashboard" replace /> },
       { path: 'dashboard', element: <Dashboard /> },
       { path: 'requests', element: <Requests /> },
+      { path: 'users', element: <Users /> },
+      { path: 'account', element: <Account /> },
     ],
   },
   { path: '*', element: <NotFound /> },

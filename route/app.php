@@ -39,6 +39,19 @@ Route::group('api', function () {
             Route::get('', 'api/RequestLog/list');
             Route::get(':id', 'api/RequestLog/detail')->pattern(['id' => '[\w\-]+']);
         });
+
+        // 用户与账户
+        Route::group('users', function () {
+            Route::get('', 'api/User/list');
+            Route::get(':id', 'api/User/detail')->pattern(['id' => '[\w\-]+']);
+        });
+        // 当前用户账户中心（单数 user）
+        Route::group('user', function () {
+            Route::get('', 'api/User/profile');
+            Route::get('keys', 'api/User/keys');
+            Route::get('keys/bot', 'api/User/botKeys');
+            Route::get('plans', 'api/User/plans');
+        });
     })->middleware(Auth::class);
 });
 
