@@ -7,7 +7,6 @@ Thumbs.db
 /.idea
 /.vscode
 /vendor
-/node_modules
 /.settings
 /.buildpath
 /.project
