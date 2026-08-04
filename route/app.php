@@ -33,6 +33,12 @@ Route::group('api', function () {
         Route::group('dashboard', function () {
             Route::get('overview', 'api/Dashboard/overview');
         });
+
+        // 请求日志监控
+        Route::group('requests', function () {
+            Route::get('', 'api/RequestLog/list');
+            Route::get(':id', 'api/RequestLog/detail')->pattern(['id' => '[\w\-]+']);
+        });
     })->middleware(Auth::class);
 });
 

@@ -30,3 +30,9 @@ pnpm-lock.yaml
 *.njsproj
 *.sln
 *.sw?
+
+# Playwright 测试产物
+/test-results/
+/playwright-report/
+/blob-report/
+/playwright/.cache
