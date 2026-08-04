@@ -26,7 +26,8 @@ class Auth extends BaseController
      * 密码为前端用一次性公钥 RSA-OAEP 加密后的 base64 密文，需带 keyId；
      * 解密失败(密钥已用/过期/无效)返回 code:2(HTTP 410)，前端重取 key 重试。
      *
-     * 仅 role=admin 且 status=active 的用户可登录管理后台。
+     * 仅 role ∈ {admin, user} 且 status=active 的用户可登录。
+     * - admin 看全平台数据；user 仅看自己（见 app\service\DataScope）。
      * - 登录标识为邮箱（前端字段名沿用 username）；
      * - 密码哈希为 bcrypt（$2a$/$2b$），password_verify 直接兼容；
      * - JWT 内携带 token_version（v）：改密码/状态/角色时自增，使旧 token 立即失效（见 Auth 中间件）。
@@ -48,8 +49,8 @@ class Auth extends BaseController
             return fail('加密凭证已失效，请重试', 2, 410);
         }
 
-        // 仅管理员可登录；按邮箱查找
-        $user = User::where('email', $account)->where('role', 'admin')->find();
+        // admin 与 user 均可登录；按邮箱查找
+        $user = User::where('email', $account)->whereIn('role', ['admin', 'user'])->find();
 
         // 无论账号是否存在都走一次 bcrypt 校验，使响应耗时一致（防账号枚举）
         $hash = ($user?->password_hash) ?? self::DUMMY_HASH;

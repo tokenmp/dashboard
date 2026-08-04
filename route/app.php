@@ -27,6 +27,13 @@ Route::group('api', function () {
             Route::get('user', 'api/Auth/user');
         })->middleware(Auth::class);
     });
+
+    // 概览仪表盘（需鉴权）
+    Route::group(function () {
+        Route::group('dashboard', function () {
+            Route::get('overview', 'api/Dashboard/overview');
+        });
+    })->middleware(Auth::class);
 });
 
 /*

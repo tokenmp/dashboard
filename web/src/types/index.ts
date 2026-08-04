@@ -1,9 +1,9 @@
 /**
- * 后端统一响应结构
+ * 后端统一响应结构（信封：code / message / data）
  */
 export interface ApiResponse<T = unknown> {
   code: number;
-  msg: string;
+  message: string;
   data: T;
 }
 
