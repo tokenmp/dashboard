@@ -51,6 +51,7 @@ Route::group('api', function () {
             Route::get('keys', 'api/User/keys');
             Route::get('keys/bot', 'api/User/botKeys');
             Route::get('plans', 'api/User/plans');
+            Route::get('redemptions', 'api/RedeemCode/myRedemptions');
         });
 
         // 上游与模型
@@ -71,6 +72,14 @@ Route::group('api', function () {
         });
         Route::group('price', function () {
             Route::get('rules', 'api/Usage/rules');
+        });
+
+        // 兑换码
+        Route::group('redeem', function () {
+            Route::group('codes', function () {
+                Route::get('', 'api/RedeemCode/list');
+                Route::get(':id/redemptions', 'api/RedeemCode/redemptions')->pattern(['id' => '[\w\-]+']);
+            });
         });
     })->middleware(Auth::class);
 });

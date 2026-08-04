@@ -69,6 +69,14 @@
   · price rules admin 全局；PostgreSQL `integer[]`（days_of_week）用 `parseIntArray` 转真数组。
 - 前端 `pages/Usage`（多 Tab：账本流水 / 额度总览 / 计费规则）；token_delta/request_delta 带正负色。
 - 类型 `src/types/usage.ts`；API `src/api/usage.ts`；Playwright smoke 15 项通过。
+### Batch 6 · 兑换码 ✅
+- 后端 `app/controller/api/RedeemCode.php` + 路由 `GET /api/redeem/codes`、`/api/redeem/codes/:id/redemptions`（admin）、`GET /api/user/redemptions`（user）。
+  · 码列表字段裁剪 `CODE_FIELDS`，永不返回 code_hash/code_plaintext。
+  · 某码兑换记录含用户；user `myRedemptions` 返回自身凭证（含套餐快照），看不到码本身。
+  · 控制器类名与模型同名，需 `use app\model\RedeemCode as RedeemCodeModel` 别名。
+- 前端 `pages/RedeemCodes`（admin 表格+进度条+兑换记录抽屉）/ `pages/MyRedemptions`（user 凭证+套餐快照）。
+  · Layout 角色化导航：admin 看「兑换码管理」，user 看「我的兑换」。
+- 类型 `src/types/redeem.ts`；API `src/api/redeem.ts`；Playwright smoke 18 项通过。
 
 ## 验证方式（连真实库 tokenmp_prod）
 容器 `tokenmp-dashboard` 通过 host 网络 + SSH 隧道连 `127.0.0.1:15432`。
@@ -86,11 +94,11 @@
 7. **时间口径**：KPI 与趋势都以 DB 会话时区为准；5h/日/周/月窗口要和执行面计费口径一致（后续计费批次注意统一封装）。
 8. **聚合性能**：request_logs/usage_ledger 是大表，时间区间 + 已有索引（`*_created`、`*_user_created`）支撑；概览如需可加 1~5min 缓存（Batch 1 暂未加）。
 
-## 下一批：Batch 6 · 兑换码
-- 路由：`GET /api/redeem/codes`、`/api/redeem/codes/:id/redemptions`（admin）、`GET /api/user/redemptions`（user）。
-- 控制器 `app/controller/api/RedeemCode.php`；脱敏 code_hash/code_plaintext，user 看不到码本身。
-- 前端：`pages/RedeemCodes`（admin）/ `pages/MyRedemptions`（user）。
-- 之后顺序见 plan 文档批次总表（7 市场→8 系统）。
+## 下一批：Batch 7 · 市场分账
+- 路由：`GET /api/marketplace/listings|settlements|ledger`。
+- 控制器 `app/controller/api/Marketplace.php`；admin 全部，user 仅 seller/consumer/supplier/user_id=self。
+- 前端：`pages/Marketplace`（多 Tab：上架管理 / 结算流水 / 分账账本）。
+- 之后顺序见 plan 文档批次总表（8 系统）。
 
 ## 本地环境恢复（新 workspace）
 见 zip 内 `RESTORE.md`（含 .env / docker-compose.override.yml / db-backup）。要点：
