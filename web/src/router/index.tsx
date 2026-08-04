@@ -1,15 +1,31 @@
-import { createBrowserRouter } from 'react-router-dom';
-import Home from '@/pages/Home';
+import { createBrowserRouter, Navigate } from 'react-router-dom';
 import Login from '@/pages/Login';
+import Dashboard from '@/pages/Dashboard';
 import NotFound from '@/pages/NotFound';
+import RequireAuth from '@/components/RequireAuth';
+import Layout from '@/components/Layout';
 
 /**
  * 路由配置
  *
- * 路由守卫（登录态校验）将在 feat/auth-integration 分支补齐。
+ * - /login：公开
+ * - / 及其子路由：经 RequireAuth 守卫 + Layout 布局
+ *   · /        → 重定向到 /dashboard
+ *   · /dashboard → Dashboard（登录后首页）
  */
 export const router = createBrowserRouter([
-  { path: '/', element: <Home /> },
   { path: '/login', element: <Login /> },
+  {
+    path: '/',
+    element: (
+      <RequireAuth>
+        <Layout />
+      </RequireAuth>
+    ),
+    children: [
+      { index: true, element: <Navigate to="/dashboard" replace /> },
+      { path: 'dashboard', element: <Dashboard /> },
+    ],
+  },
   { path: '*', element: <NotFound /> },
 ]);
