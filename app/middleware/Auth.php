@@ -1,6 +1,7 @@
 <?php
 namespace app\middleware;
 
+use app\model\User;
 use app\service\Jwt;
 use Closure;
 use think\exception\HttpException;
@@ -29,8 +30,18 @@ class Auth
             throw new HttpException(401, '登录已过期或 token 无效');
         }
 
-        // 挂到容器，控制器用 app('auth')->sub 取用户 id 等
+        // 加载用户并校验状态与 token_version：
+        // 用户被禁用，或改密码/状态/角色使 token_version 自增后，旧 token 立即失效。
+        $user = User::find((string) ($payload->sub ?? ''));
+        if (!$user
+            || $user->status !== 'active'
+            || (int) $user->token_version !== (int) ($payload->v ?? -1)) {
+            throw new HttpException(401, '登录已失效，请重新登录');
+        }
+
+        // 挂到容器：app('auth') 取 JWT payload，app('user') 取用户模型
         app()->instance('auth', $payload);
+        app()->instance('user', $user);
 
         return $next($request);
     }
