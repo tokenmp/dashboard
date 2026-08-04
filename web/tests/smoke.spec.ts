@@ -124,3 +124,37 @@ test.describe('Batch 4 · 上游与模型', () => {
     expect(cnt).toBeGreaterThanOrEqual(0);
   });
 });
+
+test.describe('Batch 5 · 计费用量', () => {
+  test('admin 账本流水加载', async ({ page }) => {
+    await authVisit(page, ADMIN_TOKEN, '/usage');
+    await expect(page.getByRole('heading', { name: '计费用量' })).toBeVisible();
+    await expect(page.locator('tbody tr').first()).toBeVisible({ timeout: 20000 });
+    const count = await page.locator('tbody tr').count();
+    expect(count).toBeGreaterThan(0);
+  });
+
+  test('admin 额度总览 Tab', async ({ page }) => {
+    await authVisit(page, ADMIN_TOKEN, '/usage');
+    await expect(page.locator('tbody tr').first()).toBeVisible({ timeout: 20000 });
+    await page.getByRole('tab', { name: '额度总览' }).click();
+    await expect(page.getByText('全平台额度池', { exact: false })).toBeVisible({ timeout: 10000 });
+  });
+
+  test('admin 计费规则 Tab', async ({ page }) => {
+    await authVisit(page, ADMIN_TOKEN, '/usage');
+    await page.getByRole('tab', { name: '计费规则' }).click();
+    await page.waitForLoadState('networkidle');
+    // rules 可能空也可能不空，只要页面不报错即可
+    await expect(page.getByText('计费倍率规则仅管理员可见', { exact: false })).toHaveCount(0);
+  });
+
+  test('user 额度总览', async ({ page }) => {
+    await authVisit(page, USER_TOKEN, '/usage');
+    await expect(page.getByRole('heading', { name: '计费用量' })).toBeVisible();
+    await page.getByRole('tab', { name: '额度总览' }).click();
+    await page.waitForLoadState('networkidle');
+    // user 看到我的额度
+    await expect(page.getByText('我的额度', { exact: false })).toBeVisible({ timeout: 10000 });
+  });
+});
