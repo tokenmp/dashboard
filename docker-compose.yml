@@ -18,7 +18,7 @@ services:
       JWT_EXPIRE: "604800"
       JWT_PREFIX: Bearer
       APP_DEBUG: "false"
-      # 接入数据库时按需补充（需镜像含对应扩展，当前已装 pdo_mysql）：
+      # 接入数据库时按需补充（镜像已装 pdo_mysql / pdo_pgsql / pgsql 扩展）：
       # DB_TYPE: mysql
       # DB_HOST: db
       # DB_NAME: tokenmp

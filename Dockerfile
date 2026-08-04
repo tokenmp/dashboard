@@ -31,8 +31,8 @@ RUN composer install \
 ############################################
 FROM dunglas/frankenphp:1-php8.4-alpine AS runtime
 
-# 生产所需 PHP 扩展（pdo_mysql 为后续真实用户/数据库预留）
-RUN install-php-extensions pdo_mysql
+# 生产所需 PHP 扩展（pdo_mysql / pdo_pgsql 为后续真实用户/数据库预留）
+RUN install-php-extensions pdo_mysql pdo_pgsql pgsql
 
 WORKDIR /app
 
