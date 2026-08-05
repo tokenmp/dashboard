@@ -15,8 +15,8 @@ interface Props {
   className?: string;
 }
 
-const ITEM_HEIGHT_REM = 1.25;
-const ROTATION_INTERVAL_MS = 4_000;
+const ITEM_HEIGHT_REM = 2.5;
+const ROTATION_INTERVAL_MS = 5_000;
 
 /** Header 中的最新公告垂直轮播。 */
 export function ScrollingAnnouncement({ fetcher, viewAllTo, itemTo, className }: Props) {
@@ -74,7 +74,7 @@ export function ScrollingAnnouncement({ fetcher, viewAllTo, itemTo, className }:
   return (
     <div
       className={cn(
-        'flex h-7 min-w-0 max-w-md flex-1 items-center gap-2 overflow-hidden rounded-md border bg-muted/40 px-2',
+        'flex h-12 min-w-0 max-w-md flex-1 items-center gap-2 overflow-hidden rounded-md border bg-muted/40 px-2',
         className,
       )}
       onMouseEnter={() => setPaused(true)}
@@ -83,7 +83,7 @@ export function ScrollingAnnouncement({ fetcher, viewAllTo, itemTo, className }:
       onBlur={() => setPaused(false)}
     >
       <Megaphone className="h-3.5 w-3.5 shrink-0 text-muted-foreground" aria-hidden="true" />
-      <div className="h-5 min-w-0 flex-1 overflow-hidden">
+      <div className="h-10 min-w-0 flex-1 overflow-hidden">
         <div
           className={transitionEnabled ? 'transition-transform duration-300 ease-in-out' : 'transition-none'}
           style={{ transform: `translateY(-${currentIndex * ITEM_HEIGHT_REM}rem)` }}
@@ -96,23 +96,31 @@ export function ScrollingAnnouncement({ fetcher, viewAllTo, itemTo, className }:
         >
           {displayedNotices.map((notice, index) => {
             const to = itemTo?.(notice.id) ?? null;
-            const titleClassName = 'line-clamp-1 h-5 w-full text-left text-xs leading-5';
+            const itemClassName = 'h-10 w-full text-left';
+            const inner = (
+              <>
+                <div className="line-clamp-1 text-xs font-medium leading-5">{notice.title}</div>
+                {notice.body && (
+                  <div className="line-clamp-1 text-[11px] leading-5 text-muted-foreground">{notice.body}</div>
+                )}
+              </>
+            );
 
             return to ? (
               <button
                 key={`${notice.id}-${index}`}
                 type="button"
-                className={cn(titleClassName, 'cursor-pointer hover:text-primary')}
+                className={cn(itemClassName, 'cursor-pointer hover:text-primary')}
                 onClick={() => navigate(to)}
                 tabIndex={index === currentIndex ? 0 : -1}
                 aria-hidden={index !== currentIndex}
               >
-                {notice.title}
+                {inner}
               </button>
             ) : (
-              <span key={`${notice.id}-${index}`} className={titleClassName} aria-hidden={index !== currentIndex}>
-                {notice.title}
-              </span>
+              <div key={`${notice.id}-${index}`} className={itemClassName} aria-hidden={index !== currentIndex}>
+                {inner}
+              </div>
             );
           })}
         </div>
