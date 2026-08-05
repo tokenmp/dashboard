@@ -1,11 +1,11 @@
 import { useEffect, useState } from 'react';
-import ReactMarkdown from 'react-markdown';
-import remarkGfm from 'remark-gfm';
-import remarkBreaks from 'remark-breaks';
 import { RefreshCw, Search, GitBranch, Plus, Pencil, Trash2 } from 'lucide-react';
 import { usePagedQuery } from '@/hooks/usePagedQuery';
 import { useAsync } from '@/hooks/useAsync';
 import { useMutation } from '@/hooks/useMutation';
+import { SeverityChip } from '@/components/SeverityChip';
+import { Markdown } from '@/components/Markdown';
+import { StatusBadge } from '@/components/StatusBadge';
 import { EmptyState } from '@/components/EmptyState';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -77,16 +77,6 @@ function Pager({ page, size, total, loading, setPage }: { page: number; size: nu
   );
 }
 
-const SEVERITY_STYLE: Record<string, { label: string; cls: string }> = {
-  info: { label: '信息', cls: 'bg-sky-100 text-sky-700' },
-  warning: { label: '警告', cls: 'bg-amber-100 text-amber-800' },
-  urgent: { label: '紧急', cls: 'bg-red-100 text-red-700' },
-};
-function SeverityChip({ severity }: { severity: string }) {
-  const s = SEVERITY_STYLE[severity] ?? SEVERITY_STYLE.info;
-  return <span className={`inline-flex items-center rounded px-1.5 py-0.5 text-[10px] font-medium ${s.cls}`}>{s.label}</span>;
-}
-
 const SCOPE_OPTIONS = [
   { value: 'all', label: '全站' },
   { value: 'panel', label: '用户面板' },
@@ -151,17 +141,13 @@ function NoticesTab() {
                   <SeverityChip severity={a.severity} />
                   <span className="font-medium">{a.title}</span>
                 </div>
-                <div className="flex items-center gap-1">
-                  {a.status === 'draft' && <Badge variant="secondary" className="text-[10px]">草稿</Badge>}
+                <div className="flex items-center gap-2">
+                  <StatusBadge status={a.status} />
                   <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => openEdit(a)} aria-label="编辑"><Pencil className="h-3.5 w-3.5" /></Button>
                   <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive" onClick={() => setDeleting(a)} aria-label="删除"><Trash2 className="h-3.5 w-3.5" /></Button>
                 </div>
               </div>
-              {a.body ? (
-                <div className="prose prose-sm mt-2 max-w-none text-muted-foreground">
-                  <ReactMarkdown remarkPlugins={[remarkGfm, remarkBreaks]}>{a.body}</ReactMarkdown>
-                </div>
-              ) : null}
+              {a.body ? <Markdown className="mt-2 text-muted-foreground">{a.body}</Markdown> : null}
               <div className="mt-2 text-xs text-muted-foreground">
                 范围 {scopeLabel(a.scope)} · 生效 {a.publish_from?.slice(0, 10)} ~ {a.publish_until?.slice(0, 10) ?? '长期'}
               </div>
