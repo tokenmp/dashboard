@@ -11,6 +11,7 @@ import PanelLayout from '@/components/panel-layout';
 import Dashboard from '@/pages/dashboard';
 import Requests from '@/pages/requests';
 import Users from '@/pages/users';
+import Plans from '@/pages/plans';
 import Upstream from '@/pages/upstream';
 import Usage from '@/pages/usage';
 import RedeemCodes from '@/pages/redeem-codes';
@@ -57,6 +58,7 @@ export const router = createBrowserRouter([
       { index: true, element: <Dashboard /> },
       { path: 'requests', element: <Requests /> },
       { path: 'users', element: <Users /> },
+      { path: 'plans', element: <Plans /> },
       { path: 'upstream', element: <Upstream /> },
       { path: 'usage', element: <Usage /> },
       { path: 'redeem/codes', element: <RedeemCodes /> },

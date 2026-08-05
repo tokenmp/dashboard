@@ -116,6 +116,19 @@ Route::group('api/v1', function () {
                     Route::put(':id', 'dashboard/User/update')->pattern(['id' => '[\w\-]+']);
                     Route::post(':id/reset-password', 'dashboard/User/resetPassword')->pattern(['id' => '[\w\-]+']);
                     Route::get(':id/notifications', 'dashboard/Notification/forUser')->pattern(['id' => '[\w\-]+']);
+
+                    // 用户套餐：发放 / 续期 / 停用（planId = user_plan.id）
+                    Route::post(':userId/plans', 'dashboard/UserPlan/grant')->pattern(['userId' => '[\w\-]+']);
+                    Route::post(':userId/plans/:planId/renew', 'dashboard/UserPlan/renew')->pattern(['userId' => '[\w\-]+', 'planId' => '[\w\-]+']);
+                    Route::put(':userId/plans/:planId/disable', 'dashboard/UserPlan/disable')->pattern(['userId' => '[\w\-]+', 'planId' => '[\w\-]+']);
+                });
+
+                // 套餐目录（模板）CRUD
+                Route::group('plans', function () {
+                    Route::get('', 'dashboard/Plan/list');
+                    Route::post('', 'dashboard/Plan/create');
+                    Route::put(':id/status', 'dashboard/Plan/updateStatus')->pattern(['id' => '[\w\-]+']);
+                    Route::put(':id', 'dashboard/Plan/update')->pattern(['id' => '[\w\-]+']);
                 });
 
                 // 上游与模型

@@ -1,6 +1,6 @@
 import { useEffect } from 'react';
 import { NavLink, Outlet, useNavigate } from 'react-router-dom';
-import { LayoutDashboard, ScrollText, Users, Network, Gauge, Ticket, Store, Settings2, BookOpen, ExternalLink, LogOut } from 'lucide-react';
+import { LayoutDashboard, ScrollText, Users, Network, Gauge, Ticket, Store, Settings2, BookOpen, ExternalLink, LogOut, Package } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useAuthStore } from '@/store/auth';
 import { NotificationBell } from '@/components/NotificationBell';
@@ -10,6 +10,7 @@ const NAV_ITEMS = [
   { to: '/dashboard', label: '概览', icon: LayoutDashboard },
   { to: '/dashboard/requests', label: '请求日志', icon: ScrollText },
   { to: '/dashboard/users', label: '用户管理', icon: Users },
+  { to: '/dashboard/plans', label: '套餐管理', icon: Package },
   { to: '/dashboard/upstream', label: '上游与模型', icon: Network },
   { to: '/dashboard/usage', label: '计费用量', icon: Gauge },
   { to: '/dashboard/redeem/codes', label: '兑换码管理', icon: Ticket },
