@@ -6,7 +6,7 @@ import { EmptyState } from '@/components/EmptyState';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
-import { Input } from '@/components/ui/input';
+import { DebouncedInput } from '@/components/DebouncedInput';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -71,7 +71,7 @@ function KeywordInput({ value, onChange, placeholder = '搜索' }: { value: stri
       <label className="mb-1 block text-xs text-muted-foreground">关键字</label>
       <div className="relative">
         <Search className="absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-        <Input className="pl-8" placeholder={placeholder} value={value} onChange={(e) => onChange(e.target.value)} />
+        <DebouncedInput className="pl-8" placeholder={placeholder} value={value} onDebouncedChange={onChange} />
       </div>
     </div>
   );

@@ -9,6 +9,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
+import { DebouncedInput } from '@/components/DebouncedInput';
 import { Skeleton } from '@/components/ui/skeleton';
 import {
   Select,
@@ -209,8 +210,6 @@ function FiltersBar({
   onFilter: (f: Partial<RequestLogQuery>) => void;
   onReset: () => void;
 }) {
-  const [keyword, setKeyword] = useState(params.keyword ?? '');
-
   return (
     <Card>
       <CardContent className="flex flex-wrap items-end gap-3 p-4">
@@ -218,23 +217,20 @@ function FiltersBar({
           <label className="mb-1 block text-xs text-muted-foreground">关键字（request_id / trace_id）</label>
           <div className="relative">
             <Search className="absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-            <Input
+            <DebouncedInput
               className="pl-8"
               placeholder="搜索 request_id / trace_id"
-              value={keyword}
-              onChange={(e) => setKeyword(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter') onFilter({ keyword });
-              }}
+              value={params.keyword ?? ''}
+              onDebouncedChange={(v) => onFilter({ keyword: v })}
             />
           </div>
         </div>
         <div className="w-[160px]">
           <label className="mb-1 block text-xs text-muted-foreground">模型名</label>
-          <Input
+          <DebouncedInput
             placeholder="如 gpt-4o"
             value={params.model ?? ''}
-            onChange={(e) => onFilter({ model: e.target.value })}
+            onDebouncedChange={(v) => onFilter({ model: v })}
           />
         </div>
         <div className="w-[140px]">
