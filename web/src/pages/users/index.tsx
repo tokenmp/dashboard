@@ -623,7 +623,6 @@ function DetailDrawer({ id, onClose }: { id: string | null; onClose: () => void 
               </Card>
             )}
 
-            <KeySection icon={<KeyRound className="h-3 w-3" />} title="API Key" items={data.apiKeys.map((k) => ({ id: k.id, name: k.name, masked: `${k.key_prefix}…${k.key_suffix}`, status: k.status, sub: k.last_used_at ? `最近 ${k.last_used_at}` : '未使用' }))} />
             <KeySection icon={<Bot className="h-3 w-3" />} title="Bot Key" items={data.botKeys.map((k) => ({ id: k.id, name: k.name, masked: `${k.key_prefix}…${k.key_suffix}`, status: k.status, sub: `scope: ${k.scope}` }))} />
 
             <Card>
