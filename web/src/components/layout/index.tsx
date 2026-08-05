@@ -8,18 +8,39 @@ import { useRole } from '@/hooks/useRole';
 import { NotificationBell } from '@/components/NotificationBell';
 import { cn } from '@/lib/utils';
 
-const NAV_ITEMS = [
-  { to: '/dashboard', label: '概览', icon: LayoutDashboard },
-  { to: '/dashboard/requests', label: '请求日志', icon: ScrollText },
-  { to: '/dashboard/users', label: '用户管理', icon: Users },
-  { to: '/dashboard/plans', label: '套餐管理', icon: Package },
-  { to: '/dashboard/upstream', label: '上游与模型', icon: Network },
-  { to: '/dashboard/usage', label: '计费用量', icon: Gauge },
-  { to: '/dashboard/redeem/codes', label: '兑换码管理', icon: Ticket },
-  { to: '/dashboard/marketplace', label: '市场分账', icon: Store },
-  { to: '/dashboard/system', label: '系统', icon: Settings2 },
-  { to: '/dashboard/releases', label: '更新日志', icon: BookOpen },
-  { to: '/panel', label: '用户面板', icon: ExternalLink },
+const NAV_GROUPS: { label: string; items: { to: string; label: string; icon: typeof LayoutDashboard; end?: boolean }[] }[] = [
+  {
+    label: '概览',
+    items: [{ to: '/dashboard', label: '概览', icon: LayoutDashboard }],
+  },
+  {
+    label: '监控',
+    items: [
+      { to: '/dashboard/requests', label: '请求日志', icon: ScrollText },
+      { to: '/dashboard/usage', label: '计费用量', icon: Gauge },
+    ],
+  },
+  {
+    label: '管理',
+    items: [
+      { to: '/dashboard/users', label: '用户管理', icon: Users },
+      { to: '/dashboard/plans', label: '套餐管理', icon: Package },
+      { to: '/dashboard/upstream', label: '上游与模型', icon: Network },
+      { to: '/dashboard/redeem/codes', label: '兑换码管理', icon: Ticket },
+      { to: '/dashboard/marketplace', label: '市场分账', icon: Store },
+    ],
+  },
+  {
+    label: '系统',
+    items: [
+      { to: '/dashboard/system', label: '系统', icon: Settings2 },
+      { to: '/dashboard/releases', label: '更新日志', icon: BookOpen },
+    ],
+  },
+  {
+    label: '切换',
+    items: [{ to: '/panel', label: '用户面板', icon: ExternalLink }],
+  },
 ];
 
 /**
@@ -48,23 +69,30 @@ function Layout() {
           <span className="text-base font-semibold">TokenMP 管理端</span>
         </div>
         <nav className="flex-1 space-y-1 overflow-y-auto p-3">
-          {NAV_ITEMS.map((item) => (
-            <NavLink
-              key={item.to}
-              to={item.to}
-              end={item.to === '/dashboard'}
-              className={({ isActive }) =>
-                cn(
-                  'flex items-center gap-2.5 rounded-lg px-3 py-2 text-sm font-medium transition-colors',
-                  isActive
-                    ? 'bg-primary text-primary-foreground'
-                    : 'text-muted-foreground hover:bg-accent hover:text-accent-foreground',
-                )
-              }
-            >
-              <item.icon className="h-4 w-4" />
-              {item.label}
-            </NavLink>
+          {NAV_GROUPS.map((group, gi) => (
+            <div key={group.label} className={gi > 0 ? 'pt-3' : ''}>
+              <div className="px-3 pb-1 text-[11px] font-medium uppercase tracking-wider text-muted-foreground/70">{group.label}</div>
+              <div className="space-y-1">
+                {group.items.map((item) => (
+                  <NavLink
+                    key={item.to}
+                    to={item.to}
+                    end={item.to === '/dashboard'}
+                    className={({ isActive }) =>
+                      cn(
+                        'flex items-center gap-2.5 rounded-lg px-3 py-2 text-sm font-medium transition-colors',
+                        isActive
+                          ? 'bg-primary text-primary-foreground'
+                          : 'text-muted-foreground hover:bg-accent hover:text-accent-foreground',
+                      )
+                    }
+                  >
+                    <item.icon className="h-4 w-4" />
+                    {item.label}
+                  </NavLink>
+                ))}
+              </div>
+            </div>
           ))}
         </nav>
       </aside>
