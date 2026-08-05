@@ -595,6 +595,8 @@ function DetailDrawer({ id, onClose }: { id: string | null; onClose: () => void 
     [id],
   );
   const [renewTarget, setRenewTarget] = useState<{ planId: string; name: string; expiresAt: string | null } | null>(null);
+  const [disablePlanTarget, setDisablePlanTarget] = useState<{ planId: string; name: string } | null>(null);
+  const [disabling, setDisabling] = useState(false);
   const todayBeijing = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Shanghai', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date());
   const activePlans = (data?.plans ?? []).filter((p) => p.status === 'active');
   const isPlanExpired = (expiresAt: string | null) => (expiresAt ? todayBeijing > expiresAt.slice(0, 10) : false);
@@ -666,11 +668,10 @@ function DetailDrawer({ id, onClose }: { id: string | null; onClose: () => void 
                             <DropdownMenuTrigger asChild><Button variant="ghost" size="icon" className="h-7 w-7"><MoreVertical className="h-4 w-4" /></Button></DropdownMenuTrigger>
                             <DropdownMenuContent align="end">
                               <DropdownMenuItem onClick={() => setRenewTarget({ planId: p.id, name: p.plan?.name ?? '—', expiresAt: p.expires_at })}>续期…</DropdownMenuItem>
-                              <DropdownMenuItem className="text-destructive focus:text-destructive" onClick={async () => {
-                                if (!window.confirm('停用此套餐绑定？')) return;
-                                try { await disableDashboardUserPlanApi(id, p.id); reload(); toast.success('已停用'); }
-                                catch (e) { toast.error(getApiError(e)); }
-                              }}>停用</DropdownMenuItem>
+                              <DropdownMenuItem
+                                className="text-destructive focus:text-destructive"
+                                onClick={() => setDisablePlanTarget({ planId: p.id, name: p.plan?.name ?? '—' })}
+                              >停用</DropdownMenuItem>
                             </DropdownMenuContent>
                           </DropdownMenu>
                         )}
@@ -682,6 +683,37 @@ function DetailDrawer({ id, onClose }: { id: string | null; onClose: () => void 
               </CardContent>
             </Card>
             <RenewPlanDialog userId={id} target={renewTarget} onOpenChange={(o) => !o && setRenewTarget(null)} onDone={reload} />
+            <AlertDialog open={disablePlanTarget !== null} onOpenChange={(o) => !o && setDisablePlanTarget(null)}>
+              <AlertDialogContent>
+                <AlertDialogHeader>
+                  <AlertDialogTitle>停用套餐绑定</AlertDialogTitle>
+                  <AlertDialogDescription>
+                    确定要停用「{disablePlanTarget?.name}」套餐吗？停用后用户将无法使用该套餐的额度。
+                  </AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                  <AlertDialogCancel>取消</AlertDialogCancel>
+                  <AlertDialogAction
+                    className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                    disabled={disabling}
+                    onClick={async () => {
+                      if (!disablePlanTarget) return;
+                      setDisabling(true);
+                      try {
+                        await disableDashboardUserPlanApi(id, disablePlanTarget.planId);
+                        reload();
+                        toast.success('已停用');
+                        setDisablePlanTarget(null);
+                      } catch (e) {
+                        toast.error(getApiError(e));
+                      } finally {
+                        setDisabling(false);
+                      }
+                    }}
+                  >停用</AlertDialogAction>
+                </AlertDialogFooter>
+              </AlertDialogContent>
+            </AlertDialog>
           </div>
         ) : null}
       </SheetContent>
