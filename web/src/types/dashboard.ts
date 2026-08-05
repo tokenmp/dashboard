@@ -52,6 +52,8 @@ export interface QuotaItem {
   /** 计费单位：requests（coding）/ tokens（token、image） */
   unit: 'requests' | 'tokens';
   mode: 'window' | 'capped' | 'balance';
+  /** 总额度（coding=本周额度、token/image capped=token_limit），无则 null */
+  total?: number | null;
   /** window 模式 */
   windows?: QuotaWindow[];
   /** capped 模式：套餐固定额度上限 */
