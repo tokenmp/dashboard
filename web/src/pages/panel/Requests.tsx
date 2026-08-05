@@ -48,6 +48,9 @@ const PROTOCOLS = ['openai', 'anthropic', 'openai_chat', 'openai_responses', 'an
 const BILLING_PLANS = ['coding', 'token', 'image', 'free'];
 const USAGE_STATUSES = ['final', 'pending', 'estimated', 'missing'];
 
+/** 日期输入校验：空值或标准 YYYY-MM-DD（年份恰好 4 位），拒绝 6 位年份等异常输入 */
+const isDate = (v: string) => v === '' || /^\d{4}-\d{2}-\d{2}$/.test(v);
+
 /**
  * 用户面·我的请求记录：分页列表 + 详情抽屉。
  * 始终是「我的请求」视角，后端按当前用户 scope，不做管理分支。
@@ -274,11 +277,11 @@ function FiltersBar({
         </div>
         <div className="w-[150px]">
           <label className="mb-1 block text-xs text-muted-foreground">起始日期</label>
-          <DebouncedInput type="date" value={params.from ?? ''} onDebouncedChange={(v) => onFilter({ from: v })} />
+          <DebouncedInput type="date" value={params.from ?? ''} acceptValue={isDate} onDebouncedChange={(v) => onFilter({ from: v })} />
         </div>
         <div className="w-[150px]">
           <label className="mb-1 block text-xs text-muted-foreground">结束日期</label>
-          <DebouncedInput type="date" value={params.to ?? ''} onDebouncedChange={(v) => onFilter({ to: v })} />
+          <DebouncedInput type="date" value={params.to ?? ''} acceptValue={isDate} onDebouncedChange={(v) => onFilter({ to: v })} />
         </div>
         <Button variant="ghost" size="sm" onClick={onReset}>重置</Button>
       </CardContent>
