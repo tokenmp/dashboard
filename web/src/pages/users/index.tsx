@@ -391,6 +391,101 @@ function previewExpires(days: number): string {
   return `${yy}-${mm}-${dd} 23:59:59（北京时间）`;
 }
 
+/** 续期预计到期：基点=max(原到期,今天)，未过期顺延/已过期从今天，+N 天 23:59:59 北京 */
+function previewRenew(currentExpiresAt: string | null, days: number): string {
+  const todayBeijing = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Shanghai', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date());
+  let baseYmd: string;
+  let baseKind: string;
+  if (currentExpiresAt) {
+    const expiresYmd = currentExpiresAt.slice(0, 10);
+    if (todayBeijing <= expiresYmd) {
+      baseYmd = expiresYmd;
+      baseKind = '未过期·从原到期日顺延';
+    } else {
+      baseYmd = todayBeijing;
+      baseKind = '已过期·从今天起算';
+    }
+  } else {
+    baseYmd = todayBeijing;
+    baseKind = '当前永久·从今天起算';
+  }
+  const [y, m, d] = baseYmd.split('-').map(Number);
+  const dt = new Date(Date.UTC(y, m - 1, d));
+  dt.setUTCDate(dt.getUTCDate() + days);
+  const yy = dt.getUTCFullYear();
+  const mm = String(dt.getUTCMonth() + 1).padStart(2, '0');
+  const dd = String(dt.getUTCDate()).padStart(2, '0');
+  return `${yy}-${mm}-${dd} 23:59:59（${baseKind}）`;
+}
+
+function RenewPlanDialog({ userId, target, onOpenChange, onDone }: {
+  userId: string;
+  target: { planId: string; name: string; expiresAt: string | null } | null;
+  onOpenChange: (open: boolean) => void;
+  onDone?: () => void;
+}) {
+  const { mutate, loading: submitting } = useMutation();
+  const [days, setDays] = useState('31');
+  const [permanent, setPermanent] = useState(false);
+
+  // 打开时重置输入
+  useEffect(() => {
+    if (target) { setDays('31'); setPermanent(false); }
+  }, [target]);
+
+  const open = target !== null;
+  const currentLabel = target?.expiresAt
+    ? `${target.expiresAt.slice(0, 10)} 23:59:59（北京时间）`
+    : '永久有效';
+  const preview = permanent
+    ? '永久有效'
+    : days ? previewRenew(target?.expiresAt ?? null, Number(days)) : '请输入天数';
+
+  const submit = () => {
+    if (!target) return;
+    mutate(() => renewDashboardUserPlanApi(userId, target.planId, {
+      duration_days: permanent ? undefined : (days ? Number(days) : undefined),
+      permanent,
+    }), {
+      successMsg: '已续期',
+      onSuccess: () => { onOpenChange(false); onDone?.(); },
+    }).catch(() => {});
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-md">
+        <DialogHeader>
+          <DialogTitle>续期套餐</DialogTitle>
+          <DialogDescription>{target?.name ?? '—'}</DialogDescription>
+        </DialogHeader>
+        <div className="space-y-3">
+          <div className="rounded-md bg-muted px-3 py-2 text-sm">
+            <span className="text-muted-foreground">当前到期：</span>
+            <span className="font-medium">{currentLabel}</span>
+          </div>
+          <div className="space-y-1.5">
+            <Label>续期天数</Label>
+            <Input type="number" value={days} onChange={(e) => setDays(e.target.value)} disabled={permanent} placeholder="如 31" />
+          </div>
+          <div className="flex items-center gap-2">
+            <Switch checked={permanent} onCheckedChange={setPermanent} id="renew-perm" />
+            <Label htmlFor="renew-perm" className="cursor-pointer">设为永久有效</Label>
+          </div>
+          <div className="rounded-md bg-muted px-3 py-2 text-sm">
+            <span className="text-muted-foreground">续期后预计到期：</span>
+            <span className="font-medium">{preview}</span>
+          </div>
+        </div>
+        <DialogFooter>
+          <Button variant="outline" onClick={() => onOpenChange(false)}>取消</Button>
+          <Button disabled={submitting || (!permanent && !days)} onClick={submit}>{submitting ? '续期中…' : '确认续期'}</Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 function GrantPlanButton({ userId, onDone }: { userId: string; onDone?: () => void }) {
   const { mutate, loading: submitting } = useMutation();
   const [open, setOpen] = useState(false);
@@ -490,6 +585,7 @@ function DetailDrawer({ id, onClose }: { id: string | null; onClose: () => void 
     () => (id ? getDashboardUserDetailApi(id) : Promise.resolve(null)),
     [id],
   );
+  const [renewTarget, setRenewTarget] = useState<{ planId: string; name: string; expiresAt: string | null } | null>(null);
   return (
     <Sheet open={id !== null} onOpenChange={(open) => !open && onClose()}>
       <SheetContent side="right" className="w-full overflow-y-auto sm:max-w-2xl">
@@ -550,12 +646,7 @@ function DetailDrawer({ id, onClose }: { id: string | null; onClose: () => void 
                           <DropdownMenu>
                             <DropdownMenuTrigger asChild><Button variant="ghost" size="icon" className="h-7 w-7"><MoreVertical className="h-4 w-4" /></Button></DropdownMenuTrigger>
                             <DropdownMenuContent align="end">
-                              <DropdownMenuItem onClick={async () => {
-                                const days = window.prompt('续期天数（未过期则在原到期日累加，已过期则从今天起算）', '31');
-                                if (!days) return;
-                                try { await renewDashboardUserPlanApi(id, p.id, { duration_days: Number(days) }); reload(); toast.success('已续期'); }
-                                catch (e) { toast.error(getApiError(e)); }
-                              }}>续期…</DropdownMenuItem>
+                              <DropdownMenuItem onClick={() => setRenewTarget({ planId: p.id, name: p.plan?.name ?? '—', expiresAt: p.expires_at })}>续期…</DropdownMenuItem>
                               <DropdownMenuItem className="text-destructive focus:text-destructive" onClick={async () => {
                                 if (!window.confirm('停用此套餐绑定？')) return;
                                 try { await disableDashboardUserPlanApi(id, p.id); reload(); toast.success('已停用'); }
@@ -571,6 +662,7 @@ function DetailDrawer({ id, onClose }: { id: string | null; onClose: () => void 
                 )}
               </CardContent>
             </Card>
+            <RenewPlanDialog userId={id} target={renewTarget} onOpenChange={(o) => !o && setRenewTarget(null)} onDone={reload} />
           </div>
         ) : null}
       </SheetContent>
