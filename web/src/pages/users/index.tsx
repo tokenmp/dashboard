@@ -6,6 +6,10 @@ import {
   createDashboardUserApi,
   updateDashboardUserApi,
   resetDashboardUserPasswordApi,
+  getDashboardPlansApi,
+  grantDashboardUserPlanApi,
+  renewDashboardUserPlanApi,
+  disableDashboardUserPlanApi,
 } from '@/api/dashboard';
 import { usePagedQuery } from '@/hooks/usePagedQuery';
 import { useAsync } from '@/hooks/useAsync';
@@ -56,6 +60,8 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
 import { formatCompact, formatNumber } from '@/utils/format';
+import { toast } from 'sonner';
+import { getApiError } from '@/utils/error';
 import type { UserBasic, UserListQuery, UserUpdatePayload } from '@/types/user';
 
 function Users() {
@@ -372,8 +378,84 @@ function RevealPasswordDialog({ data, onClose }: { data: { email: string; passwo
   );
 }
 
+function GrantPlanButton({ userId, onDone }: { userId: string; onDone?: () => void }) {
+  const { mutate, loading: submitting } = useMutation();
+  const [open, setOpen] = useState(false);
+  const [planId, setPlanId] = useState('');
+  const [mode, setMode] = useState<'default' | 'custom' | 'permanent'>('default');
+  const [days, setDays] = useState('');
+  const [options, setOptions] = useState<{ id: string; name: string; plan_type: string }[]>([]);
+
+  const openDialog = async () => {
+    setOpen(true);
+    setPlanId('');
+    setMode('default');
+    setDays('');
+    try {
+      const res = await getDashboardPlansApi({ size: 100, status: 'active' });
+      setOptions(res.list.map((p) => ({ id: p.id, name: p.name, plan_type: p.plan_type })));
+    } catch {
+      /* 加载套餐列表失败时 options 保持空 */
+    }
+  };
+  const submit = () => {
+    if (!planId) return;
+    mutate(() => grantDashboardUserPlanApi(userId, {
+      plan_id: planId,
+      duration_days: mode === 'custom' ? (days ? Number(days) : null) : undefined,
+      permanent: mode === 'permanent',
+    }), {
+      successMsg: '套餐已发放',
+      onSuccess: () => { setOpen(false); onDone?.(); },
+    }).catch(() => {});
+  };
+
+  return (
+    <>
+      <Button size="sm" variant="outline" onClick={openDialog}><Plus className="mr-1 h-3 w-3" />发放套餐</Button>
+      <Dialog open={open} onOpenChange={setOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>发放套餐</DialogTitle>
+            <DialogDescription>token 类型将自动停用该用户旧的 token 套餐（互斥）；coding/image 可叠加。</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-3">
+            <div className="space-y-1.5">
+              <Label>选择套餐模板</Label>
+              <Select value={planId} onValueChange={setPlanId}>
+                <SelectTrigger><SelectValue placeholder="选择上架套餐" /></SelectTrigger>
+                <SelectContent>
+                  {options.map((o) => <SelectItem key={o.id} value={o.id}>[{o.plan_type}] {o.name}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-1.5">
+              <Label>有效期</Label>
+              <Select value={mode} onValueChange={(v) => setMode(v as typeof mode)}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="default">按模板默认天数</SelectItem>
+                  <SelectItem value="custom">自定义天数</SelectItem>
+                  <SelectItem value="permanent">永久</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            {mode === 'custom' && (
+              <div className="space-y-1.5"><Label>天数</Label><Input type="number" value={days} onChange={(e) => setDays(e.target.value)} placeholder="如 31" /></div>
+            )}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setOpen(false)}>取消</Button>
+            <Button disabled={!planId || submitting} onClick={submit}>{submitting ? '发放中…' : '发放'}</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </>
+  );
+}
+
 function DetailDrawer({ id, onClose }: { id: string | null; onClose: () => void }) {
-  const { data, loading, error } = useAsync(
+  const { data, loading, error, reload } = useAsync(
     () => (id ? getDashboardUserDetailApi(id) : Promise.resolve(null)),
     [id],
   );
@@ -423,11 +505,18 @@ function DetailDrawer({ id, onClose }: { id: string | null; onClose: () => void 
             <KeySection icon={<KeyRound className="h-3 w-3" />} title="API Key" items={data.apiKeys.map((k) => ({ id: k.id, name: k.name, masked: `${k.key_prefix}…${k.key_suffix}`, status: k.status, sub: k.last_used_at ? `最近 ${k.last_used_at}` : '未使用' }))} />
             <KeySection icon={<Bot className="h-3 w-3" />} title="Bot Key" items={data.botKeys.map((k) => ({ id: k.id, name: k.name, masked: `${k.key_prefix}…${k.key_suffix}`, status: k.status, sub: `scope: ${k.scope}` }))} />
 
-            {data.plans.length > 0 && (
-              <Card>
-                <CardHeader className="pb-2"><CardTitle className="text-sm flex items-center gap-1.5"><Package className="h-3 w-3" />持有套餐（{data.plans.length}）</CardTitle></CardHeader>
-                <CardContent className="space-y-2">
-                  {data.plans.map((p) => (
+            <Card>
+              <CardHeader className="pb-2 flex flex-row items-center justify-between space-y-0">
+                <CardTitle className="text-sm flex items-center gap-1.5">
+                  <Package className="h-3 w-3" />持有套餐（{data.plans.length}）
+                </CardTitle>
+                <GrantPlanButton userId={id} onDone={reload} />
+              </CardHeader>
+              <CardContent className="space-y-2">
+                {data.plans.length === 0 ? (
+                  <p className="py-2 text-center text-xs text-muted-foreground">暂无套餐，点击「发放套餐」添加</p>
+                ) : (
+                  data.plans.map((p) => (
                     <div key={p.id} className="flex items-center justify-between rounded-lg border p-2.5">
                       <div>
                         <div className="text-sm font-medium">{p.plan?.name ?? '—'}</div>
@@ -435,12 +524,32 @@ function DetailDrawer({ id, onClose }: { id: string | null; onClose: () => void 
                           {p.plan_type} · 生效 {p.activated_at?.slice(0, 10)} · 过期 {p.expires_at?.slice(0, 10) ?? '永久'}
                         </div>
                       </div>
-                      <StatusBadge status={p.status} />
+                      <div className="flex items-center gap-2">
+                        {p.status === 'active' && (
+                          <DropdownMenu>
+                            <DropdownMenuTrigger asChild><Button variant="ghost" size="icon" className="h-7 w-7"><MoreVertical className="h-4 w-4" /></Button></DropdownMenuTrigger>
+                            <DropdownMenuContent align="end">
+                              <DropdownMenuItem onClick={async () => {
+                                const days = window.prompt('续期天数（未过期则在原到期日累加，已过期则从今天起算）', '31');
+                                if (!days) return;
+                                try { await renewDashboardUserPlanApi(id, p.id, { duration_days: Number(days) }); reload(); toast.success('已续期'); }
+                                catch (e) { toast.error(getApiError(e)); }
+                              }}>续期…</DropdownMenuItem>
+                              <DropdownMenuItem className="text-destructive focus:text-destructive" onClick={async () => {
+                                if (!window.confirm('停用此套餐绑定？')) return;
+                                try { await disableDashboardUserPlanApi(id, p.id); reload(); toast.success('已停用'); }
+                                catch (e) { toast.error(getApiError(e)); }
+                              }}>停用</DropdownMenuItem>
+                            </DropdownMenuContent>
+                          </DropdownMenu>
+                        )}
+                        <StatusBadge status={p.status} />
+                      </div>
                     </div>
-                  ))}
-                </CardContent>
-              </Card>
-            )}
+                  ))
+                )}
+              </CardContent>
+            </Card>
           </div>
         ) : null}
       </SheetContent>

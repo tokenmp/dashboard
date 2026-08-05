@@ -16,8 +16,8 @@ return [
     'route_auto_group'      => false,
     // 合并路由规则
     'route_rule_merge'      => false,
-    // 路由是否完全匹配
-    'route_complete_match'  => false,
+    // 路由是否完全匹配（true=路由规则必须精确匹配全部路径段，避免短路由前缀匹配长请求）
+    'route_complete_match'  => true,
     // 去除斜杠
     'remove_slash'          => false,
     // 默认的路由变量规则

@@ -16,7 +16,16 @@ import type {
   UserUpdatePayload,
   CreatedUser,
   ResetPasswordResult,
+  UserPlanItem,
 } from '@/types/user';
+import type {
+  PlanItem,
+  PlanListQuery,
+  PlanPayload,
+  PlanStatusPayload,
+  GrantUserPlanPayload,
+  RenewUserPlanPayload,
+} from '@/types/plan';
 import type { AnnouncementPayload, NotificationItem, SystemQuery } from '@/types/system';
 import type {
   ProviderItem,
@@ -276,5 +285,59 @@ export async function getDashboardCodeRedemptionsApi(
   const res = await client.get<ApiResponse<CodeRedemptionsResult>>(`/dashboard/redeem/codes/${id}/redemptions`, {
     params: toParams(params as Record<string, unknown>),
   });
+  return res.data.data;
+}
+
+// ── 套餐目录（模板）CRUD ──
+export async function getDashboardPlansApi(
+  params: PlanListQuery,
+): Promise<PageResult<PlanItem>> {
+  const res = await client.get<ApiResponse<PageResult<PlanItem>>>('/dashboard/plans', {
+    params: toParams(params as Record<string, unknown>),
+  });
+  return res.data.data;
+}
+export async function createDashboardPlanApi(body: PlanPayload): Promise<PlanItem> {
+  const res = await client.post<ApiResponse<PlanItem>>('/dashboard/plans', body);
+  return res.data.data;
+}
+export async function updateDashboardPlanApi(id: string, body: PlanPayload): Promise<PlanItem> {
+  const res = await client.put<ApiResponse<PlanItem>>(`/dashboard/plans/${id}`, body);
+  return res.data.data;
+}
+export async function updateDashboardPlanStatusApi(
+  id: string,
+  body: PlanStatusPayload,
+): Promise<PlanItem> {
+  const res = await client.put<ApiResponse<PlanItem>>(`/dashboard/plans/${id}/status`, body);
+  return res.data.data;
+}
+
+// ── 用户套餐：发放 / 续期 / 停用 ──
+export async function grantDashboardUserPlanApi(
+  userId: string,
+  body: GrantUserPlanPayload,
+): Promise<UserPlanItem> {
+  const res = await client.post<ApiResponse<UserPlanItem>>(`/dashboard/users/${userId}/plans`, body);
+  return res.data.data;
+}
+export async function renewDashboardUserPlanApi(
+  userId: string,
+  planId: string,
+  body: RenewUserPlanPayload,
+): Promise<UserPlanItem> {
+  const res = await client.post<ApiResponse<UserPlanItem>>(
+    `/dashboard/users/${userId}/plans/${planId}/renew`,
+    body,
+  );
+  return res.data.data;
+}
+export async function disableDashboardUserPlanApi(
+  userId: string,
+  planId: string,
+): Promise<{ id: string }> {
+  const res = await client.put<ApiResponse<{ id: string }>>(
+    `/dashboard/users/${userId}/plans/${planId}/disable`,
+  );
   return res.data.data;
 }
