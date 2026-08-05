@@ -171,7 +171,10 @@ Route::group('api/v1', function () {
                 Route::delete('notices/:id', 'dashboard/System/deleteNotice')->pattern(['id' => '[\w\-]+']);
                 Route::group('releases', function () {
                     Route::get('', 'dashboard/System/releases');
+                    Route::post('', 'dashboard/System/createRelease');
                     Route::get(':id', 'dashboard/System/releaseDetail')->pattern(['id' => '[\w\-]+']);
+                    Route::put(':id', 'dashboard/System/updateRelease')->pattern(['id' => '[\w\-]+']);
+                    Route::delete(':id', 'dashboard/System/deleteRelease')->pattern(['id' => '[\w\-]+']);
                 });
                 Route::get('config', 'dashboard/System/config');
                 Route::get('migrations', 'dashboard/System/migrations');

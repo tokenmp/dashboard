@@ -145,6 +145,66 @@ class System extends BaseController
         ]);
     }
 
+    /** POST /api/v1/dashboard/releases —— 创建版本日志 */
+    public function createRelease()
+    {
+        $row          = $this->releaseInput();
+        $row['id']    = Db::connect('pgsql')->query('select gen_random_uuid() as id')[0]['id'];
+        $row['created_by'] = app('user')->id;
+        $release      = VersionRelease::create($row);
+        $release->id  = $row['id'];
+        return success($release);
+    }
+
+    /** PUT /api/v1/dashboard/releases/:id —— 更新版本日志 */
+    public function updateRelease($id)
+    {
+        $release = VersionRelease::where('id', $id)->find();
+        if ($release === null) {
+            throw new HttpException(404, '版本不存在');
+        }
+        // version 唯一键，更新时不改 version（避免冲突）
+        $input = $this->releaseInput();
+        unset($input['version']);
+        $release->save($input);
+        return success($release->refresh());
+    }
+
+    /** DELETE /api/v1/dashboard/releases/:id —— 软删（归档） */
+    public function deleteRelease($id)
+    {
+        $release = VersionRelease::where('id', $id)->find();
+        if ($release === null) {
+            throw new HttpException(404, '版本不存在');
+        }
+        $release->status = 'archived';
+        $release->save();
+        return success(['id' => $id]);
+    }
+
+    /** 读取并校验版本日志字段（create/update 共用） */
+    private function releaseInput(): array
+    {
+        $version = trim((string) $this->request->post('version', ''));
+        $title   = trim((string) $this->request->post('title', ''));
+        if ($title === '') {
+            throw new HttpException(400, '版本标题不能为空');
+        }
+        $status       = $this->request->post('status');
+        $releaseType  = $this->request->post('release_type');
+        $releasedAt   = $this->request->post('released_at');
+        return [
+            'version'      => $version !== '' ? $version : 'v0.0.0',
+            'title'        => $title,
+            'summary'      => (string) $this->request->post('summary', ''),
+            'body'         => (string) $this->request->post('body', ''),
+            'release_type' => in_array($releaseType, ['feature', 'fix', 'improvement', 'perf'], true) ? $releaseType : 'feature',
+            'released_at'  => ($releasedAt ? $releasedAt : date('Y-m-d H:i:s')),
+            'status'       => in_array($status, ['draft', 'published', 'archived'], true) ? $status : 'draft',
+            'sort_order'   => (int) $this->request->post('sort_order', 0),
+        ];
+    }
+
     /** GET /api/v1/dashboard/config（敏感 key 的 value 脱敏为 "******"） */
     public function config()
     {
