@@ -8,7 +8,6 @@ import { EmptyState } from '@/components/EmptyState';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Input } from '@/components/ui/input';
 import { DebouncedInput } from '@/components/DebouncedInput';
 import { Skeleton } from '@/components/ui/skeleton';
 import {
@@ -275,11 +274,11 @@ function FiltersBar({
         </div>
         <div className="w-[150px]">
           <label className="mb-1 block text-xs text-muted-foreground">起始日期</label>
-          <Input type="date" value={params.from ?? ''} onChange={(e) => onFilter({ from: e.target.value })} />
+          <DebouncedInput type="date" value={params.from ?? ''} onDebouncedChange={(v) => onFilter({ from: v })} />
         </div>
         <div className="w-[150px]">
           <label className="mb-1 block text-xs text-muted-foreground">结束日期</label>
-          <Input type="date" value={params.to ?? ''} onChange={(e) => onFilter({ to: e.target.value })} />
+          <DebouncedInput type="date" value={params.to ?? ''} onDebouncedChange={(v) => onFilter({ to: v })} />
         </div>
         <Button variant="ghost" size="sm" onClick={onReset}>重置</Button>
       </CardContent>
