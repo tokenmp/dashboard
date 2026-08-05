@@ -53,8 +53,10 @@ Route::group('api/v1', function () {
             // 我的账户中心
             Route::group('user', function () {
                 Route::get('', 'panel/User/profile');
-                Route::get('keys', 'panel/User/keys');
+                // 注意：keys/bot 必须注册在 keys 之前——ThinkPHP 静态路由 keys 会前缀匹配
+                // keys/xxx，若 keys 在前会吞掉 keys/bot 导致 Bot Key 端点误返回 API Key。
                 Route::get('keys/bot', 'panel/User/botKeys');
+                Route::get('keys', 'panel/User/keys');
                 Route::get('plans', 'panel/User/plans');
                 Route::get('notifications', 'panel/Notification/mine');
                 Route::get('redemptions', 'panel/Redeem/myRedemptions');
