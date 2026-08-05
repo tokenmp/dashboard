@@ -6,6 +6,8 @@ import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuIte
 import { useAuthStore } from '@/store/auth';
 import { useRole } from '@/hooks/useRole';
 import { NotificationBell } from '@/components/NotificationBell';
+import { ScrollingAnnouncement } from '@/components/ScrollingAnnouncement';
+import { getDashboardNoticesApi } from '@/api/dashboard';
 import { cn } from '@/lib/utils';
 
 const NAV_ITEMS = [
@@ -72,6 +74,12 @@ function Layout() {
       <div className="flex flex-1 flex-col overflow-hidden">
         <header className="flex h-14 shrink-0 items-center justify-between border-b px-6">
           <span className="text-lg font-semibold md:hidden">TokenMP 管理端</span>
+          <ScrollingAnnouncement
+            fetcher={getDashboardNoticesApi}
+            viewAllTo="/dashboard/system"
+            itemTo={() => '/dashboard/system'}
+            className="hidden md:flex"
+          />
           <div className="ml-auto flex items-center gap-2">
             <NotificationBell />
             <DropdownMenu>
