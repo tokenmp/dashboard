@@ -4,7 +4,7 @@ declare(strict_types=1);
 namespace app\controller\dashboard;
 
 use app\BaseController;
-use app\model\Notification;
+use app\model\Notification as NotificationModel;
 use app\support\Pagination;
 
 /**
@@ -22,7 +22,7 @@ class Notification extends BaseController
     {
         [$page, $size] = Pagination::page($this->request);
 
-        $query = Notification::where('user_id', $id);
+        $query = NotificationModel::where('user_id', $id);
         if ($this->request->get('unread') === '1') {
             $query->whereNull('read_at');
         }
