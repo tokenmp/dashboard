@@ -74,7 +74,10 @@ return [
             // 端口
             'hostport'        => env('PG_PORT', '5432'),
             // 数据库连接参数
-            'params'          => [],
+            // EMULATE_PREPARES：模拟预处理，把 prepare+execute 合成一次网络往返。
+            // 经 SSH 隧道时 native prepare 每查询 ~148ms（Parse+Bind+Execute 两次 RTT），
+            // 模拟后 ~49ms（与 psql 一致）。PDO 转义可靠，安全性不变。
+            'params'          => [\PDO::ATTR_EMULATE_PREPARES => true],
             // 数据库编码
             'charset'         => env('PG_CHARSET', 'utf8'),
             // 数据库表前缀
