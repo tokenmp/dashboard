@@ -77,6 +77,41 @@ export async function getPanelBotKeysApi(): Promise<BotKeyItem[]> {
   const res = await client.get<ApiResponse<BotKeyItem[]>>('/panel/user/keys/bot');
   return res.data.data;
 }
+
+/** 创建密钥返回（含明文 key，仅此一次） */
+export interface CreatedKey {
+  id: string;
+  name: string;
+  status: string;
+  key_prefix: string;
+  key_suffix: string;
+  key: string;
+  created_at: string;
+}
+export async function createPanelKeyApi(body: { name: string }): Promise<CreatedKey> {
+  const res = await client.post<ApiResponse<CreatedKey>>('/panel/user/keys', body);
+  return res.data.data;
+}
+export async function updatePanelKeyApi(id: string, body: { name?: string; status?: string }): Promise<UserApiKeyItem> {
+  const res = await client.put<ApiResponse<UserApiKeyItem>>(`/panel/user/keys/${id}`, body);
+  return res.data.data;
+}
+export async function deletePanelKeyApi(id: string): Promise<{ id: string }> {
+  const res = await client.delete<ApiResponse<{ id: string }>>(`/panel/user/keys/${id}`);
+  return res.data.data;
+}
+export async function createPanelBotKeyApi(body: { name: string }): Promise<CreatedKey & { scope: string }> {
+  const res = await client.post<ApiResponse<CreatedKey & { scope: string }>>('/panel/user/keys/bot', body);
+  return res.data.data;
+}
+export async function updatePanelBotKeyApi(id: string, body: { name?: string; status?: string }): Promise<BotKeyItem> {
+  const res = await client.put<ApiResponse<BotKeyItem>>(`/panel/user/keys/bot/${id}`, body);
+  return res.data.data;
+}
+export async function deletePanelBotKeyApi(id: string): Promise<{ id: string }> {
+  const res = await client.delete<ApiResponse<{ id: string }>>(`/panel/user/keys/bot/${id}`);
+  return res.data.data;
+}
 export async function getPanelPlansApi(): Promise<UserPlanItem[]> {
   const res = await client.get<ApiResponse<UserPlanItem[]>>('/panel/user/plans');
   return res.data.data;

@@ -8,7 +8,10 @@ use app\model\BotKey;
 use app\model\User as UserModel;
 use app\model\UserApiKey;
 use app\model\UserPlan;
+use app\service\ApiKeyHasher;
 use app\service\DataScope;
+use think\exception\HttpException;
+use think\facade\Db;
 
 /**
  * 用户面：我的账户中心（panel，自取）
@@ -58,6 +61,146 @@ class User extends BaseController
             ->select();
 
         return success($list);
+    }
+
+    /** POST /api/v1/panel/user/keys —— 创建 API Key，明文仅返回一次 */
+    public function createKey()
+    {
+        $ctx  = DataScope::forSelf(app('user'));
+        $name = trim((string) $this->request->post('name', '')) ?: 'default';
+        $raw  = ApiKeyHasher::generateApiKey();
+        [$pre, $suf] = ApiKeyHasher::parts($raw);
+        $id   = $this->genUuid();
+        UserApiKey::create([
+            'id'         => $id,
+            'user_id'    => $ctx->userId(),
+            'name'       => $name,
+            'key_prefix' => $pre,
+            'key_suffix' => $suf,
+            'key_hash'   => ApiKeyHasher::hash($raw),
+            'status'     => 'active',
+        ]);
+
+        return success([
+            'id'         => $id,
+            'name'       => $name,
+            'status'     => 'active',
+            'key_prefix' => $pre,
+            'key_suffix' => $suf,
+            'key'        => $raw, // 明文只返回这一次，不落库
+            'created_at' => date('Y-m-d H:i:s'),
+        ]);
+    }
+
+    /** POST /api/v1/panel/user/keys/bot —— 创建 Bot Key（scope 固定 user），明文仅返回一次 */
+    public function createBotKey()
+    {
+        $ctx  = DataScope::forSelf(app('user'));
+        $name = trim((string) $this->request->post('name', '')) ?: 'default';
+        $raw  = ApiKeyHasher::generateBotKey();
+        [$pre, $suf] = ApiKeyHasher::parts($raw);
+        $id   = $this->genUuid();
+        BotKey::create([
+            'id'          => $id,
+            'user_id'     => $ctx->userId(),
+            'name'        => $name,
+            'scope'       => 'user',
+            'key_prefix'  => $pre,
+            'key_suffix'  => $suf,
+            'key_hash'    => ApiKeyHasher::hash($raw),
+            'status'      => 'active',
+            'last_used_at'=> date('Y-m-d H:i:s'),
+        ]);
+
+        return success([
+            'id'         => $id,
+            'name'       => $name,
+            'scope'      => 'user',
+            'status'     => 'active',
+            'key_prefix' => $pre,
+            'key_suffix' => $suf,
+            'key'        => $raw,
+            'created_at' => date('Y-m-d H:i:s'),
+        ]);
+    }
+
+    /** PUT /api/v1/panel/user/keys/:id —— 改名 / 启停（status ∈ active|disabled） */
+    public function updateKey($id)
+    {
+        $key = $this->findOwnApiKey($id);
+        $key->save($this->keyUpdateInput());
+        return success($key->refresh());
+    }
+
+    /** PUT /api/v1/panel/user/keys/bot/:id —— 改名 / 启停 */
+    public function updateBotKey($id)
+    {
+        $key = $this->findOwnBotKey($id);
+        $key->save($this->keyUpdateInput());
+        return success($key->refresh());
+    }
+
+    /** DELETE /api/v1/panel/user/keys/:id —— 软删（status=deleted） */
+    public function deleteKey($id)
+    {
+        $key = $this->findOwnApiKey($id);
+        $key->status = 'deleted';
+        $key->save();
+        return success(['id' => $id]);
+    }
+
+    /** DELETE /api/v1/panel/user/keys/bot/:id —— 软删 */
+    public function deleteBotKey($id)
+    {
+        $key = $this->findOwnBotKey($id);
+        $key->status = 'deleted';
+        $key->save();
+        return success(['id' => $id]);
+    }
+
+    /** 读取更新字段：name（非空则改）、status（须为 active|disabled） */
+    private function keyUpdateInput(): array
+    {
+        $update = [];
+        $name   = trim((string) $this->request->post('name', ''));
+        if ($name !== '') {
+            $update['name'] = $name;
+        }
+        $status = $this->request->post('status');
+        if ($status !== null && in_array($status, ['active', 'disabled'], true)) {
+            $update['status'] = $status;
+        }
+        if (empty($update)) {
+            throw new HttpException(400, '无可更新字段');
+        }
+        return $update;
+    }
+
+    /** 找到自己名下、未删除的 API Key，越权或不存在 → 404 */
+    private function findOwnApiKey(string $id): UserApiKey
+    {
+        $ctx = DataScope::forSelf(app('user'));
+        $key = UserApiKey::where('id', $id)->where('user_id', $ctx->userId())->where('status', '<>', 'deleted')->find();
+        if ($key === null) {
+            throw new HttpException(404, '密钥不存在');
+        }
+        return $key;
+    }
+
+    /** 找到自己名下、未删除的 Bot Key */
+    private function findOwnBotKey(string $id): BotKey
+    {
+        $ctx = DataScope::forSelf(app('user'));
+        $key = BotKey::where('id', $id)->where('user_id', $ctx->userId())->where('status', '<>', 'deleted')->find();
+        if ($key === null) {
+            throw new HttpException(404, '密钥不存在');
+        }
+        return $key;
+    }
+
+    private function genUuid(): string
+    {
+        return Db::connect('pgsql')->query('select gen_random_uuid() as id')[0]['id'];
     }
 
     /** GET /api/v1/panel/user/plans */
