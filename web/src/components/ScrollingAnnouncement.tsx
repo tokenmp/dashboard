@@ -74,7 +74,7 @@ export function ScrollingAnnouncement({ fetcher, viewAllTo, itemTo, className }:
   return (
     <div
       className={cn(
-        'flex h-12 min-w-0 max-w-md flex-1 items-center gap-2 overflow-hidden rounded-md border bg-muted/40 px-2',
+        'flex h-11 min-w-0 flex-1 items-center gap-2 overflow-hidden rounded-md border bg-muted/40 px-2',
         className,
       )}
       onMouseEnter={() => setPaused(true)}
@@ -96,7 +96,7 @@ export function ScrollingAnnouncement({ fetcher, viewAllTo, itemTo, className }:
         >
           {displayedNotices.map((notice, index) => {
             const to = itemTo?.(notice.id) ?? null;
-            const itemClassName = 'h-10 w-full text-left';
+            const itemClassName = 'block h-10 w-full shrink-0 overflow-hidden p-0 text-left leading-none';
             const inner = (
               <>
                 <div className="line-clamp-1 text-xs font-medium leading-5">{notice.title}</div>
