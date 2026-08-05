@@ -17,6 +17,7 @@ import type {
 import type { NotificationItem, SystemQuery } from '@/types/system';
 import type { RedeemCodeRedemptionItem } from '@/types/redeem';
 import type {
+  AiModelItem,
   UpstreamKeyItem,
   UpstreamKeyDetailResult,
   UpstreamQuery,
@@ -149,6 +150,14 @@ export async function getPanelUpstreamKeyDetailApi(
   id: string,
 ): Promise<UpstreamKeyDetailResult> {
   const res = await client.get<ApiResponse<UpstreamKeyDetailResult>>(`/panel/upstream/keys/${id}`);
+  return res.data.data;
+}
+export async function getPanelModelsApi(
+  params: UpstreamQuery,
+): Promise<PageResult<AiModelItem>> {
+  const res = await client.get<ApiResponse<PageResult<AiModelItem>>>('/panel/upstream/models', {
+    params: toParams(params as Record<string, unknown>),
+  });
   return res.data.data;
 }
 

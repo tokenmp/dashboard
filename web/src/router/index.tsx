@@ -22,6 +22,7 @@ import Releases from '@/pages/releases';
 
 // 用户端页面（panel，自取数据）—— 调用 @/api/panel
 import PanelOverview from '@/pages/panel/Overview';
+import PanelModels from '@/pages/panel/Models';
 import PanelRequests from '@/pages/panel/Requests';
 import PanelUsage from '@/pages/panel/Usage';
 import PanelKeys from '@/pages/panel/Keys';
@@ -80,6 +81,7 @@ export const router = createBrowserRouter([
     ),
     children: [
       { index: true, element: <PanelOverview /> },
+      { path: 'models', element: <PanelModels /> },
       { path: 'requests', element: <PanelRequests /> },
       { path: 'usage', element: <PanelUsage /> },
       { path: 'keys', element: <PanelKeys /> },
