@@ -5,6 +5,7 @@ namespace app\controller\panel;
 
 use app\BaseController;
 use app\service\DataScope;
+use app\service\QuotaService;
 use think\facade\Db;
 
 /**
@@ -91,141 +92,12 @@ class Overview extends BaseController
     }
 
     /**
-     * 用户各计费类型的额度（套餐感知）：
-     * - coding（编程套餐）：展示「本周」与「近 5 小时」已用请求数与套餐限额。
-     *   本周窗口从当前计费周起始（周一 00:00 UTC = 中国时间周一 8:00）算起，
-     *   若套餐在本周内才开通，则从套餐开通时间算起；不再用累计 ledger 余额
-     *   （coding 套餐无固定余额概念，累计扣费求和恒为负、无意义）。
-     * - token / image：若套餐设有 token_limit（固定额度）→ 展示「已用 / 限额」；
-     *   否则（计量预付费）→ 展示 ledger 余额 / 预扣 / 可用。
+     * 用户各计费类型的额度（套餐感知），委托 QuotaService 统一口径。
+     * 与 dashboard 用户详情一致，对齐执行器 QuotaCapacitySQL（usage_ledger charge 行
+     * 为「已用」、token 统一为「套餐额度 + 充值 − 已用 − 预扣」、coding 滚动窗口）。
      */
     private function userQuota(string $userId): array
     {
-        // 1. 用户有效套餐（按 plan_type 聚合，取最宽松限额 + 最早开通时间）
-        $planRows = Db::connect('pgsql')->query(
-            'select p.plan_type,'
-            . ' max(p.name) as name,'
-            . ' max(coalesce(p.hourly_5h_limit, 0)) as h5_limit,'
-            . ' max(coalesce(p.weekly_limit, 0)) as weekly_limit,'
-            . ' max(coalesce(p.token_limit, 0)) as token_limit,'
-            . ' min(up.activated_at)::text as activated_at'
-            . ' from user_plans up join plans p on p.id = up.plan_id'
-            . " where up.user_id = ? and up.status = 'active'"
-            . ' and (up.expires_at is null or up.expires_at > now())'
-            . ' group by p.plan_type',
-            [$userId]
-        );
-        $planMap = []; // plan_type => [name, h5_limit, weekly_limit, token_limit, activated_at]
-        foreach ($planRows as $p) {
-            $planMap[$p['plan_type']] = $p;
-        }
-
-        // 2. ledger 余额与累计已用（token/image 计量型用）
-        $balances = Db::connect('pgsql')->query(
-            "select coalesce(billing_plan, 'unknown') as billing_plan,"
-            . ' coalesce(sum(token_delta), 0) as token_balance,'
-            . ' coalesce(sum(case when token_delta < 0 then abs(token_delta) else 0 end), 0) as token_used'
-            . ' from usage_ledger where user_id = ? group by billing_plan',
-            [$userId]
-        );
-        $balMap = [];
-        foreach ($balances as $b) {
-            $balMap[$b['billing_plan']] = $b;
-        }
-
-        // 3. 预扣（计量型可用 = 余额 − 预扣）
-        $reserved = Db::connect('pgsql')->query(
-            "select coalesce(billing_plan, 'unknown') as billing_plan,"
-            . ' coalesce(sum(reserved_tokens), 0) as reserved_tokens'
-            . " from quota_reservations where user_id = ? and status = 'reserved' group by billing_plan",
-            [$userId]
-        );
-        $resMap = [];
-        foreach ($reserved as $r) {
-            $resMap[$r['billing_plan']] = (int) $r['reserved_tokens'];
-        }
-
-        // 4. coding 用量：近 5 小时（滚动）/ 本周（周一 00:00 UTC 起，套开开通前不计入）
-        $winUsage = ['h5' => 0, 'week' => 0];
-        if (isset($planMap['coding']) || isset($balMap['coding'])) {
-            // 当前计费周起始：周一 00:00 UTC（中国时间周一 8:00）
-            $nowUtc   = new \DateTimeImmutable('now', new \DateTimeZone('UTC'));
-            $monday   = $nowUtc->setISODate((int) $nowUtc->format('o'), (int) $nowUtc->format('W'), 1)->setTime(0, 0, 0);
-            $mondayStr = $monday->format('Y-m-d H:i:s');
-            // 套餐开通时间（最早）；无套餐则用 epoch（不限制下限）
-            $actStr = !empty($planMap['coding']['activated_at'])
-                ? (string) $planMap['coding']['activated_at']
-                : '1970-01-01 00:00:00';
-
-            $w = Db::connect('pgsql')->query(
-                'select'
-                . " count(*) filter (where created_at >= greatest(now() - interval '5 hours', ?::timestamptz)) as h5,"
-                . ' count(*) filter (where created_at >= greatest(?::timestamptz, ?::timestamptz)) as wk'
-                . ' from request_logs where user_id = ? and success is true',
-                [$actStr, $mondayStr, $actStr, $userId]
-            )[0];
-            $winUsage['h5']   = (int) ($w['h5'] ?? 0);
-            $winUsage['week'] = (int) ($w['wk'] ?? 0);
-        }
-
-        // 5. 组装：合并套餐与 ledger 出现的所有计费类型
-        $order = ['coding', 'token', 'image'];
-        $types = array_unique(array_merge($order, array_keys($planMap), array_keys($balMap)));
-        $list  = [];
-        foreach ($types as $type) {
-            if (!isset($planMap[$type]) && !isset($balMap[$type])) {
-                continue;
-            }
-            $plan = $planMap[$type] ?? null;
-            if ($type === 'coding') {
-                $h5Limit = $plan ? (int) $plan['h5_limit'] : 0;
-                $wkLimit = $plan ? (int) $plan['weekly_limit'] : 0;
-                $list[]  = [
-                    'billingPlan' => $type,
-                    'planName'    => $plan['name'] ?? null,
-                    'unit'        => 'requests',
-                    'mode'        => 'window',
-                    // 总额度：coding 以本周额度为总额度
-                    'total'       => $wkLimit > 0 ? $wkLimit : null,
-                    'windows'     => [
-                        ['key' => 'week', 'label' => '本周', 'limit' => $wkLimit > 0 ? $wkLimit : null, 'used' => $winUsage['week']],
-                        ['key' => 'h5', 'label' => '近 5 小时', 'limit' => $h5Limit > 0 ? $h5Limit : null, 'used' => $winUsage['h5']],
-                    ],
-                ];
-            } else {
-                // token / image
-                $b          = $balMap[$type] ?? ['token_balance' => 0, 'token_used' => 0];
-                $tokenLimit = $plan ? (int) $plan['token_limit'] : 0;
-                $used       = (int) $b['token_used'];
-                if ($tokenLimit > 0) {
-                    // 固定额度套餐：已用 / 限额
-                    $list[] = [
-                        'billingPlan' => $type,
-                        'planName'    => $plan['name'] ?? null,
-                        'unit'        => 'tokens',
-                        'mode'        => 'capped',
-                        'total'       => $tokenLimit,
-                        'limit'       => $tokenLimit,
-                        'used'        => $used,
-                        'available'   => max(0, $tokenLimit - $used),
-                    ];
-                } else {
-                    // 计量预付费：ledger 余额 / 预扣 / 可用
-                    $balance = (int) $b['token_balance'];
-                    $res     = $resMap[$type] ?? 0;
-                    $list[]  = [
-                        'billingPlan' => $type,
-                        'planName'    => $plan['name'] ?? null,
-                        'unit'        => 'tokens',
-                        'mode'        => 'balance',
-                        'balance'     => $balance,
-                        'used'        => $used,
-                        'reserved'    => $res,
-                        'available'   => $balance - $res,
-                    ];
-                }
-            }
-        }
-        return $list;
+        return (new QuotaService())->summary($userId);
     }
 }
