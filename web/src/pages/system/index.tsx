@@ -1,8 +1,10 @@
 import { useEffect, useState } from 'react';
-import { RefreshCw, Search, Megaphone, GitBranch, Plus, Pencil, Trash2 } from 'lucide-react';
+import { RefreshCw, Search, GitBranch, Plus, Pencil, Trash2 } from 'lucide-react';
 import { usePagedQuery } from '@/hooks/usePagedQuery';
 import { useAsync } from '@/hooks/useAsync';
 import { useMutation } from '@/hooks/useMutation';
+import { SeverityChip } from '@/components/SeverityChip';
+import { Markdown } from '@/components/Markdown';
 import { StatusBadge } from '@/components/StatusBadge';
 import { EmptyState } from '@/components/EmptyState';
 import { Badge } from '@/components/ui/badge';
@@ -75,9 +77,18 @@ function Pager({ page, size, total, loading, setPage }: { page: number; size: nu
   );
 }
 
+const SCOPE_OPTIONS = [
+  { value: 'all', label: '全站' },
+  { value: 'panel', label: '用户面板' },
+  { value: 'landing', label: '落地页' },
+];
+function scopeLabel(scope: string): string {
+  return SCOPE_OPTIONS.find((o) => o.value === scope)?.label ?? scope;
+}
+
 function NoticesTab() {
   const { list, total, page, size, loading, error, params, reload, setPage, setFilters } =
-    usePagedQuery(getNoticesApiLazy, { initial: { size: 20, sort: '-sort_order' } as SystemQuery });
+    usePagedQuery(getNoticesApiLazy, { initial: { size: 20, sort: '-created_at' } as SystemQuery });
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editing, setEditing] = useState<AnnouncementItem | null>(null);
   const [deleting, setDeleting] = useState<AnnouncementItem | null>(null);
@@ -127,10 +138,8 @@ function NoticesTab() {
             <Card key={a.id}><CardContent className="p-4">
               <div className="flex items-start justify-between gap-2">
                 <div className="flex flex-wrap items-center gap-2">
-                  <Megaphone className="h-4 w-4 text-muted-foreground" />
+                  <SeverityChip severity={a.severity} />
                   <span className="font-medium">{a.title}</span>
-                  <Badge variant={a.severity === 'urgent' ? 'destructive' : 'outline'} className="text-[10px]">{a.severity}</Badge>
-                  {a.dismissible && <Badge variant="outline" className="text-[10px]">可关闭</Badge>}
                 </div>
                 <div className="flex items-center gap-2">
                   <StatusBadge status={a.status} />
@@ -138,9 +147,9 @@ function NoticesTab() {
                   <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive" onClick={() => setDeleting(a)} aria-label="删除"><Trash2 className="h-3.5 w-3.5" /></Button>
                 </div>
               </div>
-              <p className="mt-2 text-sm text-muted-foreground line-clamp-2">{a.body}</p>
-              <div className="mt-1 text-xs text-muted-foreground">
-                范围 {a.scope} · 生效 {a.publish_from?.slice(0, 10)} ~ {a.publish_until?.slice(0, 10) ?? '长期'}
+              {a.body ? <Markdown className="mt-2 text-muted-foreground">{a.body}</Markdown> : null}
+              <div className="mt-2 text-xs text-muted-foreground">
+                范围 {scopeLabel(a.scope)} · 生效 {a.publish_from?.slice(0, 10)} ~ {a.publish_until?.slice(0, 10) ?? '长期'}
               </div>
             </CardContent></Card>
           ))}
@@ -273,8 +282,13 @@ function NoticeDialog({ open, item, onClose, onSaved }: {
           </div>
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1.5">
-              <Label htmlFor="n-scope">展示范围</Label>
-              <Input id="n-scope" value={form.scope} onChange={(e) => set('scope', e.target.value)} placeholder="all" />
+              <Label>展示范围</Label>
+              <Select value={form.scope} onValueChange={(v) => set('scope', v)}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  {SCOPE_OPTIONS.map((o) => <SelectItem key={o.value} value={o.value}>{o.label}（{o.value}）</SelectItem>)}
+                </SelectContent>
+              </Select>
             </div>
             <div className="space-y-1.5">
               <Label htmlFor="n-sort">排序权重</Label>

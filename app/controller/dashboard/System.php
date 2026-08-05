@@ -46,7 +46,7 @@ class System extends BaseController
         }
         Pagination::applyTimeRange($query, $this->request, 'created_at');
         $total = $query->count();
-        Pagination::applySort($query, $this->request, ['created_at', 'sort_order'], '-sort_order');
+        Pagination::applySort($query, $this->request, ['created_at', 'publish_from', 'sort_order'], '-created_at');
         $list = $query->page($page, $size)->select();
 
         return success(Pagination::wrap($list, $total, $page, $size));

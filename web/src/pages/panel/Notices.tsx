@@ -1,8 +1,9 @@
-import { RefreshCw, Megaphone } from 'lucide-react';
+import { RefreshCw } from 'lucide-react';
 import { getPanelNoticesApi } from '@/api/panel';
 import { usePagedQuery } from '@/hooks/usePagedQuery';
+import { SeverityChip } from '@/components/SeverityChip';
+import { Markdown } from '@/components/Markdown';
 import { EmptyState } from '@/components/EmptyState';
-import { StatusBadge } from '@/components/StatusBadge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -50,16 +51,14 @@ function NoticeRow({ item }: { item: AnnouncementItem }) {
   return (
     <Card>
       <CardContent className="p-4">
-        <div className="flex items-start justify-between">
-          <div className="flex items-center gap-2">
-            <Megaphone className="h-4 w-4 text-muted-foreground" />
+        <div className="flex items-start justify-between gap-2">
+          <div className="flex flex-wrap items-center gap-2">
+            <SeverityChip severity={item.severity} />
             <span className="font-medium">{item.title}</span>
-            <StatusBadge status={item.severity} />
-            <StatusBadge status={item.status} />
           </div>
           <span className="font-mono text-xs text-muted-foreground">{item.publish_from?.slice(0, 10)}</span>
         </div>
-        {item.body && <p className="mt-1 text-sm text-muted-foreground line-clamp-2">{item.body}</p>}
+        {item.body && <Markdown className="mt-2 text-muted-foreground">{item.body}</Markdown>}
       </CardContent>
     </Card>
   );
