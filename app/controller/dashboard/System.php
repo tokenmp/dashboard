@@ -52,6 +52,62 @@ class System extends BaseController
         return success(Pagination::wrap($list, $total, $page, $size));
     }
 
+    /** POST /api/v1/dashboard/notices —— 创建公告 */
+    public function createNotice()
+    {
+        $row        = $this->noticeInput();
+        $row['id']  = Db::connect('pgsql')->query('select gen_random_uuid() as id')[0]['id'];
+        $row['created_by'] = app('user')->id;
+        $notice     = Announcement::create($row);
+        $notice->id = $row['id'];
+        return success($notice);
+    }
+
+    /** PUT /api/v1/dashboard/notices/:id —— 更新公告 */
+    public function updateNotice($id)
+    {
+        $notice = Announcement::where('id', $id)->find();
+        if ($notice === null) {
+            throw new HttpException(404, '公告不存在');
+        }
+        $notice->save($this->noticeInput());
+        return success($notice->refresh());
+    }
+
+    /** DELETE /api/v1/dashboard/notices/:id —— 软删（归档） */
+    public function deleteNotice($id)
+    {
+        $notice = Announcement::where('id', $id)->find();
+        if ($notice === null) {
+            throw new HttpException(404, '公告不存在');
+        }
+        $notice->status = 'archived';
+        $notice->save();
+        return success(['id' => $id]);
+    }
+
+    /** 读取并校验公告字段（create/update 共用，前端表单传全集） */
+    private function noticeInput(): array
+    {
+        $title = trim((string) $this->request->post('title', ''));
+        if ($title === '') {
+            throw new HttpException(400, '公告标题不能为空');
+        }
+        $severity = $this->request->post('severity');
+        $status   = $this->request->post('status');
+        return [
+            'title'         => $title,
+            'body'          => (string) $this->request->post('body', ''),
+            'severity'      => in_array($severity, ['info', 'warning', 'urgent'], true) ? $severity : 'info',
+            'scope'         => (string) ($this->request->post('scope') ?? 'all'),
+            'dismissible'   => (bool) $this->request->post('dismissible', true),
+            'status'        => in_array($status, ['draft', 'published', 'archived'], true) ? $status : 'draft',
+            'sort_order'    => (int) $this->request->post('sort_order', 0),
+            'publish_from'  => ($f = $this->request->post('publish_from')) ? $f : date('Y-m-d H:i:s'),
+            'publish_until' => ($u = $this->request->post('publish_until')) ? $u : null,
+        ];
+    }
+
     /** GET /api/v1/dashboard/releases */
     public function releases()
     {

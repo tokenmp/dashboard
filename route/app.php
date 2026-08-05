@@ -138,6 +138,9 @@ Route::group('api/v1', function () {
 
                 // 公告 / 版本日志（全部）/ 系统配置 / 迁移台账
                 Route::get('notices', 'dashboard/System/notices');
+                Route::post('notices', 'dashboard/System/createNotice');
+                Route::put('notices/:id', 'dashboard/System/updateNotice')->pattern(['id' => '[\w\-]+']);
+                Route::delete('notices/:id', 'dashboard/System/deleteNotice')->pattern(['id' => '[\w\-]+']);
                 Route::group('releases', function () {
                     Route::get('', 'dashboard/System/releases');
                     Route::get(':id', 'dashboard/System/releaseDetail')->pattern(['id' => '[\w\-]+']);
