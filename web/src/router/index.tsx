@@ -1,49 +1,51 @@
 import { createBrowserRouter } from 'react-router-dom';
-import Login from '@/pages/Login';
-import NotFound from '@/pages/NotFound';
+import Login from '@/pages/login';
+import NotFound from '@/pages/not-found';
 import RoleHome from '@/components/RoleHome';
 import RequireAuth from '@/components/RequireAuth';
 import RequireRole from '@/components/RequireRole';
-import Layout from '@/components/Layout';
-import PanelLayout from '@/components/PanelLayout';
+import Layout from '@/components/layout';
+import PanelLayout from '@/components/panel-layout';
 
-// 管理端页面（admin）
-import Dashboard from '@/pages/Dashboard';
-import Requests from '@/pages/Requests';
-import Users from '@/pages/Users';
-import Upstream from '@/pages/Upstream';
-import Usage from '@/pages/Usage';
-import RedeemCodes from '@/pages/RedeemCodes';
-import Marketplace from '@/pages/Marketplace';
-import System from '@/pages/System';
-import Releases from '@/pages/Releases';
-import Account from '@/pages/Account';
+// 管理端页面（dashboard，admin，全平台）—— 调用 @/api/dashboard
+import Dashboard from '@/pages/dashboard';
+import Requests from '@/pages/requests';
+import Users from '@/pages/users';
+import Upstream from '@/pages/upstream';
+import Usage from '@/pages/usage';
+import RedeemCodes from '@/pages/redeem-codes';
+import Marketplace from '@/pages/marketplace';
+import System from '@/pages/system';
+import Releases from '@/pages/releases';
 
-// 用户端页面（panel 专属）
+// 用户端页面（panel，自取数据）—— 调用 @/api/panel
+import PanelOverview from '@/pages/panel/Overview';
+import PanelRequests from '@/pages/panel/Requests';
+import PanelUsage from '@/pages/panel/Usage';
 import PanelKeys from '@/pages/panel/Keys';
+import PanelRedemptions from '@/pages/panel/Redemptions';
 import PanelNotices from '@/pages/panel/Notices';
-// 用户端复用管理端组件（后端按角色自动 scope）
-import MyRedemptions from '@/pages/MyRedemptions';
+import PanelReleases from '@/pages/panel/Releases';
+import PanelAccount from '@/pages/panel/Account';
 
 /**
- * 路由配置
+ * 路由配置（按调用方彻底分离）
  *
  * - /login：公开登录页
  * - /：按角色重定向（admin→/dashboard，user→/panel）
  *
- * 管理端 /dashboard/*（RequireRole admin）：
- *   /dashboard（概览）、requests、users、upstream、usage、redeem/codes、
- *   marketplace、system、releases、account
+ * 管理端 /dashboard/*（RequireRole admin + Layout）：概览、请求、用户、上游、
+ *   用量、兑换码、市场、系统、更新日志。全平台数据（@/api/dashboard）。
  *
- * 用户端 /panel/*（RequireAuth，任意已登录角色；admin 亦可访问）：
- *   /panel（概览）、requests、usage、keys、redemptions、notices、releases、account
- *   概览/请求/用量/兑换/账户/更新日志 复用管理端组件，后端按角色自动 scope。
+ * 用户端 /panel/*（RequireAuth，任意已登录角色；admin 亦可）：概览、我的请求、
+ *   我的用量、我的密钥、我的兑换、公告、更新日志、账户。自取数据（@/api/panel）——
+ *   管理员在此同样只看自己。
  */
 export const router = createBrowserRouter([
   { path: '/login', element: <Login /> },
   { path: '/', element: <RoleHome /> },
 
-  // 管理端（admin）
+  // ── 管理端（admin）──
   {
     path: '/dashboard',
     element: (
@@ -61,11 +63,10 @@ export const router = createBrowserRouter([
       { path: 'marketplace', element: <Marketplace /> },
       { path: 'system', element: <System /> },
       { path: 'releases', element: <Releases /> },
-      { path: 'account', element: <Account /> },
     ],
   },
 
-  // 用户端（任意已登录角色）
+  // ── 用户端（任意已登录角色；admin 亦可，以普通用户身份）──
   {
     path: '/panel',
     element: (
@@ -74,14 +75,14 @@ export const router = createBrowserRouter([
       </RequireAuth>
     ),
     children: [
-      { index: true, element: <Dashboard /> },
-      { path: 'requests', element: <Requests /> },
-      { path: 'usage', element: <Usage /> },
+      { index: true, element: <PanelOverview /> },
+      { path: 'requests', element: <PanelRequests /> },
+      { path: 'usage', element: <PanelUsage /> },
       { path: 'keys', element: <PanelKeys /> },
-      { path: 'redemptions', element: <MyRedemptions /> },
+      { path: 'redemptions', element: <PanelRedemptions /> },
       { path: 'notices', element: <PanelNotices /> },
-      { path: 'releases', element: <Releases /> },
-      { path: 'account', element: <Account /> },
+      { path: 'releases', element: <PanelReleases /> },
+      { path: 'account', element: <PanelAccount /> },
     ],
   },
 

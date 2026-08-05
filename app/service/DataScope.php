@@ -25,14 +25,29 @@ class DataScope
 {
     private User $user;
 
-    private function __construct(User $user)
+    /** panel 命名空间强制「自身」视角：即使角色为 admin 也只看自己的数据 */
+    private bool $selfOnly;
+
+    private function __construct(User $user, bool $selfOnly = false)
     {
-        $this->user = $user;
+        $this->user     = $user;
+        $this->selfOnly = $selfOnly;
     }
 
+    /**
+     * 按角色构造：admin 看全平台（dashboard 命名空间用，配合 Admin 中间件）。
+     */
     public static function forUser(User $user): self
     {
-        return new self($user);
+        return new self($user, false);
+    }
+
+    /**
+     * 以「自身」视角构造：无论角色都只看自己（panel 命名空间用）。
+     */
+    public static function forSelf(User $user): self
+    {
+        return new self($user, true);
     }
 
     /** 当前登录用户模型 */
@@ -47,10 +62,15 @@ class DataScope
         return (string) $this->user->id;
     }
 
-    /** 是否为管理员（看全平台） */
+    /**
+     * 是否以管理员视角（看全平台）。
+     *
+     * selfOnly（panel 命名空间）时恒为 false——管理员在 panel 以普通用户身份访问，
+     * scope() 据此强制绑定自身、各控制器的 isAdmin 分支走用户逻辑。
+     */
     public function isAdmin(): bool
     {
-        return $this->user->role === 'admin';
+        return !$this->selfOnly && $this->user->role === 'admin';
     }
 
     /**

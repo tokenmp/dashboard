@@ -14,113 +14,141 @@ use think\facade\Route;
 
 /*
 |--------------------------------------------------------------------------
-| API 路由（统一前缀 /api）
+| API 路由（统一前缀 /api/v1）
 |--------------------------------------------------------------------------
-| 角色分区：
-|   - 双角色共用：登录、概览、我的请求/用量/密钥/兑换、公告、更新日志等，
-|     由控制器内 DataScope 按角色 scope/过滤。
-|   - 管理专属：用户管理、上游供应商/路由组/模型、系统配置/迁移、兑换码管理、
-|     计费规则 —— 挂 Admin 中间件，非 admin 直接 403。
+| 按「调用方」拆为三个命名空间，彻底分离、无需任何运行时模式判断：
+|
+|   - /api/v1/auth/*       中性：登录、公钥、当前用户身份
+|   - /api/v1/panel/*      用户面（仅 Auth）：强制自取数据——
+|                           管理员在此也只看自己的（DataScope::forSelf）。
+|   - /api/v1/dashboard/*  管理面（Auth + Admin）：全平台管理数据。
+|
+| 控制器目录与之一一对应：app/controller/{auth,panel,dashboard}/。
 */
-Route::group('api', function () {
-    Route::group('auth', function () {
-        // 公开接口
-        Route::post('login', 'api/Auth/login');
-        Route::get('public-key', 'api/Auth/publicKey');
+Route::group('api/v1', function () {
 
-        // 需鉴权的接口
+    // ─────────────── 中性：认证 ───────────────
+    Route::group('auth', function () {
+        Route::post('login', 'auth/Auth/login');
+        Route::get('public-key', 'auth/Auth/publicKey');
+
         Route::group(function () {
-            Route::get('user', 'api/Auth/user');
+            Route::get('user', 'auth/Auth/user');
         })->middleware(Auth::class);
     });
 
-    // 需鉴权的接口（以下全部挂 Auth）
+    // ─────────────── 以下全部需鉴权（Auth） ───────────────
     Route::group(function () {
 
-        // 概览仪表盘（双角色，控制器内按角色返回 admin/user 视图）
-        Route::group('dashboard', function () {
-            Route::get('overview', 'api/Dashboard/overview');
-        });
+        // ─── 用户面 panel：自取数据（DataScope::forSelf） ───
+        Route::group('panel', function () {
+            Route::get('overview', 'panel/Overview/overview');
 
-        // 请求日志监控（双角色，DataScope 按 user_id 隔离）
-        Route::group('requests', function () {
-            Route::get('', 'api/RequestLog/list');
-            Route::get(':id', 'api/RequestLog/detail')->pattern(['id' => '[\w\-]+']);
-        });
-
-        // 用户管理（admin）：列表 / 详情 / 某用户通知
-        Route::group(function () {
-            Route::group('users', function () {
-                Route::get('', 'api/User/list');
-                Route::get(':id', 'api/User/detail')->pattern(['id' => '[\w\-]+']);
-                Route::get(':id/notifications', 'api/System/userNotifications')->pattern(['id' => '[\w\-]+']);
+            // 我的请求日志
+            Route::group('requests', function () {
+                Route::get('', 'panel/RequestLog/list');
+                Route::get(':id', 'panel/RequestLog/detail')->pattern(['id' => '[\w\-]+']);
             });
-        })->middleware(Admin::class);
 
-        // 当前用户账户中心（双角色，单数 user）
-        Route::group('user', function () {
-            Route::get('', 'api/User/profile');
-            Route::get('keys', 'api/User/keys');
-            Route::get('keys/bot', 'api/User/botKeys');
-            Route::get('plans', 'api/User/plans');
-            Route::get('redemptions', 'api/RedeemCode/myRedemptions');
-            Route::get('notifications', 'api/System/myNotifications');
-        });
-
-        // 上游与模型
-        Route::group('upstream', function () {
-            // Key 列表/详情：双角色（user 仅看 owner_user_id 为自己的）
-            Route::group('keys', function () {
-                Route::get('', 'api/Upstream/keys');
-                Route::get(':id', 'api/Upstream/keyDetail')->pattern(['id' => '[\w\-]+']);
+            // 我的账户中心
+            Route::group('user', function () {
+                Route::get('', 'panel/User/profile');
+                Route::get('keys', 'panel/User/keys');
+                Route::get('keys/bot', 'panel/User/botKeys');
+                Route::get('plans', 'panel/User/plans');
+                Route::get('notifications', 'panel/Notification/mine');
+                Route::get('redemptions', 'panel/Redeem/myRedemptions');
             });
-            // 供应商 / 路由组：admin
-            Route::group(function () {
-                Route::get('providers', 'api/Upstream/providers');
-                Route::get('routes', 'api/Upstream/routes');
-            })->middleware(Admin::class);
-        });
-        // 模型目录：admin
-        Route::get('models', 'api/Upstream/models')->middleware(Admin::class);
 
-        // 计费用量（双角色）
-        Route::group('usage', function () {
-            Route::get('ledger', 'api/Usage/ledger');
-            Route::get('quota', 'api/Usage/quota');
-        });
-        // 计费规则（价格倍率）：admin
-        Route::group('price', function () {
-            Route::get('rules', 'api/Usage/rules');
-        })->middleware(Admin::class);
+            // 我持有的上游 Key
+            Route::group('upstream', function () {
+                Route::group('keys', function () {
+                    Route::get('', 'panel/Upstream/keys');
+                    Route::get(':id', 'panel/Upstream/keyDetail')->pattern(['id' => '[\w\-]+']);
+                });
+            });
 
-        // 市场分账（双角色，控制器内按角色过滤：user 仅看自己参与的）
-        Route::group('marketplace', function () {
-            Route::get('listings', 'api/Marketplace/listings');
-            Route::get('settlements', 'api/Marketplace/settlements');
-            Route::get('ledger', 'api/Marketplace/ledger');
-        });
+            // 我的用量
+            Route::group('usage', function () {
+                Route::get('ledger', 'panel/Usage/ledger');
+                Route::get('quota', 'panel/Usage/quota');
+            });
 
-        // 系统与通知
-        Route::group('system', function () {
-            // 公告 / 版本日志：双角色（user 仅看 published）
-            Route::get('notices', 'api/System/notices');
+            // 我参与的市场分账
+            Route::group('marketplace', function () {
+                Route::get('listings', 'panel/Marketplace/listings');
+                Route::get('settlements', 'panel/Marketplace/settlements');
+                Route::get('ledger', 'panel/Marketplace/ledger');
+            });
+
+            // 公告 / 版本日志（仅 published）
+            Route::get('notices', 'panel/System/notices');
             Route::group('releases', function () {
-                Route::get('', 'api/System/releases');
-                Route::get(':id', 'api/System/releaseDetail')->pattern(['id' => '[\w\-]+']);
+                Route::get('', 'panel/System/releases');
+                Route::get(':id', 'panel/System/releaseDetail')->pattern(['id' => '[\w\-]+']);
             });
-            // 系统配置 / 迁移台账：admin
-            Route::group(function () {
-                Route::get('config', 'api/System/config');
-                Route::get('migrations', 'api/System/migrations');
-            })->middleware(Admin::class);
         });
 
-        // 兑换码管理（admin）
+        // ─── 管理面 dashboard：全平台（额外挂 Admin） ───
         Route::group(function () {
-            Route::group('redeem', function () {
-                Route::group('codes', function () {
-                    Route::get('', 'api/RedeemCode/list');
-                    Route::get(':id/redemptions', 'api/RedeemCode/redemptions')->pattern(['id' => '[\w\-]+']);
+            Route::group('dashboard', function () {
+                Route::get('overview', 'dashboard/Overview/overview');
+
+                // 全平台请求日志（可按 userId 筛选）
+                Route::group('requests', function () {
+                    Route::get('', 'dashboard/RequestLog/list');
+                    Route::get(':id', 'dashboard/RequestLog/detail')->pattern(['id' => '[\w\-]+']);
+                });
+
+                // 用户管理
+                Route::group('users', function () {
+                    Route::get('', 'dashboard/User/list');
+                    Route::get(':id', 'dashboard/User/detail')->pattern(['id' => '[\w\-]+']);
+                    Route::get(':id/notifications', 'dashboard/Notification/forUser')->pattern(['id' => '[\w\-]+']);
+                });
+
+                // 上游与模型
+                Route::group('upstream', function () {
+                    Route::group('keys', function () {
+                        Route::get('', 'dashboard/Upstream/keys');
+                        Route::get(':id', 'dashboard/Upstream/keyDetail')->pattern(['id' => '[\w\-]+']);
+                    });
+                    Route::get('providers', 'dashboard/Upstream/providers');
+                    Route::get('routes', 'dashboard/Upstream/routes');
+                });
+                Route::get('models', 'dashboard/Upstream/models');
+
+                // 全平台用量 + 计费规则
+                Route::group('usage', function () {
+                    Route::get('ledger', 'dashboard/Usage/ledger');
+                    Route::get('quota', 'dashboard/Usage/quota');
+                });
+                Route::group('price', function () {
+                    Route::get('rules', 'dashboard/Usage/rules');
+                });
+
+                // 全平台市场分账
+                Route::group('marketplace', function () {
+                    Route::get('listings', 'dashboard/Marketplace/listings');
+                    Route::get('settlements', 'dashboard/Marketplace/settlements');
+                    Route::get('ledger', 'dashboard/Marketplace/ledger');
+                });
+
+                // 公告 / 版本日志（全部）/ 系统配置 / 迁移台账
+                Route::get('notices', 'dashboard/System/notices');
+                Route::group('releases', function () {
+                    Route::get('', 'dashboard/System/releases');
+                    Route::get(':id', 'dashboard/System/releaseDetail')->pattern(['id' => '[\w\-]+']);
+                });
+                Route::get('config', 'dashboard/System/config');
+                Route::get('migrations', 'dashboard/System/migrations');
+
+                // 兑换码管理
+                Route::group('redeem', function () {
+                    Route::group('codes', function () {
+                        Route::get('', 'dashboard/Redeem/list');
+                        Route::get(':id/redemptions', 'dashboard/Redeem/redemptions')->pattern(['id' => '[\w\-]+']);
+                    });
                 });
             });
         })->middleware(Admin::class);

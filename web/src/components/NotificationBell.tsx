@@ -3,7 +3,7 @@ import { Bell } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { StatusBadge } from '@/components/StatusBadge';
-import { getMyNotificationsApi } from '@/api/system';
+import { getPanelNotificationsApi } from '@/api/panel';
 import type { NotificationItem } from '@/types/system';
 import { cn } from '@/lib/utils';
 
@@ -19,7 +19,7 @@ export function NotificationBell() {
   const load = async () => {
     setLoading(true);
     try {
-      const res = await getMyNotificationsApi({ size: 8, sort: '-created_at' });
+      const res = await getPanelNotificationsApi({ size: 8, sort: '-created_at' });
       setList(res.list);
     } catch {
       // 忽略（如 401 由全局拦截器处理）
