@@ -12,6 +12,10 @@ import type {
   UserBasic,
   UserDetailResult,
   UserListQuery,
+  UserCreatePayload,
+  UserUpdatePayload,
+  CreatedUser,
+  ResetPasswordResult,
 } from '@/types/user';
 import type { AnnouncementPayload, NotificationItem, SystemQuery } from '@/types/system';
 import type {
@@ -91,6 +95,25 @@ export async function getDashboardUserNotificationsApi(
   const res = await client.get<ApiResponse<PageResult<NotificationItem>>>(`/dashboard/users/${id}/notifications`, {
     params: toParams(params as Record<string, unknown>),
   });
+  return res.data.data;
+}
+export async function createDashboardUserApi(
+  body: UserCreatePayload,
+): Promise<CreatedUser> {
+  const res = await client.post<ApiResponse<CreatedUser>>('/dashboard/users', body);
+  return res.data.data;
+}
+export async function updateDashboardUserApi(
+  id: string,
+  body: UserUpdatePayload,
+): Promise<UserBasic> {
+  const res = await client.put<ApiResponse<UserBasic>>(`/dashboard/users/${id}`, body);
+  return res.data.data;
+}
+export async function resetDashboardUserPasswordApi(
+  id: string,
+): Promise<ResetPasswordResult> {
+  const res = await client.post<ApiResponse<ResetPasswordResult>>(`/dashboard/users/${id}/reset-password`);
   return res.data.data;
 }
 

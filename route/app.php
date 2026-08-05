@@ -111,7 +111,10 @@ Route::group('api/v1', function () {
                 // 用户管理
                 Route::group('users', function () {
                     Route::get('', 'dashboard/User/list');
+                    Route::post('', 'dashboard/User/create');
                     Route::get(':id', 'dashboard/User/detail')->pattern(['id' => '[\w\-]+']);
+                    Route::put(':id', 'dashboard/User/update')->pattern(['id' => '[\w\-]+']);
+                    Route::post(':id/reset-password', 'dashboard/User/resetPassword')->pattern(['id' => '[\w\-]+']);
                     Route::get(':id/notifications', 'dashboard/Notification/forUser')->pattern(['id' => '[\w\-]+']);
                 });
 
