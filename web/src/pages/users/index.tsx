@@ -379,13 +379,25 @@ function RevealPasswordDialog({ data, onClose }: { data: { email: string; passwo
   );
 }
 
+/** 预计到期预览：今天(北京) + N 天 的 23:59:59（与后端 computeExpiresAt 公式一致） */
+function previewExpires(days: number): string {
+  const today = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Shanghai', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date());
+  const [y, m, d] = today.split('-').map(Number);
+  const dt = new Date(Date.UTC(y, m - 1, d));
+  dt.setUTCDate(dt.getUTCDate() + days);
+  const yy = dt.getUTCFullYear();
+  const mm = String(dt.getUTCMonth() + 1).padStart(2, '0');
+  const dd = String(dt.getUTCDate()).padStart(2, '0');
+  return `${yy}-${mm}-${dd} 23:59:59（北京时间）`;
+}
+
 function GrantPlanButton({ userId, onDone }: { userId: string; onDone?: () => void }) {
   const { mutate, loading: submitting } = useMutation();
   const [open, setOpen] = useState(false);
   const [planId, setPlanId] = useState('');
   const [mode, setMode] = useState<'default' | 'custom' | 'permanent'>('default');
   const [days, setDays] = useState('');
-  const [options, setOptions] = useState<{ id: string; name: string; plan_type: string }[]>([]);
+  const [options, setOptions] = useState<{ id: string; name: string; plan_type: string; default_duration_days: number | null }[]>([]);
 
   const openDialog = async () => {
     setOpen(true);
@@ -394,7 +406,7 @@ function GrantPlanButton({ userId, onDone }: { userId: string; onDone?: () => vo
     setDays('');
     try {
       const res = await getDashboardPlansApi({ size: 100, status: 'active' });
-      setOptions(res.list.map((p) => ({ id: p.id, name: p.name, plan_type: p.plan_type })));
+      setOptions(res.list.map((p) => ({ id: p.id, name: p.name, plan_type: p.plan_type, default_duration_days: p.default_duration_days })));
     } catch {
       /* 加载套餐列表失败时 options 保持空 */
     }
@@ -411,6 +423,18 @@ function GrantPlanButton({ userId, onDone }: { userId: string; onDone?: () => vo
     }).catch(() => {});
   };
 
+  const selected = options.find((o) => o.id === planId);
+  const previewText = (() => {
+    if (!planId) return '';
+    if (mode === 'permanent') return '永久有效';
+    if (mode === 'custom') {
+      if (!days) return '请输入天数';
+      return previewExpires(Number(days));
+    }
+    const d = selected?.default_duration_days ?? null;
+    return d === null ? '永久有效（模板未设默认天数）' : previewExpires(d);
+  })();
+
   return (
     <>
       <Button size="sm" variant="outline" onClick={openDialog}><Plus className="mr-1 h-3 w-3" />发放套餐</Button>
@@ -426,7 +450,7 @@ function GrantPlanButton({ userId, onDone }: { userId: string; onDone?: () => vo
               <Select value={planId} onValueChange={setPlanId}>
                 <SelectTrigger><SelectValue placeholder="选择上架套餐" /></SelectTrigger>
                 <SelectContent>
-                  {options.map((o) => <SelectItem key={o.id} value={o.id}>[{o.plan_type}] {o.name}</SelectItem>)}
+                  {options.map((o) => <SelectItem key={o.id} value={o.id}>[{o.plan_type}] {o.name}{o.default_duration_days != null ? `（默认 ${o.default_duration_days} 天）` : '（永久）'}</SelectItem>)}
                 </SelectContent>
               </Select>
             </div>
@@ -443,6 +467,12 @@ function GrantPlanButton({ userId, onDone }: { userId: string; onDone?: () => vo
             </div>
             {mode === 'custom' && (
               <div className="space-y-1.5"><Label>天数</Label><Input type="number" value={days} onChange={(e) => setDays(e.target.value)} placeholder="如 31" /></div>
+            )}
+            {previewText && (
+              <div className="rounded-md bg-muted px-3 py-2 text-sm">
+                <span className="text-muted-foreground">预计到期：</span>
+                <span className="font-medium">{previewText}</span>
+              </div>
             )}
           </div>
           <DialogFooter>
