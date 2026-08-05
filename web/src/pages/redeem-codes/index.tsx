@@ -1,7 +1,8 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { RefreshCw, Search, ChevronRight } from 'lucide-react';
 import { getDashboardRedeemCodesApi, getDashboardCodeRedemptionsApi } from '@/api/dashboard';
 import { usePagedQuery } from '@/hooks/usePagedQuery';
+import { useUrlQueryState } from '@/hooks/useUrlQueryState';
 import { useAsync } from '@/hooks/useAsync';
 import { StatusBadge } from '@/components/StatusBadge';
 import { EmptyState } from '@/components/EmptyState';
@@ -18,8 +19,15 @@ import type { RedeemCodeQuery } from '@/types/redeem';
 
 function RedeemCodes() {
   const [detailId, setDetailId] = useState<string | null>(null);
+  const { initial: urlInit, write } = useUrlQueryState([
+    { name: 'q', key: 'keyword' },
+    { name: 'status', key: 'status' },
+    { name: 'page', key: 'page', type: 'number', default: 1 },
+    { name: 'size', key: 'size', type: 'number', default: 20 },
+  ]);
   const { list, total, page, size, loading, error, params, reload, setPage, setFilters } =
-    usePagedQuery(getDashboardRedeemCodesApi, { initial: { size: 20, sort: '-created_at' } as RedeemCodeQuery });
+    usePagedQuery(getDashboardRedeemCodesApi, { initial: { size: 20, sort: '-created_at', ...urlInit } as RedeemCodeQuery });
+  useEffect(() => { write(params); }, [params]);
 
   return (
     <div className="space-y-4">

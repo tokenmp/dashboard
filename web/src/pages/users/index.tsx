@@ -12,6 +12,7 @@ import {
   disableDashboardUserPlanApi,
 } from '@/api/dashboard';
 import { usePagedQuery } from '@/hooks/usePagedQuery';
+import { useUrlQueryState } from '@/hooks/useUrlQueryState';
 import { useAsync } from '@/hooks/useAsync';
 import { useMutation } from '@/hooks/useMutation';
 import { StatusBadge } from '@/components/StatusBadge';
@@ -67,8 +68,16 @@ import type { UserBasic, UserListQuery, UserUpdatePayload } from '@/types/user';
 
 function Users() {
   const [detailId, setDetailId] = useState<string | null>(null);
+  const { initial: urlInit, write } = useUrlQueryState([
+    { name: 'q', key: 'keyword' },
+    { name: 'role', key: 'role' },
+    { name: 'status', key: 'status' },
+    { name: 'page', key: 'page', type: 'number', default: 1 },
+    { name: 'size', key: 'size', type: 'number', default: 20 },
+  ]);
   const { list, total, page, size, loading, error, params, reload, setPage, setFilters } =
-    usePagedQuery(getDashboardUsersApi, { initial: { size: 20, sort: '-created_at' } as UserListQuery });
+    usePagedQuery(getDashboardUsersApi, { initial: { size: 20, sort: '-created_at', ...urlInit } as UserListQuery });
+  useEffect(() => { write(params); }, [params]);
 
   // 写操作状态
   const { mutate, loading: submitting } = useMutation();

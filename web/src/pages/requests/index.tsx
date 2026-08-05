@@ -1,7 +1,8 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { RefreshCw, Search, ChevronRight, Clock, Cpu, Activity, AlertTriangle } from 'lucide-react';
 import { getDashboardRequestsApi, getDashboardRequestDetailApi } from '@/api/dashboard';
 import { usePagedQuery } from '@/hooks/usePagedQuery';
+import { useUrlQueryState } from '@/hooks/useUrlQueryState';
 import { useAsync } from '@/hooks/useAsync';
 import { useRole } from '@/hooks/useRole';
 import { StatusBadge } from '@/components/StatusBadge';
@@ -49,10 +50,21 @@ function Requests() {
   const { isAdmin } = useRole();
   const [detailId, setDetailId] = useState<string | null>(null);
 
+  const { initial: urlInit, write } = useUrlQueryState([
+    { name: 'q', key: 'keyword' },
+    { name: 'model', key: 'model' },
+    { name: 'protocol', key: 'protocol' },
+    { name: 'billing', key: 'billingPlan' },
+    { name: 'usage', key: 'usageStatus' },
+    { name: 'success', key: 'success' },
+    { name: 'page', key: 'page', type: 'number', default: 1 },
+    { name: 'size', key: 'size', type: 'number', default: 20 },
+  ]);
   const { list, total, page, size, loading, error, params, reload, setPage, setFilters } =
     usePagedQuery(getDashboardRequestsApi, {
-      initial: { size: 20, sort: '-created_at' } as RequestLogQuery,
+      initial: { size: 20, sort: '-created_at', ...urlInit } as RequestLogQuery,
     });
+  useEffect(() => { write(params); }, [params]);
 
   return (
     <div className="space-y-4">
