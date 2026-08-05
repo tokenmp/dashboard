@@ -13,28 +13,39 @@ import {
 } from '@/components/ui/card';
 import { useAuthStore } from '@/store/auth';
 import { getApiError } from '@/utils/error';
-import { safeRedirect } from '@/utils/redirect';
+import { safeRedirect, homePathFor } from '@/utils/redirect';
 
 function Login() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const login = useAuthStore((s) => s.login);
   const token = useAuthStore((s) => s.token);
+  const user = useAuthStore((s) => s.user);
+  const fetchUser = useAuthStore((s) => s.fetchUser);
 
-  // 登录成功后的目标地址（来自 ?redirect=，经安全校验）
-  const redirectTarget = safeRedirect(searchParams.get('redirect'));
+  // 显式回跳地址（来自 ?redirect=，经安全校验）；为空则登录后按角色跳首页
+  const requestedRedirect = searchParams.get('redirect');
+  const redirectTarget = requestedRedirect ? safeRedirect(requestedRedirect) : null;
 
   const [username, setUsername] = useState('admin');
   const [password, setPassword] = useState('admin');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
-  // token 一旦有值（登录成功，或已登录访问本页）就跳转
+  // 登录成功（或已登录访问本页）后跳转：有显式 redirect 用之，否则按角色跳首页
   useEffect(() => {
-    if (token) {
+    if (!token) return;
+    if (redirectTarget) {
       navigate(redirectTarget, { replace: true });
+      return;
     }
-  }, [token, redirectTarget, navigate]);
+    // 无显式回跳：等用户信息就绪后按角色跳首页
+    if (user) {
+      navigate(homePathFor(user.role), { replace: true });
+    } else {
+      fetchUser();
+    }
+  }, [token, user, redirectTarget, navigate, fetchUser]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();

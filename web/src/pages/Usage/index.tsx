@@ -26,6 +26,7 @@ const PROTOCOLS = ['openai', 'anthropic', 'openai_chat', 'openai_responses', 'an
 
 function Usage() {
   const [tab, setTab] = useState('ledger');
+  const { isAdmin } = useRole();
   return (
     <div className="space-y-4">
       <div>
@@ -36,11 +37,11 @@ function Usage() {
         <TabsList>
           <TabsTrigger value="ledger">账本流水</TabsTrigger>
           <TabsTrigger value="quota">额度总览</TabsTrigger>
-          <TabsTrigger value="rules">计费规则</TabsTrigger>
+          {isAdmin && <TabsTrigger value="rules">计费规则</TabsTrigger>}
         </TabsList>
         <TabsContent value="ledger"><LedgerTab /></TabsContent>
         <TabsContent value="quota"><QuotaTab /></TabsContent>
-        <TabsContent value="rules"><RulesTab /></TabsContent>
+        {isAdmin && <TabsContent value="rules"><RulesTab /></TabsContent>}
       </Tabs>
     </div>
   );

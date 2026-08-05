@@ -1,29 +1,27 @@
 import { useEffect } from 'react';
 import { NavLink, Outlet, useNavigate } from 'react-router-dom';
-import { LayoutDashboard, ScrollText, Users, UserCircle, Network, Gauge, Ticket, Store, Settings2, BookOpen, LogOut } from 'lucide-react';
+import { LayoutDashboard, ScrollText, Gauge, KeyRound, Gift, Megaphone, BookOpen, UserCircle, LogOut } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useAuthStore } from '@/store/auth';
 import { NotificationBell } from '@/components/NotificationBell';
 import { cn } from '@/lib/utils';
 
 const NAV_ITEMS = [
-  { to: '/dashboard', label: '概览', icon: LayoutDashboard },
-  { to: '/dashboard/requests', label: '请求日志', icon: ScrollText },
-  { to: '/dashboard/users', label: '用户管理', icon: Users },
-  { to: '/dashboard/upstream', label: '上游与模型', icon: Network },
-  { to: '/dashboard/usage', label: '计费用量', icon: Gauge },
-  { to: '/dashboard/redeem/codes', label: '兑换码管理', icon: Ticket },
-  { to: '/dashboard/marketplace', label: '市场分账', icon: Store },
-  { to: '/dashboard/system', label: '系统', icon: Settings2 },
-  { to: '/dashboard/releases', label: '更新日志', icon: BookOpen },
-  { to: '/dashboard/account', label: '账户中心', icon: UserCircle },
+  { to: '/panel', label: '概览', icon: LayoutDashboard, end: true },
+  { to: '/panel/requests', label: '我的请求', icon: ScrollText, end: false },
+  { to: '/panel/usage', label: '我的用量', icon: Gauge, end: false },
+  { to: '/panel/keys', label: '我的密钥', icon: KeyRound, end: false },
+  { to: '/panel/redemptions', label: '我的兑换', icon: Gift, end: false },
+  { to: '/panel/notices', label: '公告', icon: Megaphone, end: false },
+  { to: '/panel/releases', label: '更新日志', icon: BookOpen, end: false },
+  { to: '/panel/account', label: '账户', icon: UserCircle, end: false },
 ];
 
 /**
- * 管理端布局（/dashboard）：左侧导航 + 顶部 Header（通知铃铛与登出）+ 内容区 Outlet。
- * 仅 admin 角色可达（由外层 RequireRole 守卫），故导航项不再按角色过滤。
+ * 用户端布局（/panel）：精简侧栏 + 顶部 Header（通知铃铛与登出）+ 内容区 Outlet。
+ * 与管理端 Layout 共用通知/登出，仅导航项不同。
  */
-function Layout() {
+function PanelLayout() {
   const navigate = useNavigate();
   const logout = useAuthStore((s) => s.logout);
   const fetchUser = useAuthStore((s) => s.fetchUser);
@@ -41,14 +39,14 @@ function Layout() {
     <div className="flex min-h-screen bg-background">
       <aside className="hidden w-56 shrink-0 flex-col border-r bg-card/50 md:flex">
         <div className="flex h-14 items-center border-b px-5">
-          <span className="text-base font-semibold">TokenMP 管理端</span>
+          <span className="text-base font-semibold">TokenMP 面板</span>
         </div>
         <nav className="flex-1 space-y-1 overflow-y-auto p-3">
           {NAV_ITEMS.map((item) => (
             <NavLink
               key={item.to}
               to={item.to}
-              end={item.to === '/dashboard'}
+              end={item.end}
               className={({ isActive }) =>
                 cn(
                   'flex items-center gap-2.5 rounded-lg px-3 py-2 text-sm font-medium transition-colors',
@@ -67,7 +65,7 @@ function Layout() {
 
       <div className="flex flex-1 flex-col">
         <header className="flex h-14 items-center justify-between border-b px-6">
-          <span className="text-lg font-semibold md:hidden">TokenMP 管理端</span>
+          <span className="text-lg font-semibold md:hidden">TokenMP 面板</span>
           <div className="flex items-center gap-2">
             <NotificationBell />
             <Button variant="outline" size="sm" onClick={handleLogout}>
@@ -84,4 +82,4 @@ function Layout() {
   );
 }
 
-export default Layout;
+export default PanelLayout;

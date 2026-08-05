@@ -14,3 +14,10 @@ export function safeRedirect(redirect: string | null | undefined): string {
   }
   return DEFAULT_REDIRECT;
 }
+
+/**
+ * 角色首页：admin → /dashboard（管理端），其余 → /panel（用户端）。
+ */
+export function homePathFor(role?: string | null): string {
+  return role === 'admin' ? '/dashboard' : '/panel';
+}
