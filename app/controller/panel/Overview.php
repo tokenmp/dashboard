@@ -71,24 +71,31 @@ class Overview extends BaseController
      */
     private function trend30(string $userId): array
     {
-        $sql = 'with days as ('
-             . " select generate_series((current_date - interval '29 day')::date, current_date::date, interval '1 day')::date as d"
-             . ') select to_char(d.d, \'YYYY-MM-DD\') as day,'
-             . ' count(r.id) as requests,'
-             . ' coalesce(sum(r.total_tokens),0) as tokens,'
-             . " count(*) filter (where r.success is true) as successes"
-             . ' from days d left join request_logs r on r.created_at::date = d.d and r.user_id = ?'
-             . ' group by d.d order by d.d';
+        // 只查有数据的天（user_id + created_at 走索引），PHP 侧补全 30 天零值。
+        $sql = "select to_char(date_trunc('day', created_at), 'YYYY-MM-DD') as day,"
+             . ' count(id) as requests,'
+             . ' coalesce(sum(total_tokens),0) as tokens,'
+             . " count(*) filter (where success is true) as successes"
+             . " from request_logs where created_at >= current_date - interval '29 day' and user_id = ?"
+             . ' group by 1 order by 1';
 
         $rows = Db::connect('pgsql')->query($sql, [$userId]);
-        return array_map(static function ($r) {
-            return [
-                'day'       => $r['day'],
+        $map = [];
+        foreach ($rows as $r) {
+            $map[$r['day']] = $r;
+        }
+        $out = [];
+        for ($i = 29; $i >= 0; $i--) {
+            $day = date('Y-m-d', strtotime("-{$i} days"));
+            $r = $map[$day] ?? null;
+            $out[] = [
+                'day'       => $day,
                 'requests'  => (int) ($r['requests'] ?? 0),
                 'tokens'    => (int) ($r['tokens'] ?? 0),
                 'successes' => (int) ($r['successes'] ?? 0),
             ];
-        }, $rows);
+        }
+        return $out;
     }
 
     /**
