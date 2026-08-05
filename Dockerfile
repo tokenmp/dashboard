@@ -6,7 +6,7 @@ WORKDIR /build
 
 # 先拷 lock 文件，利用 Docker 层缓存
 COPY web/package.json web/package-lock.json ./
-RUN npm ci
+RUN npm config set registry https://registry.npmmirror.com && npm ci
 
 COPY web/ ./
 # vite outDir = ../public/static，故产物落在 /public/static
@@ -30,6 +30,9 @@ RUN composer install \
 # Stage 3: 运行时（FrankenPHP = Caddy + PHP）
 ############################################
 FROM dunglas/frankenphp:1-php8.4-alpine AS runtime
+
+# 国内镜像源加速 apk（install-php-extensions 编译 pgsql 需拉 llvm/clang 等大包）
+RUN sed -i 's#dl-cdn.alpinelinux.org#mirrors.aliyun.com#g' /etc/apk/repositories
 
 # 生产所需 PHP 扩展（pdo_mysql / pdo_pgsql 为后续真实用户/数据库预留）
 RUN install-php-extensions pdo_mysql pdo_pgsql pgsql
