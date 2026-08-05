@@ -6,6 +6,8 @@ import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuIte
 import { useAuthStore } from '@/store/auth';
 import { useRole } from '@/hooks/useRole';
 import { NotificationBell } from '@/components/NotificationBell';
+import { ScrollingAnnouncement } from '@/components/ScrollingAnnouncement';
+import { getPanelNoticesApi } from '@/api/panel';
 import { cn } from '@/lib/utils';
 
 const NAV_GROUPS: { label: string; items: { to: string; label: string; icon: typeof LayoutDashboard; end?: boolean }[] }[] = [
@@ -89,6 +91,12 @@ function PanelLayout() {
       <div className="flex flex-1 flex-col overflow-hidden">
         <header className="flex h-14 shrink-0 items-center justify-between border-b px-6">
           <span className="text-lg font-semibold md:hidden">TokenMP 面板</span>
+          <ScrollingAnnouncement
+            fetcher={getPanelNoticesApi}
+            viewAllTo="/panel/notices"
+            itemTo={() => '/panel/notices'}
+            className="hidden md:flex"
+          />
           <div className="ml-auto flex items-center gap-2">
             <NotificationBell />
             <DropdownMenu>
