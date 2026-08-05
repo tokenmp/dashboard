@@ -39,7 +39,7 @@ function Layout() {
   };
 
   return (
-    <div className="flex min-h-screen bg-background">
+    <div className="flex h-screen overflow-hidden bg-background">
       <aside className="hidden w-56 shrink-0 flex-col border-r bg-card/50 md:flex">
         <div className="flex h-14 items-center border-b px-5">
           <span className="text-base font-semibold">TokenMP 管理端</span>
@@ -66,8 +66,8 @@ function Layout() {
         </nav>
       </aside>
 
-      <div className="flex flex-1 flex-col">
-        <header className="flex h-14 items-center justify-between border-b px-6">
+      <div className="flex flex-1 flex-col overflow-hidden">
+        <header className="flex h-14 shrink-0 items-center justify-between border-b px-6">
           <span className="text-lg font-semibold md:hidden">TokenMP 管理端</span>
           <div className="flex items-center gap-2">
             <NotificationBell />
@@ -77,7 +77,7 @@ function Layout() {
             </Button>
           </div>
         </header>
-        <main className="flex-1 overflow-auto p-6">
+        <main className="flex-1 overflow-y-auto p-6">
           <Outlet />
         </main>
       </div>
