@@ -18,6 +18,9 @@ services:
       JWT_EXPIRE: "604800"
       JWT_PREFIX: Bearer
       APP_DEBUG: "false"
+      # 密钥哈希 pepper（须与 executor 一致，否则生成的密钥无法鉴权）：
+      #   export API_KEY_PEPPER='<与生产 executor 相同的 pepper>'
+      API_KEY_PEPPER: ${API_KEY_PEPPER:-}
       # 接入数据库时按需补充（镜像已装 pdo_mysql / pdo_pgsql / pgsql 扩展）：
       # DB_TYPE: mysql
       # DB_HOST: db
