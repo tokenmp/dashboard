@@ -8,7 +8,7 @@ export const TOKEN_KEY = 'token';
 /**
  * axios 实例
  *
- * - baseURL 来自 VITE_API_BASE_URL，默认 /api
+ * - baseURL 来自 VITE_API_BASE_URL，默认 /api/v1（panel/dashboard 双命名空间前缀）
  * - 请求拦截：从 localStorage 读 token，注入 Authorization: Bearer
  * - 响应拦截：401 时清 token 并跳转登录页（整页刷新，store 自然重置）
  *
@@ -16,7 +16,7 @@ export const TOKEN_KEY = 'token';
  *      store 与 localStorage 通过共享 TOKEN_KEY 保持同步。
  */
 const client = axios.create({
-  baseURL: import.meta.env.VITE_API_BASE_URL || '/api',
+  baseURL: import.meta.env.VITE_API_BASE_URL || '/api/v1',
   timeout: 10000,
 });
 

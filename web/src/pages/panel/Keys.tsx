@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react';
 import { RefreshCw, Key, Bot } from 'lucide-react';
-import { getMyKeysApi, getMyBotKeysApi } from '@/api/user';
+import { getPanelKeysApi, getPanelBotKeysApi } from '@/api/panel';
 import { useAsync } from '@/hooks/useAsync';
 import { EmptyState } from '@/components/EmptyState';
 import { StatusBadge } from '@/components/StatusBadge';
@@ -13,7 +13,7 @@ import type { UserApiKeyItem, BotKeyItem } from '@/types/user';
 function Keys() {
   // 同时拉取我的 API Key 与 Bot Key（接口已脱敏，仅返回 key_prefix/key_suffix）
   const { data, loading, error, reload } = useAsync(async () => {
-    const [apiKeys, botKeys] = await Promise.all([getMyKeysApi(), getMyBotKeysApi()]);
+    const [apiKeys, botKeys] = await Promise.all([getPanelKeysApi(), getPanelBotKeysApi()]);
     return { apiKeys, botKeys };
   });
 

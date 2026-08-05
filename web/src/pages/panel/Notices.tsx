@@ -1,5 +1,5 @@
 import { RefreshCw, Megaphone } from 'lucide-react';
-import { getNoticesApi } from '@/api/system';
+import { getPanelNoticesApi } from '@/api/panel';
 import { usePagedQuery } from '@/hooks/usePagedQuery';
 import { EmptyState } from '@/components/EmptyState';
 import { StatusBadge } from '@/components/StatusBadge';
@@ -44,7 +44,7 @@ function Notices() {
   );
 }
 
-const getNoticesApiLazy = (p: SystemQuery) => getNoticesApi(p);
+const getNoticesApiLazy = (p: SystemQuery) => getPanelNoticesApi(p);
 
 function NoticeRow({ item }: { item: AnnouncementItem }) {
   return (
