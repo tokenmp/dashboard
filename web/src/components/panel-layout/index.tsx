@@ -1,7 +1,8 @@
 import { useEffect } from 'react';
 import { NavLink, Outlet, useNavigate } from 'react-router-dom';
-import { LayoutDashboard, ScrollText, Gauge, KeyRound, Gift, Megaphone, BookOpen, UserCircle, ShieldCheck, LogOut } from 'lucide-react';
+import { LayoutDashboard, ScrollText, Gauge, KeyRound, Gift, Megaphone, BookOpen, UserCircle, ShieldCheck, LogOut, ChevronDown } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator } from '@/components/ui/dropdown-menu';
 import { useAuthStore } from '@/store/auth';
 import { useRole } from '@/hooks/useRole';
 import { NotificationBell } from '@/components/NotificationBell';
@@ -77,12 +78,40 @@ function PanelLayout() {
       <div className="flex flex-1 flex-col overflow-hidden">
         <header className="flex h-14 shrink-0 items-center justify-between border-b px-6">
           <span className="text-lg font-semibold md:hidden">TokenMP 面板</span>
-          <div className="flex items-center gap-2">
+          <div className="ml-auto flex items-center gap-2">
             <NotificationBell />
-            <Button variant="outline" size="sm" onClick={handleLogout}>
-              <LogOut className="mr-1.5 h-4 w-4" />
-              登出
-            </Button>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="outline" size="sm">
+                  <UserCircle className="mr-1.5 h-4 w-4" />
+                  <span className="max-w-[180px] truncate">{user?.email ?? '—'}</span>
+                  <ChevronDown className="ml-1 h-3.5 w-3.5 opacity-50" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-56">
+                <DropdownMenuLabel className="truncate">{user?.email ?? '未登录'}</DropdownMenuLabel>
+                <DropdownMenuSeparator />
+                {user?.role === 'admin' && (
+                  <DropdownMenuItem asChild>
+                    <a href="/dashboard">
+                      <ShieldCheck className="mr-2 h-4 w-4" />
+                      管理后台
+                    </a>
+                  </DropdownMenuItem>
+                )}
+                <DropdownMenuItem asChild>
+                  <NavLink to="/panel/account">
+                    <UserCircle className="mr-2 h-4 w-4" />
+                    账户
+                  </NavLink>
+                </DropdownMenuItem>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem onClick={handleLogout} className="text-destructive focus:text-destructive">
+                  <LogOut className="mr-2 h-4 w-4" />
+                  登出
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
           </div>
         </header>
         <main className="flex-1 overflow-y-auto p-6">
