@@ -7,6 +7,7 @@ import {
   updateDashboardPlanStatusApi,
 } from '@/api/dashboard';
 import { usePagedQuery } from '@/hooks/usePagedQuery';
+import { useUrlQueryState } from '@/hooks/useUrlQueryState';
 import { useMutation } from '@/hooks/useMutation';
 import { StatusBadge } from '@/components/StatusBadge';
 import { EmptyState } from '@/components/EmptyState';
@@ -40,8 +41,16 @@ const PLAN_TYPES = ['coding', 'token', 'image'] as const;
 const CATEGORIES = ['', 'month', 'week', 'day', 'custom'] as const;
 
 function Plans() {
+  const { initial: urlInit, write } = useUrlQueryState([
+    { name: 'q', key: 'keyword' },
+    { name: 'type', key: 'plan_type' },
+    { name: 'status', key: 'status' },
+    { name: 'page', key: 'page', type: 'number', default: 1 },
+    { name: 'size', key: 'size', type: 'number', default: 20 },
+  ]);
   const { list, total, page, size, loading, error, params, reload, setPage, setFilters } =
-    usePagedQuery(getDashboardPlansApi, { initial: { size: 20, sort: '-created_at' } as PlanListQuery });
+    usePagedQuery(getDashboardPlansApi, { initial: { size: 20, sort: '-created_at', ...urlInit } as PlanListQuery });
+  useEffect(() => { write(params); }, [params]);
   const { mutate, loading: submitting } = useMutation();
   const [createOpen, setCreateOpen] = useState(false);
   const [editing, setEditing] = useState<PlanItem | null>(null);
