@@ -93,3 +93,32 @@ export interface UserListQuery {
   to?: string;
   sort?: string;
 }
+
+/** 新建用户表单 */
+export interface UserCreatePayload {
+  email: string;
+  role: string;
+}
+
+/** 编辑用户表单（均可选，仅传改动项） */
+export interface UserUpdatePayload {
+  role?: string;
+  status?: string;
+  preferred_billing?: string;
+  fallback_enabled?: boolean;
+}
+
+/** 新建用户返回（含明文临时密码，仅此一次） */
+export interface CreatedUser {
+  id: string;
+  email: string;
+  role: string;
+  status: string;
+  password: string;
+}
+
+/** 重置密码返回（含明文新密码，仅此一次） */
+export interface ResetPasswordResult {
+  id: string;
+  password: string;
+}

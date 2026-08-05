@@ -1,15 +1,25 @@
-import { useState } from 'react';
-import { RefreshCw, Search, ChevronRight, KeyRound, Bot, Package } from 'lucide-react';
-import { getDashboardUsersApi, getDashboardUserDetailApi } from '@/api/dashboard';
+import { useEffect, useState } from 'react';
+import { RefreshCw, Search, ChevronRight, KeyRound, Bot, Package, Plus, MoreVertical, Pencil, Power, Copy, Check } from 'lucide-react';
+import {
+  getDashboardUsersApi,
+  getDashboardUserDetailApi,
+  createDashboardUserApi,
+  updateDashboardUserApi,
+  resetDashboardUserPasswordApi,
+} from '@/api/dashboard';
 import { usePagedQuery } from '@/hooks/usePagedQuery';
 import { useAsync } from '@/hooks/useAsync';
+import { useMutation } from '@/hooks/useMutation';
 import { StatusBadge } from '@/components/StatusBadge';
 import { EmptyState } from '@/components/EmptyState';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { DebouncedInput } from '@/components/DebouncedInput';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 import { Skeleton } from '@/components/ui/skeleton';
+import { Switch } from '@/components/ui/switch';
 import {
   Select,
   SelectContent,
@@ -21,13 +31,70 @@ import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sh
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from '@/components/ui/table';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 import { formatCompact, formatNumber } from '@/utils/format';
-import type { UserListQuery } from '@/types/user';
+import type { UserBasic, UserListQuery, UserUpdatePayload } from '@/types/user';
 
 function Users() {
   const [detailId, setDetailId] = useState<string | null>(null);
   const { list, total, page, size, loading, error, params, reload, setPage, setFilters } =
     usePagedQuery(getDashboardUsersApi, { initial: { size: 20, sort: '-created_at' } as UserListQuery });
+
+  // 写操作状态
+  const { mutate, loading: submitting } = useMutation();
+  const [createOpen, setCreateOpen] = useState(false);
+  const [editing, setEditing] = useState<UserBasic | null>(null);
+  const [resetting, setResetting] = useState<UserBasic | null>(null);
+  const [revealed, setRevealed] = useState<{ email: string; password: string } | null>(null);
+
+  const onCreate = (email: string, role: string) =>
+    mutate(() => createDashboardUserApi({ email, role }), {
+      successMsg: '用户已创建',
+      onSuccess: (r) => { setCreateOpen(false); setRevealed({ email: r.email, password: r.password }); reload(); },
+    }).catch(() => {});
+
+  const onUpdate = (u: UserBasic, patch: UserUpdatePayload) =>
+    mutate(() => updateDashboardUserApi(u.id, patch), {
+      successMsg: '已保存',
+      onSuccess: () => { setEditing(null); reload(); },
+    }).catch(() => {});
+
+  const onToggle = (u: UserBasic) =>
+    mutate(() => updateDashboardUserApi(u.id, { status: u.status === 'active' ? 'disabled' : 'active' }), {
+      successMsg: u.status === 'active' ? '已禁用' : '已启用',
+      onSuccess: () => reload(),
+    }).catch(() => {});
+
+  const onReset = () => {
+    if (!resetting) return;
+    mutate(() => resetDashboardUserPasswordApi(resetting.id), {
+      successMsg: '密码已重置',
+      onSuccess: (r) => { setRevealed({ email: resetting.email, password: r.password }); setResetting(null); },
+    }).catch(() => {});
+  };
 
   return (
     <div className="space-y-4">
@@ -36,9 +103,12 @@ function Users() {
           <h1 className="text-2xl font-bold">用户管理</h1>
           <p className="mt-1 text-sm text-muted-foreground">全平台用户 · 共 {formatNumber(total)} 人</p>
         </div>
-        <Button variant="outline" size="sm" onClick={reload} disabled={loading}>
-          <RefreshCw className={`mr-1.5 h-4 w-4 ${loading ? 'animate-spin' : ''}`} />刷新
-        </Button>
+        <div className="flex gap-2">
+          <Button size="sm" onClick={() => setCreateOpen(true)}><Plus className="mr-1.5 h-4 w-4" />新建用户</Button>
+          <Button variant="outline" size="sm" onClick={reload} disabled={loading}>
+            <RefreshCw className={`mr-1.5 h-4 w-4 ${loading ? 'animate-spin' : ''}`} />刷新
+          </Button>
+        </div>
       </div>
 
       <Card>
@@ -105,7 +175,23 @@ function Users() {
                     <TableCell><StatusBadge status={u.status} /></TableCell>
                     <TableCell className="text-xs">{u.preferred_billing}</TableCell>
                     <TableCell className="font-mono text-xs text-muted-foreground">{u.created_at}</TableCell>
-                    <TableCell><ChevronRight className="h-4 w-4 text-muted-foreground" /></TableCell>
+                    <TableCell onClick={(e) => e.stopPropagation()}>
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <Button variant="ghost" size="icon" className="h-7 w-7"><MoreVertical className="h-4 w-4" /></Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end">
+                          <DropdownMenuItem onClick={() => setDetailId(u.id)}><ChevronRight className="h-4 w-4" />查看详情</DropdownMenuItem>
+                          <DropdownMenuItem onClick={() => setEditing(u)}><Pencil className="h-4 w-4" />编辑</DropdownMenuItem>
+                          <DropdownMenuItem onClick={() => onToggle(u)}>
+                            <Power className="h-4 w-4" />{u.status === 'active' ? '禁用' : '启用'}
+                          </DropdownMenuItem>
+                          <DropdownMenuItem className="text-destructive focus:text-destructive" onClick={() => setResetting(u)}>
+                            <KeyRound className="h-4 w-4" />重置密码
+                          </DropdownMenuItem>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
+                    </TableCell>
                   </TableRow>
                 ))}
               </TableBody>
@@ -125,7 +211,164 @@ function Users() {
       )}
 
       <DetailDrawer id={detailId} onClose={() => setDetailId(null)} />
+
+      <CreateUserDialog open={createOpen} submitting={submitting} onClose={() => setCreateOpen(false)} onSubmit={onCreate} />
+      <EditUserDialog user={editing} submitting={submitting} onClose={() => setEditing(null)} onSubmit={onUpdate} />
+      <AlertDialog open={resetting !== null} onOpenChange={(o) => !o && setResetting(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>重置密码？</AlertDialogTitle>
+            <AlertDialogDescription>
+              将为「{resetting?.email}」生成新的随机密码。该用户的所有登录会话将立即失效，需用新密码重新登录。
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>取消</AlertDialogCancel>
+            <AlertDialogAction onClick={onReset}>重置</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+      <RevealPasswordDialog data={revealed} onClose={() => setRevealed(null)} />
     </div>
+  );
+}
+
+/** 新建用户弹窗 */
+function CreateUserDialog({ open, submitting, onClose, onSubmit }: {
+  open: boolean;
+  submitting: boolean;
+  onClose: () => void;
+  onSubmit: (email: string, role: string) => Promise<unknown>;
+}) {
+  const [email, setEmail] = useState('');
+  const [role, setRole] = useState('user');
+  useEffect(() => { if (open) { setEmail(''); setRole('user'); } }, [open]);
+  const submit = (e: React.FormEvent) => {
+    e.preventDefault();
+    const v = email.trim();
+    if (!v) return;
+    onSubmit(v, role);
+  };
+  return (
+    <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
+      <DialogContent className="max-w-md">
+        <DialogHeader>
+          <DialogTitle>新建用户</DialogTitle>
+          <DialogDescription>创建后将生成随机临时密码，仅显示一次，请及时转交。</DialogDescription>
+        </DialogHeader>
+        <form onSubmit={submit} className="space-y-3">
+          <div className="space-y-1.5">
+            <Label htmlFor="u-email">邮箱</Label>
+            <Input id="u-email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="user@example.com" autoFocus required />
+          </div>
+          <div className="space-y-1.5">
+            <Label>角色</Label>
+            <Select value={role} onValueChange={setRole}>
+              <SelectTrigger><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="user">user（普通用户）</SelectItem>
+                <SelectItem value="admin">admin（管理员）</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          <DialogFooter>
+            <Button type="button" variant="outline" onClick={onClose}>取消</Button>
+            <Button type="submit" disabled={submitting}>{submitting ? '创建中…' : '创建用户'}</Button>
+          </DialogFooter>
+        </form>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+/** 编辑用户弹窗（角色 / 首选计费 / 回退） */
+function EditUserDialog({ user, submitting, onClose, onSubmit }: {
+  user: UserBasic | null;
+  submitting: boolean;
+  onClose: () => void;
+  onSubmit: (u: UserBasic, patch: UserUpdatePayload) => Promise<unknown>;
+}) {
+  const [role, setRole] = useState('user');
+  const [billing, setBilling] = useState('coding');
+  const [fallback, setFallback] = useState(true);
+  const open = user !== null;
+  useEffect(() => { if (open && user) { setRole(user.role); setBilling(user.preferred_billing); setFallback(user.fallback_enabled); } }, [open, user]);
+  const submit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!user) return;
+    onSubmit(user, { role, preferred_billing: billing, fallback_enabled: fallback });
+  };
+  return (
+    <Dialog open={open} onOpenChange={(o) => { if (!o) onClose(); }}>
+      <DialogContent className="max-w-md">
+        <DialogHeader>
+          <DialogTitle>编辑用户</DialogTitle>
+          <DialogDescription className="font-mono">{user?.email}</DialogDescription>
+        </DialogHeader>
+        <form onSubmit={submit} className="space-y-3">
+          <div className="space-y-1.5">
+            <Label>角色</Label>
+            <Select value={role} onValueChange={setRole}>
+              <SelectTrigger><SelectValue /></SelectTrigger>
+              <SelectContent><SelectItem value="user">user</SelectItem><SelectItem value="admin">admin</SelectItem></SelectContent>
+            </Select>
+          </div>
+          <div className="space-y-1.5">
+            <Label>首选计费</Label>
+            <Select value={billing} onValueChange={setBilling}>
+              <SelectTrigger><SelectValue /></SelectTrigger>
+              <SelectContent><SelectItem value="coding">coding</SelectItem><SelectItem value="token">token</SelectItem></SelectContent>
+            </Select>
+          </div>
+          <div className="flex items-center justify-between rounded-lg border p-3">
+            <div className="pr-3">
+              <div className="text-sm font-medium">额度回退</div>
+              <div className="text-xs text-muted-foreground">首选额度不足时，自动回退另一种计费</div>
+            </div>
+            <Switch checked={fallback} onCheckedChange={setFallback} />
+          </div>
+          <DialogFooter>
+            <Button type="button" variant="outline" onClick={onClose}>取消</Button>
+            <Button type="submit" disabled={submitting}>{submitting ? '保存中…' : '保存'}</Button>
+          </DialogFooter>
+        </form>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+/** 一次性明文密码展示（新建/重置后，仅显示一次 + 复制） */
+function RevealPasswordDialog({ data, onClose }: { data: { email: string; password: string } | null; onClose: () => void }) {
+  const [copied, setCopied] = useState(false);
+  const copy = async () => {
+    if (!data) return;
+    try {
+      await navigator.clipboard.writeText(data.password);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch { /* 忽略 */ }
+  };
+  return (
+    <Dialog open={data !== null} onOpenChange={(o) => !o && onClose()}>
+      <DialogContent className="max-w-lg">
+        <DialogHeader>
+          <DialogTitle>密码已生成</DialogTitle>
+          <DialogDescription className="text-destructive">⚠️ 请立即复制保存，关闭后将不再显示。</DialogDescription>
+        </DialogHeader>
+        <div className="space-y-2">
+          <Label>{data?.email} 的临时密码</Label>
+          <div className="flex items-center gap-2">
+            <code className="flex-1 break-all rounded-md border bg-muted px-3 py-2 text-base font-mono tracking-wider">{data?.password}</code>
+            <Button type="button" size="icon" variant="outline" onClick={copy} aria-label="复制">
+              {copied ? <Check className="h-4 w-4 text-green-600" /> : <Copy className="h-4 w-4" />}
+            </Button>
+          </div>
+        </div>
+        <DialogFooter>
+          <Button type="button" onClick={onClose}>我已保存，关闭</Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }
 
