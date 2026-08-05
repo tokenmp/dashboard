@@ -256,6 +256,23 @@ export async function getDashboardReleaseDetailApi(
   const res = await client.get<ApiResponse<ReleaseDetailResult>>(`/dashboard/releases/${id}`);
   return res.data.data;
 }
+export async function createDashboardReleaseApi(
+  body: Partial<VersionReleaseItem>,
+): Promise<VersionReleaseItem> {
+  const res = await client.post<ApiResponse<VersionReleaseItem>>('/dashboard/releases', body);
+  return res.data.data;
+}
+export async function updateDashboardReleaseApi(
+  id: string,
+  body: Partial<VersionReleaseItem>,
+): Promise<VersionReleaseItem> {
+  const res = await client.put<ApiResponse<VersionReleaseItem>>(`/dashboard/releases/${id}`, body);
+  return res.data.data;
+}
+export async function deleteDashboardReleaseApi(id: string): Promise<{ id: string }> {
+  const res = await client.delete<ApiResponse<{ id: string }>>(`/dashboard/releases/${id}`);
+  return res.data.data;
+}
 export async function getDashboardConfigApi(): Promise<SystemConfigItem[]> {
   const res = await client.get<ApiResponse<SystemConfigItem[]>>('/dashboard/config');
   return res.data.data;
