@@ -8,16 +8,19 @@ declare(strict_types=1);
  *   php scripts/sync-releases.php           # 同步所有 v* tag（upsert，不删除）
  *   php scripts/sync-releases.php --prune   # 同步并删除 DB 中不存在对应 tag 的记录
  *
- * Tag message 约定（annotated tag，-a -m）：
- *   第一行：vX.Y.Z: 标题            ← 标题去掉 "vX.Y.Z:" 前缀
+ * Tag message 约定（annotated tag，-a -m/-F）：
+ *   第一行：vX.Y.Z: 标题            ← subject，去掉 "vX.Y.Z:" 前缀作为 title
  *   空行
- *   正文…                           ← 作为 body
+ *   ---                            ← YAML front matter（可选，body 顶部）
+ *   type: fix                       ← release_type（feature/fix/improvement/perf）
+ *   summary: 简短摘要               ← 覆盖自动推断的 summary
+ *   status: published               ← 默认 published
+ *   ---
+ *   空行
+ *   正文 changelog…                  ← 作为 body（front matter 之后）
  *
- * release_type 默认 feature；若标题或正文含 [fix]/[perf]/[improvement] 则自动推断。
- * summary 取 body 第一个非空行；无 body 时回退为标题。
- *
- * 也可在 tag message 末尾加元数据行（可选）：
- *   <!-- type: fix -->              ← 指定 release_type
+ * release_type 默认 feature；front matter.type 优先，否则按标题 [fix]/[perf] 关键词推断。
+ * summary 默认取 body 第一个非空行；front matter.summary 优先。
  *
  * 数据源：git for-each-ref（需在仓库根目录运行，或设置 GIT_DIR）。
  */
@@ -81,17 +84,39 @@ foreach ($tags as $t) {
     $body = preg_replace('/-----BEGIN PGP SIGNATURE-----.*$/s', '', $body);
     $body = trim($body);
 
-    // release_type 推断：优先 <!-- type: xxx --> 元数据，否则按关键词
-    $type = 'feature';
-    if (preg_match('/<!--\s*type:\s*(\w+)\s*-->/', $body, $m)) {
-        $type = $m[1];
-    } elseif (preg_match('/\[(fix|perf|improvement|feature)\]/i', $title . ' ' . $body, $m)) {
-        $type = strtolower($m[1]);
+    // ── YAML front matter 解析 ──
+    // 顶部 --- 包裹的参数块，可指定 type/summary/status 等 DB 字段：
+    //   ---
+    //   type: fix
+    //   summary: 简短摘要
+    //   status: published
+    //   ---
+    //   正文 changelog...
+    $front = [];
+    if (preg_match('/\A---\s*\n(.*?)\n---\s*\n?(.*)\z/s', $body, $m)) {
+        $yaml = $m[1];
+        $body = trim($m[2]);
+        // 简易 key: value 解析（不引依赖，足够覆盖标量字段）
+        foreach (preg_split('/\r?\n/', $yaml) as $ln) {
+            if (preg_match('/^(\w+)\s*:\s*(.+)$/', trim($ln), $kv)) {
+                $front[strtolower($kv[1])] = trim($kv[2]);
+            }
+        }
     }
 
-    // summary：body 第一个非空行，无则标题
-    $summary = null;
-    if ($body !== '') {
+    // release_type：优先 front matter.type，否则按标题/正文关键词推断，默认 feature
+    $type = $front['type'] ?? 'feature';
+    if (!in_array($type, ['feature', 'fix', 'improvement', 'perf'], true)) {
+        if (preg_match('/\[(fix|perf|improvement|feature)\]/i', $title . ' ' . $body, $m)) {
+            $type = strtolower($m[1]);
+        } else {
+            $type = 'feature';
+        }
+    }
+
+    // summary：优先 front matter.summary，否则 body 第一个非空行，无则标题
+    $summary = $front['summary'] ?? null;
+    if ($summary === null && $body !== '') {
         foreach (preg_split('/\r?\n/', $body) as $ln) {
             $ln = trim($ln);
             if ($ln !== '' && !str_starts_with($ln, '<!--') && !str_starts_with($ln, '──') && !str_starts_with($ln, '━━━')) {
@@ -103,6 +128,9 @@ foreach ($tags as $t) {
     if ($summary === null) {
         $summary = $title;
     }
+
+    // status：优先 front matter.status，默认 published
+    $status = $front['status'] ?? 'published';
 
     // sort_order：语义版本 major*10000 + minor*100 + patch
     $sortOrder = 0;
@@ -117,7 +145,7 @@ foreach ($tags as $t) {
         'body'         => $body !== '' ? $body : $summary,
         'release_type' => $type,
         'released_at'  => $t['date'],
-        'status'       => 'published',
+        'status'       => $status,
         'sort_order'   => $sortOrder,
         'updated_at'   => date('Y-m-d H:i:s'),
     ];
@@ -137,7 +165,7 @@ foreach ($tags as $t) {
         $row
     );
     $upserted++;
-    echo "  ✓ $version  ($type, sort=$sortOrder)\n";
+    echo "  ✓ $version  ($type, status=$status, sort=$sortOrder)\n";
 }
 
 // 4. 可选清理
