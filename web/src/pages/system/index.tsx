@@ -1,20 +1,43 @@
-import { useState } from 'react';
-import { RefreshCw, Search, Megaphone, GitBranch } from 'lucide-react';
+import { useEffect, useState } from 'react';
+import { RefreshCw, Search, Megaphone, GitBranch, Plus, Pencil, Trash2 } from 'lucide-react';
 import { usePagedQuery } from '@/hooks/usePagedQuery';
 import { useAsync } from '@/hooks/useAsync';
+import { useMutation } from '@/hooks/useMutation';
 import { StatusBadge } from '@/components/StatusBadge';
 import { EmptyState } from '@/components/EmptyState';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Textarea } from '@/components/ui/textarea';
+import { Switch } from '@/components/ui/switch';
 import { DebouncedInput } from '@/components/DebouncedInput';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 import { formatNumber } from '@/utils/format';
-import { getDashboardNoticesApi, getDashboardConfigApi, getDashboardMigrationsApi } from '@/api/dashboard';
-import type { SystemQuery } from '@/types/system';
+import {
+  getDashboardNoticesApi,
+  getDashboardConfigApi,
+  getDashboardMigrationsApi,
+  createDashboardNoticeApi,
+  updateDashboardNoticeApi,
+  deleteDashboardNoticeApi,
+} from '@/api/dashboard';
+import type { AnnouncementItem, AnnouncementPayload, SystemQuery } from '@/types/system';
 
 function System() {
   const [tab, setTab] = useState('notices');
@@ -55,6 +78,22 @@ function Pager({ page, size, total, loading, setPage }: { page: number; size: nu
 function NoticesTab() {
   const { list, total, page, size, loading, error, params, reload, setPage, setFilters } =
     usePagedQuery(getNoticesApiLazy, { initial: { size: 20, sort: '-sort_order' } as SystemQuery });
+  const [dialogOpen, setDialogOpen] = useState(false);
+  const [editing, setEditing] = useState<AnnouncementItem | null>(null);
+  const [deleting, setDeleting] = useState<AnnouncementItem | null>(null);
+  const { mutate } = useMutation();
+
+  const openCreate = () => { setEditing(null); setDialogOpen(true); };
+  const openEdit = (a: AnnouncementItem) => { setEditing(a); setDialogOpen(true); };
+
+  const confirmDelete = () => {
+    if (!deleting) return;
+    mutate(() => deleteDashboardNoticeApi(deleting.id), {
+      successMsg: '已删除',
+      onSuccess: () => { setDeleting(null); reload(); },
+    }).catch(() => {});
+  };
+
   return (
     <div className="space-y-3">
       <Card><CardContent className="flex flex-wrap items-end gap-3 p-4">
@@ -77,6 +116,7 @@ function NoticesTab() {
             </SelectContent>
           </Select>
         </div>
+        <Button size="sm" onClick={openCreate}><Plus className="mr-1.5 h-4 w-4" />新建</Button>
         <Button variant="outline" size="sm" onClick={reload} disabled={loading}><RefreshCw className={`mr-1.5 h-4 w-4 ${loading ? 'animate-spin' : ''}`} />刷新</Button>
       </CardContent></Card>
       {error && <Card className="border-destructive"><CardContent className="py-3 text-sm text-destructive">{error}</CardContent></Card>}
@@ -85,14 +125,18 @@ function NoticesTab() {
           : list.length === 0 ? <EmptyState title="暂无公告" />
           : list.map((a) => (
             <Card key={a.id}><CardContent className="p-4">
-              <div className="flex items-start justify-between">
-                <div className="flex items-center gap-2">
+              <div className="flex items-start justify-between gap-2">
+                <div className="flex flex-wrap items-center gap-2">
                   <Megaphone className="h-4 w-4 text-muted-foreground" />
                   <span className="font-medium">{a.title}</span>
                   <Badge variant={a.severity === 'urgent' ? 'destructive' : 'outline'} className="text-[10px]">{a.severity}</Badge>
                   {a.dismissible && <Badge variant="outline" className="text-[10px]">可关闭</Badge>}
                 </div>
-                <StatusBadge status={a.status} />
+                <div className="flex items-center gap-2">
+                  <StatusBadge status={a.status} />
+                  <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => openEdit(a)} aria-label="编辑"><Pencil className="h-3.5 w-3.5" /></Button>
+                  <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive" onClick={() => setDeleting(a)} aria-label="删除"><Trash2 className="h-3.5 w-3.5" /></Button>
+                </div>
               </div>
               <p className="mt-2 text-sm text-muted-foreground line-clamp-2">{a.body}</p>
               <div className="mt-1 text-xs text-muted-foreground">
@@ -102,10 +146,164 @@ function NoticesTab() {
           ))}
       </div>
       <Pager page={page} size={size} total={total} loading={loading} setPage={setPage} />
+
+      <NoticeDialog
+        open={dialogOpen}
+        item={editing}
+        onClose={() => setDialogOpen(false)}
+        onSaved={reload}
+      />
+
+      <AlertDialog open={deleting !== null} onOpenChange={(o) => !o && setDeleting(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>删除公告？</AlertDialogTitle>
+            <AlertDialogDescription>
+              将归档公告「{deleting?.title}」，归档后不再展示。此操作可由重新编辑恢复。
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>取消</AlertDialogCancel>
+            <AlertDialogAction onClick={confirmDelete} className="bg-destructive hover:bg-destructive/90">删除</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
 const getNoticesApiLazy = (p: SystemQuery) => getDashboardNoticesApi(p);
+
+const EMPTY_NOTICE: AnnouncementPayload = {
+  title: '',
+  body: '',
+  severity: 'info',
+  scope: 'all',
+  dismissible: true,
+  status: 'published',
+  sort_order: 0,
+  publish_from: '',
+  publish_until: null,
+};
+
+/** datetime 字段转 datetime-local 输入框值（取前16位、空格→T） */
+function toDateTimeLocal(s: string | null): string {
+  return s ? s.slice(0, 16).replace(' ', 'T') : '';
+}
+
+function toForm(a: AnnouncementItem): AnnouncementPayload {
+  return {
+    title: a.title,
+    body: a.body,
+    severity: (['info', 'warning', 'urgent'].includes(a.severity) ? a.severity : 'info') as AnnouncementPayload['severity'],
+    scope: a.scope,
+    dismissible: a.dismissible,
+    status: (['draft', 'published', 'archived'].includes(a.status) ? a.status : 'draft') as AnnouncementPayload['status'],
+    sort_order: a.sort_order,
+    publish_from: toDateTimeLocal(a.publish_from),
+    publish_until: a.publish_until ? toDateTimeLocal(a.publish_until) : null,
+  };
+}
+
+function NoticeDialog({ open, item, onClose, onSaved }: {
+  open: boolean;
+  item: AnnouncementItem | null;
+  onClose: () => void;
+  onSaved: () => void;
+}) {
+  const isEdit = item !== null;
+  const { loading, mutate } = useMutation();
+  const [form, setForm] = useState<AnnouncementPayload>(EMPTY_NOTICE);
+
+  useEffect(() => {
+    if (open) setForm(item ? toForm(item) : EMPTY_NOTICE);
+  }, [open, item]);
+
+  const set = <K extends keyof AnnouncementPayload>(k: K, v: AnnouncementPayload[K]) =>
+    setForm((f) => ({ ...f, [k]: v }));
+
+  const submit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const payload: AnnouncementPayload = {
+      ...form,
+      // datetime-local 空串 → 发当前时间；publish_until 空串 → null
+      publish_from: form.publish_from || new Date().toISOString().slice(0, 16),
+      publish_until: form.publish_until || null,
+    };
+    mutate(
+      () => (isEdit ? updateDashboardNoticeApi(item!.id, payload) : createDashboardNoticeApi(payload)),
+      { successMsg: isEdit ? '已更新' : '已创建', onSuccess: () => { onSaved(); onClose(); } },
+    ).catch(() => {});
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
+      <DialogContent className="max-h-[90vh] max-w-xl overflow-y-auto">
+        <DialogHeader><DialogTitle>{isEdit ? '编辑公告' : '新建公告'}</DialogTitle></DialogHeader>
+        <form onSubmit={submit} className="space-y-3">
+          <div className="space-y-1.5">
+            <Label htmlFor="n-title">标题</Label>
+            <Input id="n-title" required value={form.title} onChange={(e) => set('title', e.target.value)} placeholder="公告标题" />
+          </div>
+          <div className="space-y-1.5">
+            <Label htmlFor="n-body">正文</Label>
+            <Textarea id="n-body" rows={4} value={form.body} onChange={(e) => set('body', e.target.value)} placeholder="公告正文" />
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div className="space-y-1.5">
+              <Label>严重级别</Label>
+              <Select value={form.severity} onValueChange={(v) => set('severity', v as AnnouncementPayload['severity'])}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="info">info</SelectItem>
+                  <SelectItem value="warning">warning</SelectItem>
+                  <SelectItem value="urgent">urgent</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-1.5">
+              <Label>状态</Label>
+              <Select value={form.status} onValueChange={(v) => set('status', v as AnnouncementPayload['status'])}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="draft">草稿</SelectItem>
+                  <SelectItem value="published">已发布</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div className="space-y-1.5">
+              <Label htmlFor="n-scope">展示范围</Label>
+              <Input id="n-scope" value={form.scope} onChange={(e) => set('scope', e.target.value)} placeholder="all" />
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="n-sort">排序权重</Label>
+              <Input id="n-sort" type="number" value={form.sort_order} onChange={(e) => set('sort_order', Number(e.target.value))} />
+            </div>
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div className="space-y-1.5">
+              <Label htmlFor="n-from">生效起始</Label>
+              <Input id="n-from" type="datetime-local" value={form.publish_from} onChange={(e) => set('publish_from', e.target.value)} />
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="n-until">生效截止（留空=长期）</Label>
+              <Input id="n-until" type="datetime-local" value={form.publish_until ?? ''} onChange={(e) => set('publish_until', e.target.value || null)} />
+            </div>
+          </div>
+          <div className="flex items-center gap-2">
+            <Switch id="n-dismiss" checked={form.dismissible} onCheckedChange={(v) => set('dismissible', v)} />
+            <Label htmlFor="n-dismiss" className="cursor-pointer">用户可手动关闭</Label>
+          </div>
+          <DialogFooter>
+            <Button type="button" variant="outline" onClick={onClose}>取消</Button>
+            <Button type="submit" disabled={loading}>{loading ? '保存中…' : '保存'}</Button>
+          </DialogFooter>
+        </form>
+      </DialogContent>
+    </Dialog>
+  );
+}
 
 function ConfigTab() {
   const { data, loading, error, reload } = useAsync(getDashboardConfigApi);

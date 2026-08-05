@@ -19,6 +19,19 @@ export interface AnnouncementItem {
   updated_at: string;
 }
 
+/** 公告创建/编辑表单（与后端 noticeInput 对齐） */
+export interface AnnouncementPayload {
+  title: string;
+  body: string;
+  severity: 'info' | 'warning' | 'urgent';
+  scope: string;
+  dismissible: boolean;
+  status: 'draft' | 'published' | 'archived';
+  sort_order: number;
+  publish_from: string;
+  publish_until: string | null;
+}
+
 /** 通知 */
 export interface NotificationItem {
   id: string;

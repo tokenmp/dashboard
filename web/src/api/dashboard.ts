@@ -13,7 +13,7 @@ import type {
   UserDetailResult,
   UserListQuery,
 } from '@/types/user';
-import type { NotificationItem, SystemQuery } from '@/types/system';
+import type { AnnouncementPayload, NotificationItem, SystemQuery } from '@/types/system';
 import type {
   ProviderItem,
   UpstreamKeyItem,
@@ -191,6 +191,23 @@ export async function getDashboardNoticesApi(
   const res = await client.get<ApiResponse<PageResult<AnnouncementItem>>>('/dashboard/notices', {
     params: toParams(params as Record<string, unknown>),
   });
+  return res.data.data;
+}
+export async function createDashboardNoticeApi(
+  body: AnnouncementPayload,
+): Promise<AnnouncementItem> {
+  const res = await client.post<ApiResponse<AnnouncementItem>>('/dashboard/notices', body);
+  return res.data.data;
+}
+export async function updateDashboardNoticeApi(
+  id: string,
+  body: AnnouncementPayload,
+): Promise<AnnouncementItem> {
+  const res = await client.put<ApiResponse<AnnouncementItem>>(`/dashboard/notices/${id}`, body);
+  return res.data.data;
+}
+export async function deleteDashboardNoticeApi(id: string): Promise<{ id: string }> {
+  const res = await client.delete<ApiResponse<{ id: string }>>(`/dashboard/notices/${id}`);
   return res.data.data;
 }
 export async function getDashboardReleasesApi(
