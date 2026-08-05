@@ -80,6 +80,7 @@ Route::group('api/v1', function () {
                     Route::get('', 'panel/Upstream/keys');
                     Route::get(':id', 'panel/Upstream/keyDetail')->pattern(['id' => '[\w\-]+']);
                 });
+                Route::get('models', 'panel/Upstream/models');
             });
 
             // 我的用量

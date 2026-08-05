@@ -1,6 +1,6 @@
 import { useEffect } from 'react';
 import { NavLink, Outlet, useNavigate } from 'react-router-dom';
-import { LayoutDashboard, ScrollText, Gauge, KeyRound, Gift, Megaphone, BookOpen, UserCircle, ShieldCheck, LogOut, ChevronDown } from 'lucide-react';
+import { LayoutDashboard, ScrollText, Gauge, KeyRound, Gift, Cpu, Megaphone, BookOpen, UserCircle, ShieldCheck, LogOut, ChevronDown } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator } from '@/components/ui/dropdown-menu';
 import { useAuthStore } from '@/store/auth';
@@ -19,6 +19,7 @@ const NAV_GROUPS: { label: string; items: { to: string; label: string; icon: typ
     { to: '/panel/redemptions', label: '我的兑换', icon: Gift, end: false },
   ]},
   { label: '信息', items: [
+    { to: '/panel/models', label: '模型目录', icon: Cpu, end: false },
     { to: '/panel/notices', label: '公告', icon: Megaphone, end: false },
     { to: '/panel/releases', label: '更新日志', icon: BookOpen, end: false },
   ]},

@@ -4,6 +4,7 @@ declare(strict_types=1);
 namespace app\controller\panel;
 
 use app\BaseController;
+use app\model\AiModel;
 use app\model\UpstreamKey;
 use app\model\UpstreamKeyVerification;
 use app\model\UpstreamModelMapping;
@@ -13,13 +14,15 @@ use think\exception\HttpException;
 use think\facade\Db;
 
 /**
- * 用户面：我持有的上游 Key（panel，自取）
+ * 用户面：我持有的上游 Key 与模型目录（panel）
  *
  * 路由前缀 /api/v1/panel/upstream
  * - GET /keys       我自有的上游 Key 列表（脱敏）
  * - GET /keys/:id   详情 + mappings + route_groups + 最近 verifications
+ * - GET /models     全平台可用模型目录
  *
- * 仅看 owner_user_id=self 的私有 Key。脱敏：永不返回 encrypted_key / encryption_version。
+ * Key 仅看 owner_user_id=self 的私有数据。模型目录不受 DataScope 限制。
+ * 脱敏：永不返回 encrypted_key / encryption_version。
  */
 class Upstream extends BaseController
 {
@@ -100,5 +103,96 @@ class Upstream extends BaseController
             'routeGroups'   => $routeGroups,
             'verifications' => $verifications,
         ]);
+    }
+
+    /** GET /api/v1/panel/upstream/models */
+    public function models()
+    {
+        [$page, $size] = Pagination::page($this->request);
+
+        $query = AiModel::where('status', 'active');
+        $keyword = trim((string) $this->request->get('keyword', ''));
+        if ($keyword !== '') {
+            $query->where(function ($q) use ($keyword) {
+                $q->whereLike('name', "%{$keyword}%")->whereOr('display_name', 'like', "%{$keyword}%");
+            });
+        }
+        $billingMode = trim((string) $this->request->get('billingMode', ''));
+        if ($billingMode !== '') {
+            $query->where('billing_mode', $billingMode);
+        }
+        Pagination::applyTimeRange($query, $this->request, 'created_at');
+        $total = $query->count();
+        Pagination::applySort($query, $this->request, ['created_at', 'name'], 'created_at');
+        $list = $query->page($page, $size)->select();
+        $data = $list->toArray();
+
+        // 批量查询当前页模型的可用供应商映射，避免 N+1。
+        $modelIds = array_column($data, 'id');
+        $providerRows = [];
+        if (!empty($modelIds)) {
+            $placeholders = implode(',', array_fill(0, count($modelIds), '?'));
+            $providerRows = Db::connect('pgsql')->query(
+                "select umm.id as mapping_id, umm.model_id, umm.upstream_model_name,"
+                . " umm.input_price_per_token, umm.output_price_per_token, umm.max_tokens, umm.status,"
+                . " uk.name as upstream_key_name, p.name as provider_name, p.display_name as provider_display_name"
+                . " from upstream_model_mappings umm"
+                . " join upstream_keys uk on uk.id = umm.upstream_key_id"
+                . " join providers p on p.id = uk.provider_id"
+                . " where umm.model_id in ($placeholders) and umm.status = 'active'"
+                . " order by p.name, uk.name",
+                $modelIds
+            );
+        }
+
+        $byModel = [];
+        foreach ($providerRows as $providerRow) {
+            $byModel[$providerRow['model_id']][] = [
+                'mapping_id'             => $providerRow['mapping_id'],
+                'provider_name'          => $providerRow['provider_name'],
+                'provider_display_name'  => $providerRow['provider_display_name'],
+                'upstream_key_name'      => $providerRow['upstream_key_name'],
+                'upstream_model_name'    => $providerRow['upstream_model_name'],
+                'input_price_per_token'  => $providerRow['input_price_per_token'] !== null ? (float) $providerRow['input_price_per_token'] : null,
+                'output_price_per_token' => $providerRow['output_price_per_token'] !== null ? (float) $providerRow['output_price_per_token'] : null,
+                'max_tokens'             => $providerRow['max_tokens'] !== null ? (int) $providerRow['max_tokens'] : null,
+                'status'                 => $providerRow['status'],
+            ];
+        }
+
+        foreach ($data as &$model) {
+            $model['capabilities'] = self::parsePgArray($model['capabilities'] ?? null);
+            $model['providers'] = $byModel[$model['id']] ?? [];
+        }
+        unset($model);
+
+        return success(Pagination::wrap($data, $total, $page, $size));
+    }
+
+    /** 解析 PostgreSQL text[] 字面量（如 "{text,vision}"）为 PHP 数组 */
+    private static function parsePgArray($value): array
+    {
+        if (is_array($value)) {
+            return $value;
+        }
+        if (!is_string($value) || $value === '') {
+            return [];
+        }
+
+        $value = trim($value);
+        if ($value === '' || $value === '{}') {
+            return [];
+        }
+        if (str_starts_with($value, '{') && str_ends_with($value, '}')) {
+            $inner = substr($value, 1, -1);
+            if ($inner === '') {
+                return [];
+            }
+            return array_map(
+                static fn(string $item): string => trim($item, " \t\n\r\0\x0B\""),
+                explode(',', $inner)
+            );
+        }
+        return [];
     }
 }
