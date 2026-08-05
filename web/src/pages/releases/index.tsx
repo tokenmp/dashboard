@@ -3,6 +3,7 @@ import { getDashboardReleasesApi, getDashboardReleaseDetailApi } from '@/api/das
 import { usePagedQuery } from '@/hooks/usePagedQuery';
 import { useAsync } from '@/hooks/useAsync';
 import { EmptyState } from '@/components/EmptyState';
+import { Markdown } from '@/components/Markdown';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
@@ -86,7 +87,7 @@ function ReleaseDetailDrawer({ id, onClose }: { id: string | null; onClose: () =
             <h2 className="text-lg font-semibold">{data.release.title}</h2>
             {data.release.summary && <p className="text-sm text-muted-foreground">{data.release.summary}</p>}
             <div className="rounded-lg border bg-muted/30 p-4">
-              <pre className="whitespace-pre-wrap break-words text-sm">{data.release.body}</pre>
+              <Markdown>{data.release.body}</Markdown>
             </div>
             <div className="text-xs text-muted-foreground">发布时间：{data.release.released_at}</div>
           </div>
