@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { RefreshCw, Search } from 'lucide-react';
 import { usePagedQuery } from '@/hooks/usePagedQuery';
@@ -16,7 +16,7 @@ import {
 } from '@/components/ui/table';
 import { formatCompact, formatNumber } from '@/utils/format';
 import { KeysTab } from './KeysTab';
-import type { UpstreamQuery } from '@/types/upstream';
+import type { AiModelItem, UpstreamQuery } from '@/types/upstream';
 
 function Upstream() {
   const [sp, setSp] = useSearchParams();
@@ -166,6 +166,63 @@ import { getDashboardRouteGroupsApi } from '@/api/dashboard';
 const getRouteGroupsApiLazy = (p: UpstreamQuery) => getDashboardRouteGroupsApi(p);
 
 /* ----------------------------- 平台模型 ----------------------------- */
+function formatPrice(price: number | null): string {
+  if (price == null) return '—';
+  const perMillion = price * 1_000_000;
+  return `¥${perMillion.toFixed(2)}/M`;
+}
+
+function ModelCard({ m }: { m: AiModelItem }) {
+  const [expanded, setExpanded] = useState(false);
+  const providers = m.providers ?? [];
+  const visibleProviders = expanded ? providers : providers.slice(0, 5);
+
+  return (
+    <Card>
+      <CardContent className="p-4">
+        <div className="flex items-start justify-between">
+          <div>
+            <div className="font-medium">{m.display_name || m.name}</div>
+            <div className="font-mono text-xs text-muted-foreground">{m.name}</div>
+          </div>
+          <Badge variant={m.billing_mode === 'free_global' ? 'secondary' : 'default'} className="text-[10px]">{m.billing_mode}</Badge>
+        </div>
+        {m.description && <p className="mt-1 line-clamp-2 text-xs text-muted-foreground">{m.description}</p>}
+        <div className="mt-2 flex flex-wrap gap-1">
+          {(m.capabilities ?? []).map((c) => <Badge key={c} variant="outline" className="text-[10px]">{c}</Badge>)}
+        </div>
+        <div className="mt-2 text-xs text-muted-foreground">上下文窗口：{m.context_window_tokens ? formatCompact(m.context_window_tokens) : '—'}</div>
+        <div className="mt-2 border-t pt-2">
+          <div className="mb-1 text-[11px] font-medium text-muted-foreground">供应商映射（{providers.length}）</div>
+          {providers.length === 0 ? (
+            <div className="text-xs text-muted-foreground">暂无可用供应商</div>
+          ) : (
+            <div className="space-y-1">
+              {visibleProviders.map((p) => (
+                <div key={p.mapping_id} className="flex flex-wrap items-center gap-x-3 gap-y-0.5 text-[11px]">
+                  <span className="font-medium">{p.provider_display_name || p.provider_name}</span>
+                  <span className="text-muted-foreground">{p.upstream_key_name}</span>
+                  {p.upstream_model_name && p.upstream_model_name !== m.name && (
+                    <span className="font-mono text-muted-foreground">→ {p.upstream_model_name}</span>
+                  )}
+                  <span className="text-muted-foreground">max: {p.max_tokens != null ? formatCompact(p.max_tokens) : '—'}</span>
+                  <span className="text-muted-foreground">in: {formatPrice(p.input_price_per_token)}</span>
+                  <span className="text-muted-foreground">out: {formatPrice(p.output_price_per_token)}</span>
+                </div>
+              ))}
+              {providers.length > 5 && (
+                <button type="button" className="text-[11px] text-primary hover:underline" onClick={() => setExpanded((value) => !value)}>
+                  {expanded ? '收起' : `还有 ${providers.length - 5} 个`}
+                </button>
+              )}
+            </div>
+          )}
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
 function ModelsTab() {
   const { initial: urlInit, write } = useUrlQueryState([
     { name: 'q', key: 'keyword' },
@@ -196,22 +253,7 @@ function ModelsTab() {
       {loading && list.length === 0 ? <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">{Array.from({ length: 6 }).map((_, i) => <Skeleton key={i} className="h-32" />)}</div>
         : list.length === 0 ? <EmptyState title="暂无模型" />
         : <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
-            {list.map((m) => (
-              <Card key={m.id}><CardContent className="p-4">
-                <div className="flex items-start justify-between">
-                  <div>
-                    <div className="font-medium">{m.display_name || m.name}</div>
-                    <div className="font-mono text-xs text-muted-foreground">{m.name}</div>
-                  </div>
-                  <Badge variant={m.billing_mode === 'free_global' ? 'secondary' : 'default'} className="text-[10px]">{m.billing_mode}</Badge>
-                </div>
-                {m.description && <p className="mt-1 line-clamp-2 text-xs text-muted-foreground">{m.description}</p>}
-                <div className="mt-2 flex flex-wrap gap-1">
-                  {(m.capabilities ?? []).map((c) => <Badge key={c} variant="outline" className="text-[10px]">{c}</Badge>)}
-                </div>
-                <div className="mt-2 text-xs text-muted-foreground">上下文窗口：{m.context_window_tokens ? formatCompact(m.context_window_tokens) : '—'}</div>
-              </CardContent></Card>
-            ))}
+            {list.map((m) => <ModelCard key={m.id} m={m} />)}
           </div>}
       <Pager page={page} size={size} total={total} loading={loading} setPage={setPage} />
     </div>

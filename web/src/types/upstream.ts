@@ -95,6 +95,19 @@ export interface RouteGroupItem {
   updated_at: string;
 }
 
+/** 平台模型的供应商映射 */
+export interface AiModelProvider {
+  mapping_id: string;
+  provider_name: string;
+  provider_display_name: string | null;
+  upstream_key_name: string;
+  upstream_model_name: string | null;
+  input_price_per_token: number | null;
+  output_price_per_token: number | null;
+  max_tokens: number | null;
+  status: string;
+}
+
 /** 平台模型 */
 export interface AiModelItem {
   id: string;
@@ -108,6 +121,7 @@ export interface AiModelItem {
   status: string;
   created_at: string;
   updated_at: string;
+  providers: AiModelProvider[];
 }
 
 /** 通用列表查询 */
