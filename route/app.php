@@ -32,6 +32,10 @@ Route::group('api/v1', function () {
         Route::post('login', 'auth/Auth/login');
         Route::get('public-key', 'auth/Auth/publicKey');
 
+        // 密码重置（公开，无需登录）
+        Route::post('password/send-code', 'auth/PasswordReset/sendCode');
+        Route::post('password/reset', 'auth/PasswordReset/reset');
+
         Route::group(function () {
             Route::get('user', 'auth/Auth/user');
         })->middleware(Auth::class);
