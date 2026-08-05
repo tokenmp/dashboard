@@ -4,7 +4,7 @@ declare(strict_types=1);
 namespace app\controller\panel;
 
 use app\BaseController;
-use app\model\Notification;
+use app\model\Notification as NotificationModel;
 use app\service\DataScope;
 use app\support\Pagination;
 
@@ -22,7 +22,7 @@ class Notification extends BaseController
         $ctx = DataScope::forSelf(app('user'));
         [$page, $size] = Pagination::page($this->request);
 
-        $query = Notification::where('user_id', $ctx->userId());
+        $query = NotificationModel::where('user_id', $ctx->userId());
 
         if ($this->request->get('unread') === '1') {
             $query->whereNull('read_at');
