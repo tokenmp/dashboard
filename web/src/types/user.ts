@@ -1,3 +1,5 @@
+import type { QuotaItem } from './dashboard';
+
 /**
  * 用户与账户相关类型
  */
@@ -80,6 +82,7 @@ export interface UserDetailResult {
   botKeys: BotKeyItem[];
   plans: UserPlanItem[];
   usage: UserUsageSummary[];
+  quota: QuotaItem[];
 }
 
 /** 用户列表查询参数 */

@@ -3,6 +3,7 @@ import { RefreshCw, Activity, Zap, Gauge, CheckCircle2 } from 'lucide-react';
 import { getPanelOverviewApi } from '@/api/panel';
 import { useAsync } from '@/hooks/useAsync';
 import { StatCard } from '@/components/StatCard';
+import { QuotaCards } from '@/components/QuotaCards';
 import { TrendChart } from '@/components/TrendChart';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -77,11 +78,7 @@ function OverviewView({ data }: { data: UserOverview }) {
             <CardTitle className="text-base">额度明细</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-              {quota.map((q) => (
-                <QuotaDetail key={q.billingPlan} q={q} />
-              ))}
-            </div>
+            <QuotaCards items={quota} />
           </CardContent>
         </Card>
       )}
@@ -120,83 +117,6 @@ function QuotaStatCard({ q }: { q: QuotaItem }) {
       }
       icon={<Gauge className="h-4 w-4" />}
     />
-  );
-}
-
-/** 额度明细卡：按套餐模式（window / capped / balance）分别渲染 */
-function QuotaDetail({ q }: { q: QuotaItem }) {
-  const name = q.planName || planLabel(q.billingPlan);
-  return (
-    <div className="rounded-lg border p-4">
-      <div className="flex items-center justify-between">
-        <span className="text-sm font-medium">{name}</span>
-        <Badge variant="outline">{q.unit === 'requests' ? '次' : 'tok'}</Badge>
-      </div>
-
-      {/* 总额度头条 */}
-      {q.total != null && (
-        <div className="mt-3 flex items-baseline justify-between border-b pb-3">
-          <span className="text-xs text-muted-foreground">{q.mode === 'window' ? '本周总额度' : '总额度'}</span>
-          <span className="text-xl font-semibold tabular-nums">{formatNumber(q.total)}</span>
-        </div>
-      )}
-
-      {q.mode === 'window' &&
-        q.windows?.map((w) => (
-          <div key={w.key} className="mt-3">
-            <div className="flex items-center justify-between text-xs text-muted-foreground">
-              <span>{w.label}</span>
-              <span className="tabular-nums">
-                {formatNumber(w.used)}
-                {w.limit ? ` / ${formatNumber(w.limit)}` : ' / 不限'}
-              </span>
-            </div>
-            {w.limit ? (
-              <UsageBar ratio={Math.min(1, w.used / w.limit)} />
-            ) : null}
-          </div>
-        ))}
-
-      {q.mode === 'capped' && (
-        <>
-          <div className="mt-2 text-xl font-semibold tabular-nums">剩余 {formatCompact(q.available ?? 0)}</div>
-          <UsageBar ratio={q.limit ? Math.min(1, (q.used ?? 0) / q.limit) : 0} className="mt-2" />
-          <div className="mt-2 flex justify-between text-xs text-muted-foreground">
-            <span>已用 {formatNumber(q.used ?? 0)}</span>
-            <span>限额 {formatNumber(q.limit ?? 0)}</span>
-          </div>
-        </>
-      )}
-
-      {q.mode === 'balance' && (
-        <>
-          <div className="mt-2 text-xl font-semibold tabular-nums">可用 {formatCompact(q.available ?? 0)}</div>
-          <div className="mt-2 space-y-1 text-xs text-muted-foreground">
-            <div className="flex justify-between">
-              <span>余额</span>
-              <span className="tabular-nums">{formatNumber(q.balance ?? 0)}</span>
-            </div>
-            <div className="flex justify-between">
-              <span>预扣中</span>
-              <span className="tabular-nums">{formatNumber(q.reserved ?? 0)}</span>
-            </div>
-          </div>
-        </>
-      )}
-    </div>
-  );
-}
-
-/** 用量进度条：ratio = 已用 / 限额（0~1） */
-function UsageBar({ ratio, className }: { ratio: number; className?: string }) {
-  const pct = Math.round(Math.max(0, Math.min(1, ratio)) * 100);
-  return (
-    <div className={`mt-1 h-2 w-full overflow-hidden rounded-full bg-muted ${className ?? ''}`}>
-      <div
-        className={`h-full rounded-full transition-all ${pct >= 90 ? 'bg-destructive' : pct >= 70 ? 'bg-amber-500' : 'bg-primary'}`}
-        style={{ width: `${pct}%` }}
-      />
-    </div>
   );
 }
 

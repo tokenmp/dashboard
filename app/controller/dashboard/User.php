@@ -9,6 +9,7 @@ use app\model\User as UserModel;
 use app\model\UserApiKey;
 use app\model\UserPlan;
 use app\service\DataScope;
+use app\service\QuotaService;
 use app\support\Pagination;
 use think\exception\HttpException;
 use think\facade\Db;
@@ -84,28 +85,17 @@ class User extends BaseController
             ->order('created_at', 'desc')
             ->select();
 
-        // 用量汇总：按 billing_plan 聚合 token_delta / request_delta
-        $usage = Db::connect('pgsql')->query(
-            'select coalesce(billing_plan, ?) as billing_plan,'
-            . ' coalesce(sum(token_delta),0) as token_balance,'
-            . ' coalesce(sum(request_delta),0) as request_balance'
-            . ' from usage_ledger where user_id = ? group by billing_plan order by billing_plan',
-            ['unknown', $id]
-        );
-        $usageSummary = array_map(static function ($r) {
-            return [
-                'billingPlan'    => $r['billing_plan'],
-                'tokenBalance'   => (int) $r['token_balance'],
-                'requestBalance' => (int) $r['request_balance'],
-            ];
-        }, $usage);
+        // 额度（套餐感知，对齐执行器口径）+ 扁平 usage（向后兼容，口径已修正）
+        $svc   = new QuotaService();
+        $quota = $svc->summary((string) $id);
 
         return success([
             'user'    => $user,
             'apiKeys' => $apiKeys,
             'botKeys' => $botKeys,
             'plans'   => $plans,
-            'usage'   => $usageSummary,
+            'quota'   => $quota,
+            'usage'   => $svc->legacyUsage((string) $id),
         ]);
     }
 

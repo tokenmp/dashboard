@@ -15,6 +15,7 @@ import { usePagedQuery } from '@/hooks/usePagedQuery';
 import { useAsync } from '@/hooks/useAsync';
 import { useMutation } from '@/hooks/useMutation';
 import { StatusBadge } from '@/components/StatusBadge';
+import { QuotaCards } from '@/components/QuotaCards';
 import { EmptyState } from '@/components/EmptyState';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -59,7 +60,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
-import { formatCompact, formatNumber } from '@/utils/format';
+import { formatNumber } from '@/utils/format';
 import { toast } from 'sonner';
 import { getApiError } from '@/utils/error';
 import type { UserBasic, UserListQuery, UserUpdatePayload } from '@/types/user';
@@ -483,21 +484,11 @@ function DetailDrawer({ id, onClose }: { id: string | null; onClose: () => void 
               </CardContent>
             </Card>
 
-            {data.usage.length > 0 && (
+            {data.quota.length > 0 && (
               <Card>
-                <CardHeader className="pb-2"><CardTitle className="text-sm">用量汇总</CardTitle></CardHeader>
+                <CardHeader className="pb-2"><CardTitle className="text-sm">额度</CardTitle></CardHeader>
                 <CardContent>
-                  <div className="grid grid-cols-3 gap-3">
-                    {data.usage.map((u) => (
-                      <div key={u.billingPlan} className="rounded-lg border p-3">
-                        <Badge variant="outline" className="text-[10px]">{u.billingPlan}</Badge>
-                        <div className="mt-1 text-xs text-muted-foreground">Token 余额</div>
-                        <div className="text-sm font-semibold tabular-nums">{formatCompact(u.tokenBalance)}</div>
-                        <div className="mt-1 text-xs text-muted-foreground">请求余额</div>
-                        <div className="text-sm font-semibold tabular-nums">{formatNumber(u.requestBalance)}</div>
-                      </div>
-                    ))}
-                  </div>
+                  <QuotaCards items={data.quota} />
                 </CardContent>
               </Card>
             )}
