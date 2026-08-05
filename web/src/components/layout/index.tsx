@@ -1,8 +1,10 @@
 import { useEffect } from 'react';
 import { NavLink, Outlet, useNavigate } from 'react-router-dom';
-import { LayoutDashboard, ScrollText, Users, Network, Gauge, Ticket, Store, Settings2, BookOpen, ExternalLink, LogOut, Package } from 'lucide-react';
+import { LayoutDashboard, ScrollText, Users, Network, Gauge, Ticket, Store, Settings2, BookOpen, ExternalLink, LogOut, Package, ChevronDown, UserCircle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator } from '@/components/ui/dropdown-menu';
 import { useAuthStore } from '@/store/auth';
+import { useRole } from '@/hooks/useRole';
 import { NotificationBell } from '@/components/NotificationBell';
 import { cn } from '@/lib/utils';
 
@@ -28,6 +30,7 @@ function Layout() {
   const navigate = useNavigate();
   const logout = useAuthStore((s) => s.logout);
   const fetchUser = useAuthStore((s) => s.fetchUser);
+  const { user } = useRole();
 
   useEffect(() => {
     fetchUser();
@@ -69,12 +72,32 @@ function Layout() {
       <div className="flex flex-1 flex-col overflow-hidden">
         <header className="flex h-14 shrink-0 items-center justify-between border-b px-6">
           <span className="text-lg font-semibold md:hidden">TokenMP 管理端</span>
-          <div className="flex items-center gap-2">
+          <div className="ml-auto flex items-center gap-2">
             <NotificationBell />
-            <Button variant="outline" size="sm" onClick={handleLogout}>
-              <LogOut className="mr-1.5 h-4 w-4" />
-              登出
-            </Button>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="outline" size="sm">
+                  <UserCircle className="mr-1.5 h-4 w-4" />
+                  <span className="max-w-[180px] truncate">{user?.email ?? '—'}</span>
+                  <ChevronDown className="ml-1 h-3.5 w-3.5 opacity-50" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-56">
+                <DropdownMenuLabel className="truncate">{user?.email ?? '未登录'}</DropdownMenuLabel>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem asChild>
+                  <a href="/panel">
+                    <ExternalLink className="mr-2 h-4 w-4" />
+                    用户面板
+                  </a>
+                </DropdownMenuItem>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem onClick={handleLogout} className="text-destructive focus:text-destructive">
+                  <LogOut className="mr-2 h-4 w-4" />
+                  登出
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
           </div>
         </header>
         <main className="flex-1 overflow-y-auto p-6">
