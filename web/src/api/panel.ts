@@ -124,6 +124,13 @@ export async function getPanelNotificationsApi(
   });
   return res.data.data;
 }
+export async function markPanelNotificationReadApi(id: string): Promise<void> {
+  await client.post(`/panel/user/notifications/${id}/read`);
+}
+export async function markAllPanelNotificationsReadApi(): Promise<number> {
+  const res = await client.post<ApiResponse<{ updated: number }>>('/panel/user/notifications/read-all');
+  return res.data.data.updated;
+}
 export async function getPanelRedemptionsApi(): Promise<RedeemCodeRedemptionItem[]> {
   const res = await client.get<ApiResponse<RedeemCodeRedemptionItem[]>>('/panel/user/redemptions');
   return res.data.data;
