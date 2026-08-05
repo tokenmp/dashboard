@@ -69,6 +69,8 @@ Route::group('api/v1', function () {
                 Route::delete('keys/:id', 'panel/User/deleteKey')->pattern(['id' => '[\w\-]+']);
                 Route::get('plans', 'panel/User/plans');
                 Route::get('notifications', 'panel/Notification/mine');
+                Route::post('notifications/read-all', 'panel/Notification/markAllRead');
+                Route::post('notifications/:id/read', 'panel/Notification/markRead')->pattern(['id' => '[\\w\\-]+']);
                 Route::get('redemptions', 'panel/Redeem/myRedemptions');
             });
 
