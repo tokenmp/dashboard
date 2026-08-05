@@ -9,10 +9,10 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
 import { formatCompact, formatNumber, formatPercent } from '@/utils/format';
-import type { UserOverview, TrendPoint } from '@/types/dashboard';
+import type { UserOverview, TrendPoint, QuotaItem } from '@/types/dashboard';
 
 /**
- * 用户面·概览：个人视角的今日 KPI、各计费类型额度与 30 天趋势。
+ * 用户面·概览：个人视角的今日 KPI、各计费类型额度（套餐感知）与 30 天趋势。
  * 始终是用户视角（panel 永远只取自己的数据）。
  */
 function Overview() {
@@ -51,6 +51,7 @@ function OverviewView({ data }: { data: UserOverview }) {
   const { kpi, quota, trend } = data;
   return (
     <>
+      {/* 今日 KPI + 各套餐概览 */}
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <StatCard
           label="今日请求"
@@ -65,44 +66,20 @@ function OverviewView({ data }: { data: UserOverview }) {
           icon={<Zap className="h-4 w-4" />}
         />
         {quota.slice(0, 2).map((q) => (
-          <StatCard
-            key={q.billingPlan}
-            label={`${planLabel(q.billingPlan)} 可用`}
-            value={formatCompact(q.available)}
-            hint={`${q.unit === 'requests' ? '次' : 'tok'} · 余额 ${formatCompact(q.balance)}`}
-            icon={<Gauge className="h-4 w-4" />}
-          />
+          <QuotaStatCard key={q.billingPlan} q={q} />
         ))}
       </div>
 
-      {/* 额度明细：每个计费类型一张卡 */}
+      {/* 额度明细：每个计费类型一张卡（按套餐类型区分展示） */}
       {quota.length > 0 && (
         <Card>
           <CardHeader>
             <CardTitle className="text-base">额度明细</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
               {quota.map((q) => (
-                <div key={q.billingPlan} className="rounded-lg border p-4">
-                  <div className="flex items-center justify-between">
-                    <span className="text-sm font-medium">{planLabel(q.billingPlan)}</span>
-                    <Badge variant="outline">{q.unit}</Badge>
-                  </div>
-                  <div className="mt-2 text-xl font-semibold tabular-nums">
-                    {formatCompact(q.available)}
-                  </div>
-                  <div className="mt-2 space-y-1 text-xs text-muted-foreground">
-                    <div className="flex justify-between">
-                      <span>余额</span>
-                      <span className="tabular-nums">{formatNumber(q.balance)}</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span>预扣中</span>
-                      <span className="tabular-nums">{formatNumber(q.reserved)}</span>
-                    </div>
-                  </div>
-                </div>
+                <QuotaDetail key={q.billingPlan} q={q} />
               ))}
             </div>
           </CardContent>
@@ -111,6 +88,107 @@ function OverviewView({ data }: { data: UserOverview }) {
 
       <TrendSection trend={trend} extra={<SuccessNote rate={kpi.todaySuccessRate} />} />
     </>
+  );
+}
+
+/* ----------------------------- 额度卡片 ----------------------------- */
+
+/** 顶部概览卡：每个计费类型一行精简摘要 */
+function QuotaStatCard({ q }: { q: QuotaItem }) {
+  const name = q.planName || planLabel(q.billingPlan);
+  if (q.mode === 'window') {
+    const w5 = q.windows?.find((w) => w.key === 'h5');
+    const w7 = q.windows?.find((w) => w.key === 'd7');
+    return (
+      <StatCard
+        label={`${name} · 近 5 小时`}
+        value={w5 ? `${formatNumber(w5.used)}${w5.limit ? ` / ${formatNumber(w5.limit)}` : ''}` : '—'}
+        hint={w7 ? `近 7 天 ${formatNumber(w7.used)}${w7.limit ? ` / ${formatNumber(w7.limit)}` : ' / 不限'}` : undefined}
+        icon={<Gauge className="h-4 w-4" />}
+      />
+    );
+  }
+  // capped / balance：统一展示「可用」
+  return (
+    <StatCard
+      label={`${name} 可用`}
+      value={formatCompact(q.available ?? 0)}
+      hint={
+        q.mode === 'capped'
+          ? `限额 ${formatCompact(q.limit ?? 0)} · 已用 ${formatCompact(q.used ?? 0)}`
+          : `余额 ${formatCompact(q.balance ?? 0)}`
+      }
+      icon={<Gauge className="h-4 w-4" />}
+    />
+  );
+}
+
+/** 额度明细卡：按套餐模式（window / capped / balance）分别渲染 */
+function QuotaDetail({ q }: { q: QuotaItem }) {
+  const name = q.planName || planLabel(q.billingPlan);
+  return (
+    <div className="rounded-lg border p-4">
+      <div className="flex items-center justify-between">
+        <span className="text-sm font-medium">{name}</span>
+        <Badge variant="outline">{q.unit === 'requests' ? '次' : 'tok'}</Badge>
+      </div>
+
+      {q.mode === 'window' &&
+        q.windows?.map((w) => (
+          <div key={w.key} className="mt-3">
+            <div className="flex items-center justify-between text-xs text-muted-foreground">
+              <span>{w.label}</span>
+              <span className="tabular-nums">
+                {formatNumber(w.used)}
+                {w.limit ? ` / ${formatNumber(w.limit)}` : ' / 不限'}
+              </span>
+            </div>
+            {w.limit ? (
+              <UsageBar ratio={Math.min(1, w.used / w.limit)} />
+            ) : null}
+          </div>
+        ))}
+
+      {q.mode === 'capped' && (
+        <>
+          <div className="mt-2 text-xl font-semibold tabular-nums">剩余 {formatCompact(q.available ?? 0)}</div>
+          <UsageBar ratio={q.limit ? Math.min(1, (q.used ?? 0) / q.limit) : 0} className="mt-2" />
+          <div className="mt-2 flex justify-between text-xs text-muted-foreground">
+            <span>已用 {formatNumber(q.used ?? 0)}</span>
+            <span>限额 {formatNumber(q.limit ?? 0)}</span>
+          </div>
+        </>
+      )}
+
+      {q.mode === 'balance' && (
+        <>
+          <div className="mt-2 text-xl font-semibold tabular-nums">可用 {formatCompact(q.available ?? 0)}</div>
+          <div className="mt-2 space-y-1 text-xs text-muted-foreground">
+            <div className="flex justify-between">
+              <span>余额</span>
+              <span className="tabular-nums">{formatNumber(q.balance ?? 0)}</span>
+            </div>
+            <div className="flex justify-between">
+              <span>预扣中</span>
+              <span className="tabular-nums">{formatNumber(q.reserved ?? 0)}</span>
+            </div>
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
+/** 用量进度条：ratio = 已用 / 限额（0~1） */
+function UsageBar({ ratio, className }: { ratio: number; className?: string }) {
+  const pct = Math.round(Math.max(0, Math.min(1, ratio)) * 100);
+  return (
+    <div className={`mt-1 h-2 w-full overflow-hidden rounded-full bg-muted ${className ?? ''}`}>
+      <div
+        className={`h-full rounded-full transition-all ${pct >= 90 ? 'bg-destructive' : pct >= 70 ? 'bg-amber-500' : 'bg-primary'}`}
+        style={{ width: `${pct}%` }}
+      />
+    </div>
   );
 }
 

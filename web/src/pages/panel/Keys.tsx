@@ -8,6 +8,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import type { UserApiKeyItem, BotKeyItem } from '@/types/user';
 
 function Keys() {
@@ -35,24 +36,26 @@ function Keys() {
 
       {loading ? <div className="space-y-3">{Array.from({ length: 3 }).map((_, i) => <Skeleton key={i} className="h-32 w-full" />)}</div>
         : isEmpty ? <EmptyState title="暂无密钥" description="你还没有生成任何 API Key 或 Bot Key" /> : (
-          <div className="space-y-6">
-            {apiKeys.length > 0 && (
-              <section className="space-y-3">
-                <h2 className="text-lg font-semibold">API Key</h2>
-                <div className="space-y-3">
-                  {apiKeys.map((item) => <ApiKeyCard key={item.id} item={item} />)}
-                </div>
-              </section>
-            )}
-            {botKeys.length > 0 && (
-              <section className="space-y-3">
-                <h2 className="text-lg font-semibold">Bot Key</h2>
-                <div className="space-y-3">
-                  {botKeys.map((item) => <BotKeyCard key={item.id} item={item} />)}
-                </div>
-              </section>
-            )}
-          </div>
+          <Tabs defaultValue="api" className="w-full">
+            <TabsList>
+              <TabsTrigger value="api">API Key{apiKeys.length > 0 ? ` (${apiKeys.length})` : ''}</TabsTrigger>
+              <TabsTrigger value="bot">Bot Key{botKeys.length > 0 ? ` (${botKeys.length})` : ''}</TabsTrigger>
+            </TabsList>
+            <TabsContent value="api" className="space-y-3 mt-4">
+              {apiKeys.length > 0 ? (
+                apiKeys.map((item) => <ApiKeyCard key={item.id} item={item} />)
+              ) : (
+                <EmptyState title="暂无 API Key" description="你还没有生成 API Key" />
+              )}
+            </TabsContent>
+            <TabsContent value="bot" className="space-y-3 mt-4">
+              {botKeys.length > 0 ? (
+                botKeys.map((item) => <BotKeyCard key={item.id} item={item} />)
+              ) : (
+                <EmptyState title="暂无 Bot Key" description="你还没有生成 Bot Key" />
+              )}
+            </TabsContent>
+          </Tabs>
         )}
     </div>
   );

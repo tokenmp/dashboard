@@ -8,7 +8,7 @@ import { EmptyState } from '@/components/EmptyState';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Input } from '@/components/ui/input';
+import { DebouncedInput } from '@/components/DebouncedInput';
 import { Skeleton } from '@/components/ui/skeleton';
 import {
   Select,
@@ -47,9 +47,9 @@ function Users() {
             <label className="mb-1 block text-xs text-muted-foreground">邮箱搜索</label>
             <div className="relative">
               <Search className="absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-              <Input className="pl-8" placeholder="搜索邮箱"
+              <DebouncedInput className="pl-8" placeholder="搜索邮箱"
                 value={params.keyword ?? ''}
-                onChange={(e) => setFilters({ keyword: e.target.value })} />
+                onDebouncedChange={(v) => setFilters({ keyword: v })} />
             </div>
           </div>
           <div className="w-[120px]">
