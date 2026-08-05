@@ -586,6 +586,10 @@ function DetailDrawer({ id, onClose }: { id: string | null; onClose: () => void 
     [id],
   );
   const [renewTarget, setRenewTarget] = useState<{ planId: string; name: string; expiresAt: string | null } | null>(null);
+  const todayBeijing = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Shanghai', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date());
+  const activePlans = (data?.plans ?? []).filter((p) => p.status === 'active');
+  const isPlanExpired = (expiresAt: string | null) => (expiresAt ? todayBeijing > expiresAt.slice(0, 10) : false);
+  const effectiveCount = activePlans.filter((p) => !isPlanExpired(p.expires_at)).length;
   return (
     <Sheet open={id !== null} onOpenChange={(open) => !open && onClose()}>
       <SheetContent side="right" className="w-full overflow-y-auto sm:max-w-2xl">
@@ -625,18 +629,25 @@ function DetailDrawer({ id, onClose }: { id: string | null; onClose: () => void 
             <Card>
               <CardHeader className="pb-2 flex flex-row items-center justify-between space-y-0">
                 <CardTitle className="text-sm flex items-center gap-1.5">
-                  <Package className="h-3 w-3" />持有套餐（{data.plans.length}）
+                  <Package className="h-3 w-3" />持有套餐（生效中 {effectiveCount}）
                 </CardTitle>
                 <GrantPlanButton userId={id} onDone={reload} />
               </CardHeader>
               <CardContent className="space-y-2">
-                {data.plans.length === 0 ? (
-                  <p className="py-2 text-center text-xs text-muted-foreground">暂无套餐，点击「发放套餐」添加</p>
+                {activePlans.length === 0 ? (
+                  <p className="py-2 text-center text-xs text-muted-foreground">暂无生效套餐，点击「发放套餐」添加</p>
                 ) : (
-                  data.plans.map((p) => (
+                  activePlans.map((p) => {
+                    const expired = isPlanExpired(p.expires_at);
+                    return (
                     <div key={p.id} className="flex items-center justify-between rounded-lg border p-2.5">
                       <div>
-                        <div className="text-sm font-medium">{p.plan?.name ?? '—'}</div>
+                        <div className="text-sm font-medium flex items-center gap-2">
+                          {p.plan?.name ?? '—'}
+                          {expired
+                            ? <Badge variant="destructive" className="text-[10px]">已过期</Badge>
+                            : <Badge className="bg-emerald-600 text-[10px] hover:bg-emerald-600">生效中</Badge>}
+                        </div>
                         <div className="text-xs text-muted-foreground">
                           {p.plan_type} · 生效 {p.activated_at?.slice(0, 10)} · 过期 {p.expires_at?.slice(0, 10) ?? '永久'}
                         </div>
@@ -655,10 +666,10 @@ function DetailDrawer({ id, onClose }: { id: string | null; onClose: () => void 
                             </DropdownMenuContent>
                           </DropdownMenu>
                         )}
-                        <StatusBadge status={p.status} />
                       </div>
                     </div>
-                  ))
+                    );
+                  })
                 )}
               </CardContent>
             </Card>
