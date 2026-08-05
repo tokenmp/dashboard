@@ -1,5 +1,6 @@
 import { createBrowserRouter } from 'react-router-dom';
 import Login from '@/pages/login';
+import ForgotPassword from '@/pages/forgot-password';
 import NotFound from '@/pages/not-found';
 import RoleHome from '@/components/RoleHome';
 import RequireAuth from '@/components/RequireAuth';
@@ -44,6 +45,7 @@ import PanelAccount from '@/pages/panel/Account';
  */
 export const router = createBrowserRouter([
   { path: '/login', element: <Login /> },
+  { path: '/forgot-password', element: <ForgotPassword /> },
   { path: '/', element: <RoleHome /> },
 
   // ── 管理端（admin）──

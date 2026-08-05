@@ -59,3 +59,23 @@ export async function getUserApi(): Promise<UserInfo> {
   const res = await client.get<ApiResponse<UserInfo>>('/auth/user');
   return res.data.data;
 }
+
+/**
+ * 发送密码重置验证码：POST /auth/password/send-code（公开，防枚举始终返回 sent）
+ */
+export async function sendResetCodeApi(email: string): Promise<void> {
+  await client.post('/auth/password/send-code', { email });
+}
+
+/**
+ * 重置密码：POST /auth/password/reset
+ * 新密码经一次性 RSA-OAEP 公钥加密传输（与登录一致）；成功后旧会话全部吊销。
+ */
+export async function resetPasswordApi(
+  email: string,
+  code: string,
+  password: string,
+): Promise<void> {
+  const { keyId, ciphertext } = await encryptSecret(password);
+  await client.post('/auth/password/reset', { email, code, password: ciphertext, keyId });
+}
