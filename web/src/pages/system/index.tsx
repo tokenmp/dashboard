@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { RefreshCw, Search, GitBranch, Plus, Pencil, Trash2 } from 'lucide-react';
 import { usePagedQuery } from '@/hooks/usePagedQuery';
+import { useUrlQueryState } from '@/hooks/useUrlQueryState';
 import { useAsync } from '@/hooks/useAsync';
 import { useMutation } from '@/hooks/useMutation';
 import { SeverityChip } from '@/components/SeverityChip';
@@ -42,14 +44,20 @@ import {
 import type { AnnouncementItem, AnnouncementPayload, SystemQuery } from '@/types/system';
 
 function System() {
-  const [tab, setTab] = useState('notices');
+  const [sp, setSp] = useSearchParams();
+  const tab = sp.get('tab') ?? 'notices';
+  const switchTab = (t: string) => {
+    const next = new URLSearchParams();
+    if (t !== 'notices') next.set('tab', t);
+    setSp(next, { replace: true });
+  };
   return (
     <div className="space-y-4">
       <div>
         <h1 className="text-2xl font-bold">系统</h1>
         <p className="mt-1 text-sm text-muted-foreground">公告、系统配置与迁移台账</p>
       </div>
-      <Tabs value={tab} onValueChange={setTab}>
+      <Tabs value={tab} onValueChange={switchTab}>
         <TabsList>
           <TabsTrigger value="notices">公告</TabsTrigger>
           <TabsTrigger value="config">系统配置</TabsTrigger>
@@ -87,8 +95,15 @@ function scopeLabel(scope: string): string {
 }
 
 function NoticesTab() {
+  const { initial: urlInit, write } = useUrlQueryState([
+    { name: 'q', key: 'keyword' },
+    { name: 'status', key: 'status' },
+    { name: 'page', key: 'page', type: 'number', default: 1 },
+    { name: 'size', key: 'size', type: 'number', default: 20 },
+  ]);
   const { list, total, page, size, loading, error, params, reload, setPage, setFilters } =
-    usePagedQuery(getNoticesApiLazy, { initial: { size: 20, sort: '-created_at' } as SystemQuery });
+    usePagedQuery(getNoticesApiLazy, { initial: { size: 20, sort: '-created_at', ...urlInit } as SystemQuery });
+  useEffect(() => { write(params); }, [params]);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editing, setEditing] = useState<AnnouncementItem | null>(null);
   const [deleting, setDeleting] = useState<AnnouncementItem | null>(null);

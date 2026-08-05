@@ -1,6 +1,8 @@
-import { useState } from 'react';
+import { useEffect } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { RefreshCw, Search } from 'lucide-react';
 import { usePagedQuery } from '@/hooks/usePagedQuery';
+import { useUrlQueryState } from '@/hooks/useUrlQueryState';
 import { StatusBadge } from '@/components/StatusBadge';
 import { EmptyState } from '@/components/EmptyState';
 import { Badge } from '@/components/ui/badge';
@@ -15,14 +17,20 @@ import { formatCompact, formatNumber } from '@/utils/format';
 import type { MarketplaceQuery } from '@/types/marketplace';
 
 function Marketplace() {
-  const [tab, setTab] = useState('listings');
+  const [sp, setSp] = useSearchParams();
+  const tab = sp.get('tab') ?? 'listings';
+  const switchTab = (t: string) => {
+    const next = new URLSearchParams();
+    if (t !== 'listings') next.set('tab', t);
+    setSp(next, { replace: true });
+  };
   return (
     <div className="space-y-4">
       <div>
         <h1 className="text-2xl font-bold">市场分账</h1>
         <p className="mt-1 text-sm text-muted-foreground">上架挂单、结算流水与分账账本</p>
       </div>
-      <Tabs value={tab} onValueChange={setTab}>
+      <Tabs value={tab} onValueChange={switchTab}>
         <TabsList>
           <TabsTrigger value="listings">上架管理</TabsTrigger>
           <TabsTrigger value="settlements">结算流水</TabsTrigger>
@@ -98,8 +106,15 @@ function TableSkeleton() {
 
 /* ----------------------------- 上架管理 ----------------------------- */
 function ListingsTab() {
+  const { initial: urlInit, write } = useUrlQueryState([
+    { name: 'q', key: 'keyword' },
+    { name: 'status', key: 'status' },
+    { name: 'page', key: 'page', type: 'number', default: 1 },
+    { name: 'size', key: 'size', type: 'number', default: 20 },
+  ]);
   const { list, total, page, size, loading, error, params, reload, setPage, setFilters } =
-    usePagedQuery(getListingsApiLazy, { initial: { size: 20, sort: '-created_at' } as MarketplaceQuery });
+    usePagedQuery(getListingsApiLazy, { initial: { size: 20, sort: '-created_at', ...urlInit } as MarketplaceQuery });
+  useEffect(() => { write(params); }, [params]);
   return (
     <div className="space-y-3">
       <SearchBar onReload={reload} loading={loading}>
@@ -137,8 +152,15 @@ const getListingsApiLazy = (p: MarketplaceQuery) => getDashboardListingsApi(p);
 
 /* ----------------------------- 结算流水 ----------------------------- */
 function SettlementsTab() {
+  const { initial: urlInit, write } = useUrlQueryState([
+    { name: 'source', key: 'usageSource' },
+    { name: 'status', key: 'status' },
+    { name: 'page', key: 'page', type: 'number', default: 1 },
+    { name: 'size', key: 'size', type: 'number', default: 20 },
+  ]);
   const { list, total, page, size, loading, error, params, reload, setPage, setFilters } =
-    usePagedQuery(getSettlementsApiLazy, { initial: { size: 20, sort: '-created_at' } as MarketplaceQuery });
+    usePagedQuery(getSettlementsApiLazy, { initial: { size: 20, sort: '-created_at', ...urlInit } as MarketplaceQuery });
+  useEffect(() => { write(params); }, [params]);
   return (
     <div className="space-y-3">
       <SearchBar onReload={reload} loading={loading}>
@@ -179,8 +201,15 @@ const getSettlementsApiLazy = (p: MarketplaceQuery) => getDashboardSettlementsAp
 
 /* ----------------------------- 分账账本 ----------------------------- */
 function LedgerTab() {
+  const { initial: urlInit, write } = useUrlQueryState([
+    { name: 'entry', key: 'entryType' },
+    { name: 'status', key: 'status' },
+    { name: 'page', key: 'page', type: 'number', default: 1 },
+    { name: 'size', key: 'size', type: 'number', default: 20 },
+  ]);
   const { list, total, page, size, loading, error, params, reload, setPage, setFilters } =
-    usePagedQuery(getLedgerApiLazy, { initial: { size: 20, sort: '-created_at' } as MarketplaceQuery });
+    usePagedQuery(getLedgerApiLazy, { initial: { size: 20, sort: '-created_at', ...urlInit } as MarketplaceQuery });
+  useEffect(() => { write(params); }, [params]);
   return (
     <div className="space-y-3">
       <SearchBar onReload={reload} loading={loading}>

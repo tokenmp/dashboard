@@ -1,6 +1,8 @@
-import { useState } from 'react';
+import { useEffect } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { RefreshCw, Search } from 'lucide-react';
 import { usePagedQuery } from '@/hooks/usePagedQuery';
+import { useUrlQueryState } from '@/hooks/useUrlQueryState';
 import { useAsync } from '@/hooks/useAsync';
 import { useRole } from '@/hooks/useRole';
 import { StatusBadge } from '@/components/StatusBadge';
@@ -25,7 +27,13 @@ const BILLING_PLANS = ['coding', 'token', 'image', 'free'];
 const PROTOCOLS = ['openai', 'anthropic', 'openai_chat', 'openai_responses', 'anthropic_messages', 'image_generation', 'tokenmp_gateway', 'custom'];
 
 function Usage() {
-  const [tab, setTab] = useState('ledger');
+  const [sp, setSp] = useSearchParams();
+  const tab = sp.get('tab') ?? 'ledger';
+  const switchTab = (t: string) => {
+    const next = new URLSearchParams();
+    if (t !== 'ledger') next.set('tab', t);
+    setSp(next, { replace: true });
+  };
   const { isAdmin } = useRole();
   return (
     <div className="space-y-4">
@@ -33,7 +41,7 @@ function Usage() {
         <h1 className="text-2xl font-bold">计费用量</h1>
         <p className="mt-1 text-sm text-muted-foreground">用量流水、额度总览与计费倍率规则</p>
       </div>
-      <Tabs value={tab} onValueChange={setTab}>
+      <Tabs value={tab} onValueChange={switchTab}>
         <TabsList>
           <TabsTrigger value="ledger">账本流水</TabsTrigger>
           <TabsTrigger value="quota">额度总览</TabsTrigger>
@@ -63,8 +71,16 @@ function Pager({ page, size, total, loading, setPage }: { page: number; size: nu
 
 /* ----------------------------- 账本流水 ----------------------------- */
 function LedgerTab() {
+  const { initial: urlInit, write } = useUrlQueryState([
+    { name: 'q', key: 'keyword' },
+    { name: 'ledger', key: 'ledgerType' },
+    { name: 'billing', key: 'billingPlan' },
+    { name: 'page', key: 'page', type: 'number', default: 1 },
+    { name: 'size', key: 'size', type: 'number', default: 20 },
+  ]);
   const { list, total, page, size, loading, error, params, reload, setPage, setFilters } =
-    usePagedQuery(getUsageLedgerApiLazy, { initial: { size: 20, sort: '-created_at' } as UsageQuery });
+    usePagedQuery(getUsageLedgerApiLazy, { initial: { size: 20, sort: '-created_at', ...urlInit } as UsageQuery });
+  useEffect(() => { write(params); }, [params]);
   return (
     <div className="space-y-3">
       <Card><CardContent className="flex flex-wrap items-end gap-3 p-4">
@@ -213,8 +229,16 @@ function UserQuotaView({ data }: { data: import('@/types/usage').UserQuota }) {
 /* ----------------------------- 计费规则 ----------------------------- */
 function RulesTab() {
   const { isAdmin } = useRole();
+  const { initial: urlInit, write } = useUrlQueryState([
+    { name: 'q', key: 'keyword' },
+    { name: 'protocol', key: 'protocol' },
+    { name: 'compose', key: 'composeMode' },
+    { name: 'page', key: 'page', type: 'number', default: 1 },
+    { name: 'size', key: 'size', type: 'number', default: 20 },
+  ]);
   const { list, total, page, size, loading, error, params, reload, setPage, setFilters } =
-    usePagedQuery(getPriceRulesApiLazy, { initial: { size: 20, sort: '-priority' } as UsageQuery });
+    usePagedQuery(getPriceRulesApiLazy, { initial: { size: 20, sort: '-priority', ...urlInit } as UsageQuery });
+  useEffect(() => { write(params); }, [params]);
   if (!isAdmin) {
     return <Card><CardContent className="py-6 text-sm text-muted-foreground">计费倍率规则仅管理员可见。</CardContent></Card>;
   }
