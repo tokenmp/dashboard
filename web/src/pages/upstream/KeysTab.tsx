@@ -1,7 +1,8 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { RefreshCw, Search, ChevronRight } from 'lucide-react';
 import { getDashboardUpstreamKeysApi, getDashboardUpstreamKeyDetailApi } from '@/api/dashboard';
 import { usePagedQuery } from '@/hooks/usePagedQuery';
+import { useUrlQueryState } from '@/hooks/useUrlQueryState';
 import { useAsync } from '@/hooks/useAsync';
 import { useRole } from '@/hooks/useRole';
 import { StatusBadge } from '@/components/StatusBadge';
@@ -22,8 +23,16 @@ const MARKET_STATUSES = ['online', 'offline', 'paused', 'degraded', 'exhausted',
 export function KeysTab() {
   const { isAdmin } = useRole();
   const [detailId, setDetailId] = useState<string | null>(null);
+  const { initial: urlInit, write } = useUrlQueryState([
+    { name: 'q', key: 'keyword' },
+    { name: 'source', key: 'sourceType' },
+    { name: 'market', key: 'marketStatus' },
+    { name: 'page', key: 'page', type: 'number', default: 1 },
+    { name: 'size', key: 'size', type: 'number', default: 20 },
+  ]);
   const { list, total, page, size, loading, error, params, reload, setPage, setFilters } =
-    usePagedQuery(getDashboardUpstreamKeysApi, { initial: { size: 20, sort: '-created_at' } as UpstreamQuery });
+    usePagedQuery(getDashboardUpstreamKeysApi, { initial: { size: 20, sort: '-created_at', ...urlInit } as UpstreamQuery });
+  useEffect(() => { write(params); }, [params]);
 
   return (
     <div className="space-y-3">

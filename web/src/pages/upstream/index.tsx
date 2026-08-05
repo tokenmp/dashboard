@@ -1,6 +1,8 @@
-import { useState } from 'react';
+import { useEffect } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { RefreshCw, Search } from 'lucide-react';
 import { usePagedQuery } from '@/hooks/usePagedQuery';
+import { useUrlQueryState } from '@/hooks/useUrlQueryState';
 import { StatusBadge } from '@/components/StatusBadge';
 import { EmptyState } from '@/components/EmptyState';
 import { Badge } from '@/components/ui/badge';
@@ -17,7 +19,13 @@ import { KeysTab } from './KeysTab';
 import type { UpstreamQuery } from '@/types/upstream';
 
 function Upstream() {
-  const [tab, setTab] = useState('keys');
+  const [sp, setSp] = useSearchParams();
+  const tab = sp.get('tab') ?? 'keys';
+  const switchTab = (t: string) => {
+    const next = new URLSearchParams();
+    if (t !== 'keys') next.set('tab', t);
+    setSp(next, { replace: true });
+  };
 
   return (
     <div className="space-y-4">
@@ -25,7 +33,7 @@ function Upstream() {
         <h1 className="text-2xl font-bold">上游与模型</h1>
         <p className="mt-1 text-sm text-muted-foreground">供应商、上游 Key、路由组与平台模型目录</p>
       </div>
-      <Tabs value={tab} onValueChange={setTab}>
+      <Tabs value={tab} onValueChange={switchTab}>
         <TabsList>
           <TabsTrigger value="keys">上游 Key</TabsTrigger>
           <TabsTrigger value="providers">供应商</TabsTrigger>
@@ -58,8 +66,14 @@ function Pager({ page, size, total, loading, setPage }: { page: number; size: nu
 
 /* ----------------------------- 供应商 ----------------------------- */
 function ProvidersTab() {
+  const { initial: urlInit, write } = useUrlQueryState([
+    { name: 'q', key: 'keyword' },
+    { name: 'page', key: 'page', type: 'number', default: 1 },
+    { name: 'size', key: 'size', type: 'number', default: 20 },
+  ]);
   const { list, total, page, size, loading, error, params, reload, setPage, setFilters } =
-    usePagedQuery(getProvidersApiLazy, { initial: { size: 20, sort: '-created_at' } as UpstreamQuery });
+    usePagedQuery(getProvidersApiLazy, { initial: { size: 20, sort: '-created_at', ...urlInit } as UpstreamQuery });
+  useEffect(() => { write(params); }, [params]);
   return (
     <div className="space-y-3">
       <Card>
@@ -105,8 +119,14 @@ const getProvidersApiLazy = (p: UpstreamQuery) => getDashboardProvidersApi(p);
 
 /* ----------------------------- 路由组 ----------------------------- */
 function RoutesTab() {
+  const { initial: urlInit, write } = useUrlQueryState([
+    { name: 'q', key: 'keyword' },
+    { name: 'page', key: 'page', type: 'number', default: 1 },
+    { name: 'size', key: 'size', type: 'number', default: 20 },
+  ]);
   const { list, total, page, size, loading, error, params, reload, setPage, setFilters } =
-    usePagedQuery(getRouteGroupsApiLazy, { initial: { size: 20, sort: 'created_at' } as UpstreamQuery });
+    usePagedQuery(getRouteGroupsApiLazy, { initial: { size: 20, sort: 'created_at', ...urlInit } as UpstreamQuery });
+  useEffect(() => { write(params); }, [params]);
   return (
     <div className="space-y-3">
       <Card><CardContent className="flex items-end gap-3 p-4">
@@ -147,8 +167,15 @@ const getRouteGroupsApiLazy = (p: UpstreamQuery) => getDashboardRouteGroupsApi(p
 
 /* ----------------------------- 平台模型 ----------------------------- */
 function ModelsTab() {
+  const { initial: urlInit, write } = useUrlQueryState([
+    { name: 'q', key: 'keyword' },
+    { name: 'billing', key: 'billingMode' },
+    { name: 'page', key: 'page', type: 'number', default: 1 },
+    { name: 'size', key: 'size', type: 'number', default: 20 },
+  ]);
   const { list, total, page, size, loading, error, params, reload, setPage, setFilters } =
-    usePagedQuery(getModelsApiLazy, { initial: { size: 20, sort: 'created_at' } as UpstreamQuery });
+    usePagedQuery(getModelsApiLazy, { initial: { size: 20, sort: 'created_at', ...urlInit } as UpstreamQuery });
+  useEffect(() => { write(params); }, [params]);
   return (
     <div className="space-y-3">
       <Card><CardContent className="flex items-end gap-3 p-4">

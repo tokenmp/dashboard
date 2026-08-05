@@ -1,7 +1,9 @@
-import { useState } from 'react';
+import { useEffect } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { RefreshCw, Search } from 'lucide-react';
 import { getPanelUsageLedgerApi, getPanelUsageQuotaApi } from '@/api/panel';
 import { usePagedQuery } from '@/hooks/usePagedQuery';
+import { useUrlQueryState } from '@/hooks/useUrlQueryState';
 import { useAsync } from '@/hooks/useAsync';
 import { EmptyState } from '@/components/EmptyState';
 import { Badge } from '@/components/ui/badge';
@@ -27,14 +29,20 @@ const BILLING_PLANS = ['coding', 'token', 'image', 'free'];
  * 始终是用户视角，不含计费规则等管理功能。
  */
 function Usage() {
-  const [tab, setTab] = useState('ledger');
+  const [sp, setSp] = useSearchParams();
+  const tab = sp.get('tab') ?? 'ledger';
+  const switchTab = (t: string) => {
+    const next = new URLSearchParams();
+    if (t !== 'ledger') next.set('tab', t);
+    setSp(next, { replace: true });
+  };
   return (
     <div className="space-y-4">
       <div>
         <h1 className="text-2xl font-bold">我的用量</h1>
         <p className="mt-1 text-sm text-muted-foreground">用量流水与额度总览</p>
       </div>
-      <Tabs value={tab} onValueChange={setTab}>
+      <Tabs value={tab} onValueChange={switchTab}>
         <TabsList>
           <TabsTrigger value="ledger">账本流水</TabsTrigger>
           <TabsTrigger value="quota">额度总览</TabsTrigger>
@@ -62,8 +70,16 @@ function Pager({ page, size, total, loading, setPage }: { page: number; size: nu
 
 /* ----------------------------- 账本流水 ----------------------------- */
 function LedgerTab() {
+  const { initial: urlInit, write } = useUrlQueryState([
+    { name: 'q', key: 'keyword' },
+    { name: 'ledger', key: 'ledgerType' },
+    { name: 'billing', key: 'billingPlan' },
+    { name: 'page', key: 'page', type: 'number', default: 1 },
+    { name: 'size', key: 'size', type: 'number', default: 20 },
+  ]);
   const { list, total, page, size, loading, error, params, reload, setPage, setFilters } =
-    usePagedQuery(getPanelUsageLedgerApi, { initial: { size: 20, sort: '-created_at' } as UsageQuery });
+    usePagedQuery(getPanelUsageLedgerApi, { initial: { size: 20, sort: '-created_at', ...urlInit } as UsageQuery });
+  useEffect(() => { write(params); }, [params]);
   return (
     <div className="space-y-3">
       <Card><CardContent className="flex flex-wrap items-end gap-3 p-4">
