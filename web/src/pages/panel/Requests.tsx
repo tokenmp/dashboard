@@ -43,7 +43,6 @@ import type {
   RequestLogQuery,
   RequestLogDetail,
   RequestAttemptItem,
-  RequestLogEventItem,
 } from '@/types/request-log';
 
 const PROTOCOLS = ['openai', 'anthropic', 'openai_chat', 'openai_responses', 'anthropic_messages', 'image_generation', 'tokenmp_gateway', 'custom'];
@@ -312,7 +311,6 @@ function DetailDrawer({ id, onClose }: { id: string | null; onClose: () => void 
           <div className="space-y-4 p-4">
             <DetailBasic log={data.log} />
             <AttemptsSection attempts={data.attempts} />
-            <EventsSection events={data.events} />
           </div>
         ) : null}
       </SheetContent>
@@ -322,8 +320,6 @@ function DetailDrawer({ id, onClose }: { id: string | null; onClose: () => void 
 
 function DetailBasic({ log }: { log: RequestLogDetail }) {
   const rows: { label: string; value: React.ReactNode }[] = [
-    { label: '请求 ID', value: <span className="font-mono text-xs">{log.request_id || '—'}</span> },
-    { label: 'Trace ID', value: <span className="font-mono text-xs">{log.trace_id || '—'}</span> },
     { label: '模型', value: log.model_name || '—' },
     { label: '请求模型', value: log.requested_model_name || '—' },
     { label: '解析模型', value: log.resolved_model_name || '—' },
@@ -350,6 +346,11 @@ function DetailBasic({ log }: { log: RequestLogDetail }) {
 
   return (
     <>
+      {/* 请求 ID 单独置顶 */}
+      <div className="rounded-lg border bg-muted/40 p-3">
+        <div className="text-xs text-muted-foreground">请求 ID</div>
+        <div className="mt-0.5 break-all font-mono text-sm">{log.request_id || '—'}</div>
+      </div>
       <div className="grid grid-cols-3 gap-3">
         {tokens.map((t) => (
           <div key={t.label} className="rounded-lg border p-3">
@@ -446,40 +447,6 @@ function AttemptsSection({ attempts }: { attempts: RequestAttemptItem[] }) {
             ))}
           </TableBody>
         </Table>
-      </CardContent>
-    </Card>
-  );
-}
-
-function EventsSection({ events }: { events: RequestLogEventItem[] }) {
-  if (events.length === 0) return null;
-  return (
-    <Card>
-      <CardHeader className="pb-2"><CardTitle className="text-sm">事件时间线（{events.length}）</CardTitle></CardHeader>
-      <CardContent>
-        <ol className="relative space-y-3 border-l pl-4">
-          {events.map((e) => (
-            <li key={e.id} className="relative">
-              <span
-                className={`absolute -left-[21px] top-1 h-2.5 w-2.5 rounded-full ring-2 ring-background ${
-                  e.status === 'success' ? 'bg-primary' : e.status === 'failed' ? 'bg-destructive' : 'bg-muted-foreground'
-                }`}
-              />
-              <div className="flex items-center gap-2">
-                <span className="text-xs font-medium">{e.stage}</span>
-                <StatusBadge status={e.status} />
-                {e.duration_ms !== null && (
-                  <span className="text-xs text-muted-foreground">{formatNumber(e.duration_ms)}ms</span>
-                )}
-                {e.status_code !== null && (
-                  <Badge variant="outline" className="text-[10px]">{e.status_code}</Badge>
-                )}
-              </div>
-              {e.message && <p className="mt-0.5 text-xs text-muted-foreground">{e.message}</p>}
-              <span className="font-mono text-[10px] text-muted-foreground">{e.created_at}</span>
-            </li>
-          ))}
-        </ol>
       </CardContent>
     </Card>
   );

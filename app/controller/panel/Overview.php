@@ -91,34 +91,31 @@ class Overview extends BaseController
     }
 
     /**
-     * 自身各计费类型的额度：余额（usage_ledger 净和）/ 预扣（quota_reservations reserved）/ 可用
-     *
-     * - coding：按请求次数计（request_delta / reserved_requests）
-     * - token / image / 其它：按 token 计（token_delta / reserved_tokens）
-     */
-    /**
      * 用户各计费类型的额度（套餐感知）：
-     * - coding（编程套餐，滚动窗口制）：展示「近 5 小时 / 近 7 天」已用请求数与套餐限额；
-     *   不再用累计 ledger 余额（coding 套餐无固定余额概念，累计扣费求和恒为负、无意义）。
+     * - coding（编程套餐）：展示「本周」与「近 5 小时」已用请求数与套餐限额。
+     *   本周窗口从当前计费周起始（周一 00:00 UTC = 中国时间周一 8:00）算起，
+     *   若套餐在本周内才开通，则从套餐开通时间算起；不再用累计 ledger 余额
+     *   （coding 套餐无固定余额概念，累计扣费求和恒为负、无意义）。
      * - token / image：若套餐设有 token_limit（固定额度）→ 展示「已用 / 限额」；
      *   否则（计量预付费）→ 展示 ledger 余额 / 预扣 / 可用。
      */
     private function userQuota(string $userId): array
     {
-        // 1. 用户有效套餐（按 plan_type 聚合，取最宽松限额）
+        // 1. 用户有效套餐（按 plan_type 聚合，取最宽松限额 + 最早开通时间）
         $planRows = Db::connect('pgsql')->query(
             'select p.plan_type,'
             . ' max(p.name) as name,'
             . ' max(coalesce(p.hourly_5h_limit, 0)) as h5_limit,'
             . ' max(coalesce(p.weekly_limit, 0)) as weekly_limit,'
-            . ' max(coalesce(p.token_limit, 0)) as token_limit'
+            . ' max(coalesce(p.token_limit, 0)) as token_limit,'
+            . ' min(up.activated_at)::text as activated_at'
             . ' from user_plans up join plans p on p.id = up.plan_id'
             . " where up.user_id = ? and up.status = 'active'"
             . ' and (up.expires_at is null or up.expires_at > now())'
             . ' group by p.plan_type',
             [$userId]
         );
-        $planMap = []; // plan_type => [name, h5_limit, weekly_limit, token_limit]
+        $planMap = []; // plan_type => [name, h5_limit, weekly_limit, token_limit, activated_at]
         foreach ($planRows as $p) {
             $planMap[$p['plan_type']] = $p;
         }
@@ -148,18 +145,27 @@ class Overview extends BaseController
             $resMap[$r['billing_plan']] = (int) $r['reserved_tokens'];
         }
 
-        // 4. coding 滚动窗口用量（仅当出现 coding 时计算）
-        $winUsage = ['h5' => 0, 'd7' => 0];
+        // 4. coding 用量：近 5 小时（滚动）/ 本周（周一 00:00 UTC 起，套开开通前不计入）
+        $winUsage = ['h5' => 0, 'week' => 0];
         if (isset($planMap['coding']) || isset($balMap['coding'])) {
+            // 当前计费周起始：周一 00:00 UTC（中国时间周一 8:00）
+            $nowUtc   = new \DateTimeImmutable('now', new \DateTimeZone('UTC'));
+            $monday   = $nowUtc->setISODate((int) $nowUtc->format('o'), (int) $nowUtc->format('W'), 1)->setTime(0, 0, 0);
+            $mondayStr = $monday->format('Y-m-d H:i:s');
+            // 套餐开通时间（最早）；无套餐则用 epoch（不限制下限）
+            $actStr = !empty($planMap['coding']['activated_at'])
+                ? (string) $planMap['coding']['activated_at']
+                : '1970-01-01 00:00:00';
+
             $w = Db::connect('pgsql')->query(
                 'select'
-                . " count(*) filter (where created_at >= now() - interval '5 hours') as h5,"
-                . " count(*) filter (where created_at >= now() - interval '7 days') as d7"
+                . " count(*) filter (where created_at >= greatest(now() - interval '5 hours', ?::timestamptz)) as h5,"
+                . ' count(*) filter (where created_at >= greatest(?::timestamptz, ?::timestamptz)) as wk'
                 . ' from request_logs where user_id = ? and success is true',
-                [$userId]
+                [$actStr, $mondayStr, $actStr, $userId]
             )[0];
-            $winUsage['h5'] = (int) ($w['h5'] ?? 0);
-            $winUsage['d7'] = (int) ($w['d7'] ?? 0);
+            $winUsage['h5']   = (int) ($w['h5'] ?? 0);
+            $winUsage['week'] = (int) ($w['wk'] ?? 0);
         }
 
         // 5. 组装：合并套餐与 ledger 出现的所有计费类型
@@ -179,9 +185,11 @@ class Overview extends BaseController
                     'planName'    => $plan['name'] ?? null,
                     'unit'        => 'requests',
                     'mode'        => 'window',
+                    // 总额度：coding 以本周额度为总额度
+                    'total'       => $wkLimit > 0 ? $wkLimit : null,
                     'windows'     => [
+                        ['key' => 'week', 'label' => '本周', 'limit' => $wkLimit > 0 ? $wkLimit : null, 'used' => $winUsage['week']],
                         ['key' => 'h5', 'label' => '近 5 小时', 'limit' => $h5Limit > 0 ? $h5Limit : null, 'used' => $winUsage['h5']],
-                        ['key' => 'd7', 'label' => '近 7 天', 'limit' => $wkLimit > 0 ? $wkLimit : null, 'used' => $winUsage['d7']],
                     ],
                 ];
             } else {
@@ -196,6 +204,7 @@ class Overview extends BaseController
                         'planName'    => $plan['name'] ?? null,
                         'unit'        => 'tokens',
                         'mode'        => 'capped',
+                        'total'       => $tokenLimit,
                         'limit'       => $tokenLimit,
                         'used'        => $used,
                         'available'   => max(0, $tokenLimit - $used),

@@ -97,13 +97,13 @@ function OverviewView({ data }: { data: UserOverview }) {
 function QuotaStatCard({ q }: { q: QuotaItem }) {
   const name = q.planName || planLabel(q.billingPlan);
   if (q.mode === 'window') {
-    const w5 = q.windows?.find((w) => w.key === 'h5');
-    const w7 = q.windows?.find((w) => w.key === 'd7');
+    const wk = q.windows?.find((w) => w.key === 'week');
+    const h5 = q.windows?.find((w) => w.key === 'h5');
     return (
       <StatCard
-        label={`${name} · 近 5 小时`}
-        value={w5 ? `${formatNumber(w5.used)}${w5.limit ? ` / ${formatNumber(w5.limit)}` : ''}` : '—'}
-        hint={w7 ? `近 7 天 ${formatNumber(w7.used)}${w7.limit ? ` / ${formatNumber(w7.limit)}` : ' / 不限'}` : undefined}
+        label={`${name} · 本周`}
+        value={wk ? `${formatNumber(wk.used)}${wk.limit ? ` / ${formatNumber(wk.limit)}` : ''}` : '—'}
+        hint={h5 ? `近 5 小时 ${formatNumber(h5.used)}${h5.limit ? ` / ${formatNumber(h5.limit)}` : ' / 不限'}` : undefined}
         icon={<Gauge className="h-4 w-4" />}
       />
     );
@@ -132,6 +132,14 @@ function QuotaDetail({ q }: { q: QuotaItem }) {
         <span className="text-sm font-medium">{name}</span>
         <Badge variant="outline">{q.unit === 'requests' ? '次' : 'tok'}</Badge>
       </div>
+
+      {/* 总额度头条 */}
+      {q.total != null && (
+        <div className="mt-3 flex items-baseline justify-between border-b pb-3">
+          <span className="text-xs text-muted-foreground">{q.mode === 'window' ? '本周总额度' : '总额度'}</span>
+          <span className="text-xl font-semibold tabular-nums">{formatNumber(q.total)}</span>
+        </div>
+      )}
 
       {q.mode === 'window' &&
         q.windows?.map((w) => (

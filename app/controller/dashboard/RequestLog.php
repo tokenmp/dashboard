@@ -60,11 +60,11 @@ class RequestLog extends BaseController
 
         $model = trim((string) $this->request->get('model', ''));
         if ($model !== '') {
-            $query->where(function ($q) use ($model) {
-                $q->where('model_name', $model)
-                  ->whereOr('requested_model_name', $model)
-                  ->whereOr('resolved_model_name', $model);
-            });
+            // 模型名模糊 + 大小写不敏感（ILIKE）：同时匹配实际/请求/解析模型名
+            $query->whereRaw(
+                '(model_name ILIKE ? OR requested_model_name ILIKE ? OR resolved_model_name ILIKE ?)',
+                ["%{$model}%", "%{$model}%", "%{$model}%"]
+            );
         }
 
         $protocol = trim((string) $this->request->get('protocol', ''));
