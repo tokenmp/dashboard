@@ -29,6 +29,11 @@ export default defineConfig(({ mode }) => {
           target: env.VITE_API_TARGET || 'http://localhost:8000',
           changeOrigin: true,
         },
+        // 模型品牌图标（svg 在 dashboard/public/model-icons，后端静态服务）
+        '/model-icons': {
+          target: env.VITE_API_TARGET || 'http://localhost:8000',
+          changeOrigin: true,
+        },
       },
     },
     build: {
