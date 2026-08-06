@@ -62,11 +62,13 @@ export function ModelIcon({
   }
   return (
     <div
-      className={`flex shrink-0 items-center justify-center overflow-hidden rounded-lg p-1.5 shadow-[inset_0_0_0_1px_rgba(0,0,0,0.06)] ${className}`}
+      className={`flex shrink-0 items-center justify-center overflow-hidden rounded-lg p-[3px] shadow-[inset_0_0_0_1px_rgba(0,0,0,0.06)] ${className}`}
       style={{
         width: size,
         height: size,
         background: `${match.logoBackground} url("/model-icons/${match.icon}.svg") center / contain no-repeat`,
+        backgroundClip: 'content-box',
+        backgroundOrigin: 'content-box',
       }}
       title={match.label}
       aria-label={`${match.label} 图标`}
