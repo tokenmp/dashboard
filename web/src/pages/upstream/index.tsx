@@ -1,11 +1,13 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { ChevronRight, RefreshCw, Search } from 'lucide-react';
 import { usePagedQuery } from '@/hooks/usePagedQuery';
 import { useUrlQueryState } from '@/hooks/useUrlQueryState';
 import { StatusBadge } from '@/components/StatusBadge';
 import { EmptyState } from '@/components/EmptyState';
-import { ModelIcon } from '@/components/ModelIcon';
+import { ModelIcon, ModelSeriesSelect } from '@/components/ModelIcon';
+import { CapabilityBadge } from '@/components/CapabilityBadge';
+import { Sparkline } from '@/components/Sparkline';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
@@ -176,7 +178,44 @@ function formatPrice(price: number | null): string {
 
 function ModelCard({ m }: { m: AiModelItem }) {
   const [providerDialogOpen, setProviderDialogOpen] = useState(false);
-  const providers = m.providers ?? [];
+  const [healthData, setHealthData] = useState<Record<string, number[]>>({});
+  const [healthLoading, setHealthLoading] = useState(false);
+  const providers = useMemo(() => m.providers ?? [], [m.providers]);
+  const grouped = useMemo(() => {
+    const map = new Map<string, { providerName: string; keys: typeof providers }>();
+    for (const p of providers) {
+      const name = p.provider_display_name || p.provider_name;
+      if (!map.has(p.provider_name)) {
+        map.set(p.provider_name, { providerName: name, keys: [] });
+      }
+      map.get(p.provider_name)!.keys.push(p);
+    }
+    return Array.from(map.values());
+  }, [providers]);
+
+  useEffect(() => {
+    if (!providerDialogOpen) return;
+
+    let active = true;
+    setHealthLoading(true);
+    getModelKeyHealthApi(m.id)
+      .then((data) => {
+        if (!active) return;
+        const map: Record<string, number[]> = {};
+        for (const item of data) {
+          map[item.upstream_key_id] = item.series.map((point) => point.success);
+        }
+        setHealthData(map);
+      })
+      .catch(() => {
+        if (active) setHealthData({});
+      })
+      .finally(() => {
+        if (active) setHealthLoading(false);
+      });
+
+    return () => { active = false; };
+  }, [providerDialogOpen, m.id]);
 
   return (
     <>
@@ -194,9 +233,12 @@ function ModelCard({ m }: { m: AiModelItem }) {
           </div>
           {m.description && <p className="mt-1 line-clamp-2 text-xs text-muted-foreground">{m.description}</p>}
           <div className="mt-2 flex flex-wrap gap-1">
-            {(m.capabilities ?? []).map((c) => <Badge key={c} variant="outline" className="text-[10px]">{c}</Badge>)}
+            {(m.capabilities ?? []).map((c) => <CapabilityBadge key={c} capability={c} />)}
           </div>
-          <div className="mt-2 text-xs text-muted-foreground">上下文窗口：{m.context_window_tokens ? formatCompact(m.context_window_tokens) : '—'}</div>
+          <div className="mt-2 flex items-center gap-x-4 text-xs text-muted-foreground">
+            <span>上下文：<span className="text-foreground">{m.context_window_tokens ? formatCompact(m.context_window_tokens) : '—'}</span></span>
+            <span>最大输出：<span className="text-foreground">{(() => { const mo = Math.max(0, ...providers.map(p => p.max_tokens ?? 0)); return mo ? formatCompact(mo) : '—'; })()}</span></span>
+          </div>
           <button
             type="button"
             className="mt-2 flex w-full items-center justify-between border-t pt-2 text-[11px] font-medium text-muted-foreground hover:text-foreground"
@@ -216,24 +258,69 @@ function ModelCard({ m }: { m: AiModelItem }) {
             {providers.length === 0 ? (
               <div className="py-6 text-center text-sm text-muted-foreground">暂无可用供应商</div>
             ) : (
-              <div className="space-y-2">
-                {providers.map((p) => (
-                  <div key={p.mapping_id} className="rounded-lg border p-3">
-                    <div className="flex items-center justify-between">
-                      <span className="font-medium">{p.provider_display_name || p.provider_name}</span>
-                      <Badge variant="outline" className="text-[10px]">{p.status}</Badge>
+              <div className="space-y-3">
+                {grouped.map((group) => {
+                  const activeCount = group.keys.filter((key) => key.status === 'active').length;
+                  const totalCount = group.keys.length;
+                  const allActive = activeCount === totalCount;
+                  const maxTokens = Math.max(...group.keys.map((key) => key.max_tokens ?? 0));
+                  const inputPrices = group.keys
+                    .map((key) => key.input_price_per_token)
+                    .filter((value): value is number => value != null);
+                  const outputPrices = group.keys
+                    .map((key) => key.output_price_per_token)
+                    .filter((value): value is number => value != null);
+                  const inputPrice = inputPrices.length ? Math.min(...inputPrices) : null;
+                  const outputPrice = outputPrices.length ? Math.min(...outputPrices) : null;
+
+                  return (
+                    <div key={group.providerName} className="rounded-lg border p-3">
+                      <div className="flex items-center justify-between">
+                        <span className="font-medium">{group.providerName}</span>
+                        <Badge
+                          variant={allActive ? 'secondary' : 'destructive'}
+                          className="text-[10px]"
+                        >
+                          {totalCount} 个 Key · {allActive ? '全部可用' : `${activeCount}/${totalCount} 可用`}
+                        </Badge>
+                      </div>
+                      <div className="mt-1.5 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-muted-foreground">
+                        <span>最大输出：<span className="text-foreground">{maxTokens ? formatCompact(maxTokens) : '—'}</span></span>
+                        <span>输入价格：<span className="text-foreground">{formatPrice(inputPrice)}</span></span>
+                        <span>输出价格：<span className="text-foreground">{formatPrice(outputPrice)}</span></span>
+                      </div>
+                      <div className="mt-2 space-y-1.5">
+                        {group.keys.map((key) => (
+                          <div
+                            key={key.mapping_id}
+                            className="flex flex-wrap items-center gap-x-3 gap-y-1 rounded bg-muted/50 px-2 py-1"
+                          >
+                            <span
+                              title={key.upstream_key_id}
+                              className="font-mono text-[10px] text-muted-foreground"
+                            >
+                              {key.upstream_key_id.slice(-10)}
+                            </span>
+                            {key.upstream_model_name && key.upstream_model_name !== m.name && (
+                              <span className="truncate text-[10px] text-muted-foreground/70">→ {key.upstream_model_name}</span>
+                            )}
+                            <span className="text-[10px] text-muted-foreground">
+                              <span className="text-foreground">{key.max_tokens ? formatCompact(key.max_tokens) : '—'}</span> · {formatPrice(key.input_price_per_token)} / {formatPrice(key.output_price_per_token)}
+                            </span>
+                            <span className={key.status === 'active' ? 'text-green-600' : 'text-red-600'}>●</span>
+                            <div className="ml-auto shrink-0">
+                              {healthLoading ? (
+                                <Skeleton className="h-5 w-20" />
+                              ) : (
+                                <Sparkline data={healthData[key.upstream_key_id] ?? []} width={80} height={20} />
+                              )}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
                     </div>
-                    <div className="mt-1.5 grid grid-cols-2 gap-x-4 gap-y-1 text-xs text-muted-foreground">
-                      <div>上游 Key：<span className="text-foreground">{p.upstream_key_name}</span></div>
-                      {p.upstream_model_name && p.upstream_model_name !== m.name && (
-                        <div>转发名：<span className="font-mono text-foreground">{p.upstream_model_name}</span></div>
-                      )}
-                      <div>最大输出：<span className="text-foreground">{p.max_tokens ? formatCompact(p.max_tokens) : '—'}</span></div>
-                      <div>输入价格：<span className="text-foreground">{formatPrice(p.input_price_per_token)}</span></div>
-                      <div>输出价格：<span className="text-foreground">{formatPrice(p.output_price_per_token)}</span></div>
-                    </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             )}
           </div>
@@ -247,6 +334,7 @@ function ModelsTab() {
   const { initial: urlInit, write } = useUrlQueryState([
     { name: 'q', key: 'keyword' },
     { name: 'billing', key: 'billingMode' },
+    { name: 'series', key: 'series' },
     { name: 'page', key: 'page', type: 'number', default: 1 },
     { name: 'size', key: 'size', type: 'number', default: 20 },
   ]);
@@ -256,6 +344,10 @@ function ModelsTab() {
   return (
     <div className="space-y-3">
       <Card><CardContent className="flex items-end gap-3 p-4">
+        <div className="w-[160px]">
+          <label className="mb-1 block text-xs text-muted-foreground">模型系列</label>
+          <ModelSeriesSelect value={params.series ?? 'all'} onChange={(v) => setFilters({ series: v === 'all' ? '' : v })} />
+        </div>
         <div className="flex-1">
           <label className="mb-1 block text-xs text-muted-foreground">名称搜索</label>
           <div className="relative">
@@ -279,7 +371,7 @@ function ModelsTab() {
     </div>
   );
 }
-import { getDashboardModelsApi } from '@/api/dashboard';
+import { getDashboardModelsApi, getModelKeyHealthApi } from '@/api/dashboard';
 const getModelsApiLazy = (p: UpstreamQuery) => getDashboardModelsApi(p);
 
 function ModelBillingSelect({ value, onChange }: { value: string; onChange: (v: string) => void }) {

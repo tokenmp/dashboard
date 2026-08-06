@@ -27,11 +27,12 @@ export function KeysTab() {
     { name: 'q', key: 'keyword' },
     { name: 'source', key: 'sourceType' },
     { name: 'market', key: 'marketStatus' },
+    { name: 'status', key: 'status', default: 'active' },
     { name: 'page', key: 'page', type: 'number', default: 1 },
     { name: 'size', key: 'size', type: 'number', default: 20 },
   ]);
   const { list, total, page, size, loading, error, params, reload, setPage, setFilters } =
-    usePagedQuery(getDashboardUpstreamKeysApi, { initial: { size: 20, sort: '-created_at', ...urlInit } as UpstreamQuery });
+    usePagedQuery(getDashboardUpstreamKeysApi, { initial: { size: 20, sort: '-created_at', status: 'active', ...urlInit } as UpstreamQuery });
   useEffect(() => { write(params); }, [params]);
 
   return (
@@ -58,6 +59,17 @@ export function KeysTab() {
               </Select>
             </div>
           )}
+          <div className="w-[140px]">
+            <label className="mb-1 block text-xs text-muted-foreground">状态</label>
+            <Select value={params.status ?? 'all'} onValueChange={(v) => setFilters({ status: v === 'all' ? '' : v })}>
+              <SelectTrigger><SelectValue placeholder="全部" /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">全部</SelectItem>
+                <SelectItem value="active">active</SelectItem>
+                <SelectItem value="disabled">disabled</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
           <div className="w-[140px]">
             <label className="mb-1 block text-xs text-muted-foreground">市场状态</label>
             <Select value={params.marketStatus ?? 'all'} onValueChange={(v) => setFilters({ marketStatus: v === 'all' ? '' : v })}>
@@ -179,6 +191,8 @@ function KeyDetailDrawer({ id, onClose }: { id: string | null; onClose: () => vo
                   <Table>
                     <TableHeader><TableRow>
                       <TableHead>模型</TableHead><TableHead className="w-[120px]">端点</TableHead>
+                      <TableHead className="w-[90px] text-right">上下文</TableHead>
+                      <TableHead className="w-[90px] text-right">最大输出</TableHead>
                       <TableHead className="w-[100px] text-right">输入价</TableHead><TableHead className="w-[100px] text-right">输出价</TableHead>
                     </TableRow></TableHeader>
                     <TableBody>{data.mappings.map((m) => (
@@ -188,6 +202,8 @@ function KeyDetailDrawer({ id, onClose }: { id: string | null; onClose: () => vo
                           <div className="text-xs text-muted-foreground">{m.upstream_model_name ?? ''}</div>
                         </TableCell>
                         <TableCell className="text-xs">{m.providerEndpoint ? `${m.providerEndpoint.protocol}` : '—'}</TableCell>
+                        <TableCell className="text-right tabular-nums text-xs">{m.model?.context_window_tokens ? formatCompact(m.model.context_window_tokens) : '—'}</TableCell>
+                        <TableCell className="text-right tabular-nums text-xs">{m.max_tokens ? formatCompact(m.max_tokens) : '—'}</TableCell>
                         <TableCell className="text-right tabular-nums text-xs">{m.input_price_per_token ?? '—'}</TableCell>
                         <TableCell className="text-right tabular-nums text-xs">{m.output_price_per_token ?? '—'}</TableCell>
                       </TableRow>

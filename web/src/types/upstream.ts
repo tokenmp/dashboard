@@ -65,7 +65,7 @@ export interface UpstreamModelMappingItem {
   status: string;
   created_at: string;
   updated_at: string;
-  model?: { id: string; name: string } | null;
+  model?: { id: string; name: string; context_window_tokens?: number | null } | null;
   providerEndpoint?: { id: string; protocol: string; path: string } | null;
 }
 
@@ -101,6 +101,7 @@ export interface AiModelProvider {
   provider_name: string;
   provider_display_name: string | null;
   upstream_key_name: string;
+  upstream_key_id: string;
   upstream_model_name: string | null;
   input_price_per_token: number | null;
   output_price_per_token: number | null;
@@ -109,6 +110,18 @@ export interface AiModelProvider {
 }
 
 /** 平台模型 */
+export interface ModelKeyHealthPoint {
+  hour: string;
+  total: number;
+  success: number;
+  failed: number;
+}
+
+export interface ModelKeyHealthItem {
+  upstream_key_id: string;
+  series: ModelKeyHealthPoint[];
+}
+
 export interface AiModelItem {
   id: string;
   name: string;
@@ -133,6 +146,7 @@ export interface UpstreamQuery {
   sourceType?: string;
   marketStatus?: string;
   billingMode?: string;
+  series?: string;
   from?: string;
   to?: string;
   sort?: string;

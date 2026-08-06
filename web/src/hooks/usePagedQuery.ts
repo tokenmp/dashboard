@@ -48,16 +48,34 @@ export function usePagedQuery<T, Q extends PageQuery = PageQuery>(
   });
 
   const fetchingRef = useRef(false);
+  const pendingOverrideRef = useRef<Partial<Q> | null>(null);
   const mountedRef = useRef(true);
+  // paramsRef 始终跟踪最新 state.params，避免 load 闭包捕获过期 state
+  const paramsRef = useRef<Q>(initialParams);
+  const updateParams = (updater: (prev: Q) => Q) => {
+    setState((s) => {
+      const next = updater(s.params);
+      paramsRef.current = next;
+      return { ...s, params: next };
+    });
+  };
 
   const load = useCallback(
     async (override?: Partial<Q>) => {
-      if (fetchingRef.current) return;
+      // 用 ref 拿最新 params，避免闭包过期
+      const merged = { ...paramsRef.current, ...(override ?? {}) } as Q;
+      if (override && Object.keys(override).length > 0) {
+        updateParams(() => merged);
+      }
+      if (fetchingRef.current) {
+        pendingOverrideRef.current = { ...(pendingOverrideRef.current ?? {}), ...(override ?? {}) };
+        return;
+      }
       fetchingRef.current = true;
-      const params = { ...state.params, ...override } as Q;
-      setState((s) => ({ ...s, loading: true, error: '', params }));
+      updateParams(() => merged);
+      setState((s) => ({ ...s, loading: true, error: '' }));
       try {
-        const res = await fetcher(params);
+        const res = await fetcher(merged);
         if (!mountedRef.current) return;
         setState((s) => ({
           ...s,
@@ -72,6 +90,11 @@ export function usePagedQuery<T, Q extends PageQuery = PageQuery>(
         setState((s) => ({ ...s, loading: false, error: getApiError(e) }));
       } finally {
         fetchingRef.current = false;
+        const pending = pendingOverrideRef.current;
+        pendingOverrideRef.current = null;
+        if (pending && Object.keys(pending).length > 0) {
+          load(pending);
+        }
       }
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps

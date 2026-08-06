@@ -81,6 +81,7 @@ Route::group('api/v1', function () {
                     Route::get(':id', 'panel/Upstream/keyDetail')->pattern(['id' => '[\w\-]+']);
                 });
                 Route::get('models', 'panel/Upstream/models');
+                Route::get('model-key-health', 'panel/Upstream/modelKeyHealth');
             });
 
             // 我的用量
@@ -146,6 +147,7 @@ Route::group('api/v1', function () {
                     });
                     Route::get('providers', 'dashboard/Upstream/providers');
                     Route::get('routes', 'dashboard/Upstream/routes');
+                    Route::get('model-key-health', 'dashboard/Upstream/modelKeyHealth');
                 });
                 Route::get('models', 'dashboard/Upstream/models');
 
