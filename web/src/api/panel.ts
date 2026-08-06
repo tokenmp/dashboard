@@ -138,6 +138,18 @@ export async function getPanelRedemptionsApi(): Promise<RedeemCodeRedemptionItem
   return res.data.data;
 }
 
+/** 兑换结果：含脱敏码信息 + 本次兑换记录快照 */
+export interface RedeemResult {
+  code: { id: string; name: string; prefix: string | null; suffix: string | null };
+  redemption: RedeemCodeRedemptionItem;
+}
+
+/** 兑换一个兑换码 */
+export async function redeemCodeApi(code: string): Promise<RedeemResult> {
+  const res = await client.post<ApiResponse<RedeemResult>>('/panel/user/redeem', { code });
+  return res.data.data;
+}
+
 // ── 我持有的上游 Key ──
 export async function getPanelUpstreamKeysApi(
   params: UpstreamQuery,

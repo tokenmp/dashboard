@@ -57,6 +57,8 @@ import type {
   RedeemCodeItem,
   CodeRedemptionsResult,
   RedeemCodeQuery,
+  CreateRedeemCodeInput,
+  CreateRedeemCodeResult,
 } from '@/types/redeem';
 
 /*
@@ -371,6 +373,14 @@ export async function getDashboardCodeRedemptionsApi(
   const res = await client.get<ApiResponse<CodeRedemptionsResult>>(`/dashboard/redeem/codes/${id}/redemptions`, {
     params: toParams(params as Record<string, unknown>),
   });
+  return res.data.data;
+}
+
+/** 新建兑换码 */
+export async function createDashboardRedeemCodeApi(
+  input: CreateRedeemCodeInput,
+): Promise<CreateRedeemCodeResult> {
+  const res = await client.post<ApiResponse<CreateRedeemCodeResult>>('/dashboard/redeem/codes', input);
   return res.data.data;
 }
 
