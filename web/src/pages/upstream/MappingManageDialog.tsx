@@ -9,6 +9,7 @@ import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from '@/components/ui/table';
 import { Skeleton } from '@/components/ui/skeleton';
+import { SearchableSelect } from '@/components/ui/searchable-select';
 import { formatCompact } from '@/utils/format';
 import {
   getModelMappingsApi, createModelMappingApi, updateModelMappingApi, deleteModelMappingApi,
@@ -106,6 +107,7 @@ export function MappingManageDialog({ open, onOpenChange, model }: Props) {
           <MappingEditForm
             mapping={editing === 'new' ? null : editing}
             modelId={model.id}
+            existingKeyIds={mappings.map((mm) => mm.upstream_key_id)}
             onClose={() => setEditing(null)}
             onSaved={(saved) => {
               setMappings((prev) => {
@@ -130,11 +132,12 @@ function fmtPrice(v: number | null): string {
 interface MappingEditFormProps {
   mapping: ModelMappingItem | null;
   modelId: string;
+  existingKeyIds: string[];
   onClose: () => void;
   onSaved: (saved: ModelMappingItem) => void;
 }
 
-function MappingEditForm({ mapping, modelId, onClose, onSaved }: MappingEditFormProps) {
+function MappingEditForm({ mapping, modelId, existingKeyIds, onClose, onSaved }: MappingEditFormProps) {
   const isEdit = !!mapping;
   const [keyId, setKeyId] = useState(mapping?.upstream_key_id ?? '');
   const [upstreamModelName, setUpstreamModelName] = useState(mapping?.upstream_model_name ?? '');
@@ -189,18 +192,17 @@ function MappingEditForm({ mapping, modelId, onClose, onSaved }: MappingEditForm
       <div className="grid grid-cols-2 gap-3">
         <div className="space-y-1">
           <Label>上游 Key *</Label>
-          <select
-            className="flex h-9 w-full items-center justify-between rounded-md border border-input bg-transparent px-3 py-2 text-sm ring-offset-background focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
+          <SearchableSelect
+            options={keyOptions.map((k) => ({
+              value: k.id,
+              label: k.name,
+              hint: k.provider_display_name || k.provider_name,
+            }))}
             value={keyId}
-            onChange={(e) => setKeyId(e.target.value)}
-          >
-            <option value="">选择 Key</option>
-            {keyOptions.map((k) => (
-              <option key={k.id} value={k.id}>
-                {k.provider_display_name || k.provider_name} · {k.name}{k.status !== 'active' ? ` (${k.status})` : ''}
-              </option>
-            ))}
-          </select>
+            onChange={setKeyId}
+            placeholder="选择 Key"
+            excludeValues={isEdit ? [] : existingKeyIds}
+          />
         </div>
         <div className="space-y-1">
           <Label>上游模型名</Label>
