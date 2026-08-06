@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { ChevronDown, Search } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 
@@ -6,6 +6,7 @@ export interface ComboOption {
   value: string;
   label: string;
   hint?: string;
+  icon?: ReactNode;
 }
 
 interface Props {
@@ -58,7 +59,6 @@ export function SearchableSelect({ options, value, onChange, placeholder, exclud
           {selected ? (
             <span className="flex items-center gap-1">
               <span>{selected.label}</span>
-              {selected.hint && <span className="text-xs text-muted-foreground">· {selected.hint}</span>}
             </span>
           ) : (placeholder ?? '请选择')}
         </span>
@@ -89,9 +89,12 @@ export function SearchableSelect({ options, value, onChange, placeholder, exclud
                   onClick={() => { onChange(o.value); setOpen(false); }}
                   className={`flex w-full items-center justify-between rounded-sm px-2 py-1.5 text-left text-sm hover:bg-accent ${o.value === value ? 'bg-accent' : ''}`}
                 >
-                  <span className="flex items-center gap-1">
-                    <span>{o.label}</span>
-                    {o.hint && <span className="text-xs text-muted-foreground">· {o.hint}</span>}
+                  <span className="flex items-center gap-2">
+                    {o.icon}
+                    <span className="flex flex-col items-start">
+                      <span className="truncate">{o.label}</span>
+                      {o.hint && <span className="text-xs text-muted-foreground">{o.hint}</span>}
+                    </span>
                   </span>
                 </button>
               ))
