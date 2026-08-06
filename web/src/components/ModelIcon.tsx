@@ -32,6 +32,11 @@ export function findModelIcon(id: string, displayName?: string): ModelIconMatch 
   return MODEL_ICON_MATCHES.find((m) => m.pattern.test(haystack));
 }
 
+/**
+ * 模型品牌图标：按模型名正则匹配品牌 svg。
+ * svg 用 background-image 渲染（svg 自身 width/height=1em，img naturalWidth=0 不显示，
+ * background-size: contain 不依赖固有像素尺寸，最可靠）。
+ */
 export function ModelIcon({
   id,
   displayName,
@@ -57,18 +62,15 @@ export function ModelIcon({
   }
   return (
     <div
-      className={`flex shrink-0 items-center justify-center overflow-hidden rounded-lg p-1 shadow-[inset_0_0_0_1px_rgba(0,0,0,0.06)] ${className}`}
-      style={{ width: size, height: size, background: match.logoBackground }}
+      className={`flex shrink-0 items-center justify-center overflow-hidden rounded-lg p-1.5 shadow-[inset_0_0_0_1px_rgba(0,0,0,0.06)] ${className}`}
+      style={{
+        width: size,
+        height: size,
+        background: `${match.logoBackground} url("/model-icons/${match.icon}.svg") center / contain no-repeat`,
+      }}
       title={match.label}
       aria-label={`${match.label} 图标`}
-    >
-      <img
-        src={`/model-icons/${match.icon}.svg`}
-        alt=""
-        className="h-full w-full object-contain"
-        loading="lazy"
-      />
-    </div>
+    />
   );
 }
 
