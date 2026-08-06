@@ -59,6 +59,7 @@ class RedeemCodeRedemption extends Model
         'token_user_plan_id' => 'string',
         'image_plan_id' => 'string',
         'image_user_plan_id' => 'string',
+        'code' => 'string',
     ];
 
     // ==================== 关联关系 ====================
