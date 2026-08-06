@@ -18,6 +18,7 @@ import type { NotificationItem, SystemQuery } from '@/types/system';
 import type { RedeemCodeRedemptionItem } from '@/types/redeem';
 import type {
   AiModelItem,
+  ModelKeyHealthItem,
   UpstreamKeyItem,
   UpstreamKeyDetailResult,
   UpstreamQuery,
@@ -157,6 +158,12 @@ export async function getPanelModelsApi(
 ): Promise<PageResult<AiModelItem>> {
   const res = await client.get<ApiResponse<PageResult<AiModelItem>>>('/panel/upstream/models', {
     params: toParams(params as Record<string, unknown>),
+  });
+  return res.data.data;
+}
+export async function getModelKeyHealthApi(modelId: string): Promise<ModelKeyHealthItem[]> {
+  const res = await client.get<ApiResponse<ModelKeyHealthItem[]>>('/panel/upstream/model-key-health', {
+    params: { model_id: modelId },
   });
   return res.data.data;
 }

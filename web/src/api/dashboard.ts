@@ -33,6 +33,7 @@ import type {
   UpstreamKeyDetailResult,
   RouteGroupItem,
   AiModelItem,
+  ModelKeyHealthItem,
   UpstreamQuery,
 } from '@/types/upstream';
 import type { UsageLedgerItem, QuotaResult, PriceRuleItem, UsageQuery } from '@/types/usage';
@@ -162,6 +163,12 @@ export async function getDashboardModelsApi(
 ): Promise<PageResult<AiModelItem>> {
   const res = await client.get<ApiResponse<PageResult<AiModelItem>>>('/dashboard/models', {
     params: toParams(params as Record<string, unknown>),
+  });
+  return res.data.data;
+}
+export async function getModelKeyHealthApi(modelId: string): Promise<ModelKeyHealthItem[]> {
+  const res = await client.get<ApiResponse<ModelKeyHealthItem[]>>('/dashboard/upstream/model-key-health', {
+    params: { model_id: modelId },
   });
   return res.data.data;
 }

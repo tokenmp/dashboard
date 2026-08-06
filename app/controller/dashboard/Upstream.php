@@ -10,6 +10,7 @@ use app\model\RouteGroup;
 use app\model\UpstreamKey;
 use app\model\UpstreamKeyVerification;
 use app\model\UpstreamModelMapping;
+use app\service\ModelKeyHealthService;
 use app\support\Pagination;
 use think\exception\HttpException;
 use think\facade\Db;
@@ -201,13 +202,23 @@ class Upstream extends BaseController
         $query = AiModel::where('status', '<>', 'deleted');
         $keyword = trim((string) $this->request->get('keyword', ''));
         if ($keyword !== '') {
-            $query->where(function ($q) use ($keyword) {
-                $q->whereLike('name', "%{$keyword}%")->whereOr('display_name', 'like', "%{$keyword}%");
-            });
+            $query->whereRaw(
+                '(name ILIKE ? OR display_name ILIKE ?)',
+                ["%{$keyword}%", "%{$keyword}%"]
+            );
         }
         $billingMode = trim((string) $this->request->get('billingMode', ''));
         if ($billingMode !== '') {
             $query->where('billing_mode', $billingMode);
+        }
+        $series = trim((string) $this->request->get('series', ''));
+        if ($series !== '') {
+            // 支持多前缀（如 qwen 匹配 qwen- 和 qwen3-），大小写不敏感
+            $lower = strtolower($series);
+            $query->whereRaw(
+                '(name ILIKE ? OR name = ? OR name ILIKE ?)',
+                ["{$lower}-%", $lower, "{$lower}%"]
+            );
         }
         Pagination::applyTimeRange($query, $this->request, 'created_at');
         $total = $query->count();
@@ -223,13 +234,13 @@ class Upstream extends BaseController
         if (!empty($modelIds)) {
             $placeholders = implode(',', array_fill(0, count($modelIds), '?'));
             $providerRows = Db::connect('pgsql')->query(
-                "select umm.id as mapping_id, umm.model_id, umm.upstream_model_name,"
+                "select umm.id as mapping_id, umm.model_id, umm.upstream_key_id, umm.upstream_model_name,"
                 . " umm.input_price_per_token, umm.output_price_per_token, umm.max_tokens, umm.status,"
                 . " uk.name as upstream_key_name, p.name as provider_name, p.display_name as provider_display_name"
                 . " from upstream_model_mappings umm"
                 . " join upstream_keys uk on uk.id = umm.upstream_key_id"
                 . " join providers p on p.id = uk.provider_id"
-                . " where umm.model_id in ($placeholders) and umm.status = 'active'"
+                . " where umm.model_id in ($placeholders) and umm.status = 'active' and uk.status = 'active'"
                 . " order by p.name, uk.name",
                 $modelIds
             );
@@ -241,6 +252,7 @@ class Upstream extends BaseController
                 'provider_name'           => $pr['provider_name'],
                 'provider_display_name'   => $pr['provider_display_name'],
                 'upstream_key_name'       => $pr['upstream_key_name'],
+                'upstream_key_id'         => $pr['upstream_key_id'],
                 'upstream_model_name'     => $pr['upstream_model_name'],
                 'input_price_per_token'   => $pr['input_price_per_token'] !== null ? (float) $pr['input_price_per_token'] : null,
                 'output_price_per_token'  => $pr['output_price_per_token'] !== null ? (float) $pr['output_price_per_token'] : null,
@@ -256,6 +268,13 @@ class Upstream extends BaseController
         unset($m);
 
         return success(Pagination::wrap($data, $total, $page, $size));
+    }
+
+    /** GET /api/v1/dashboard/upstream/model-key-health?model_id=xxx */
+    public function modelKeyHealth()
+    {
+        $modelId = trim((string) $this->request->get('model_id', ''));
+        return success(ModelKeyHealthService::getModelKeyHealth($modelId));
     }
 
     /** 解析 PostgreSQL text[] 字面量（如 "{a,b}"）为 PHP 数组 */
