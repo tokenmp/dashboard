@@ -72,6 +72,7 @@ Route::group('api/v1', function () {
                 Route::post('notifications/read-all', 'panel/Notification/markAllRead');
                 Route::post('notifications/:id/read', 'panel/Notification/markRead')->pattern(['id' => '[\\w\\-]+']);
                 Route::get('redemptions', 'panel/Redeem/myRedemptions');
+                Route::post('redeem', 'panel/Redeem/redeem');
             });
 
             // 我持有的上游 Key
@@ -199,6 +200,7 @@ Route::group('api/v1', function () {
                 Route::group('redeem', function () {
                     Route::group('codes', function () {
                         Route::get('', 'dashboard/Redeem/list');
+                        Route::post('', 'dashboard/Redeem/create');
                         Route::get(':id/redemptions', 'dashboard/Redeem/redemptions')->pattern(['id' => '[\w\-]+']);
                     });
                 });
