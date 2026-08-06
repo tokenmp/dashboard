@@ -13,7 +13,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
-import { formatCompact } from '@/utils/format';
+import { formatDate, formatDateTime, formatCompact } from '@/utils/format';
 import type { UserBasic, UserApiKeyItem, BotKeyItem, UserPlanItem } from '@/types/user';
 
 function Account() {
@@ -73,7 +73,7 @@ function ProfileCard({ profile }: { profile: UserBasic }) {
           <Row label="状态" value={<StatusBadge status={profile.status} />} />
           <Row label="首选计费" value={profile.preferred_billing} />
           <Row label="回退计费" value={profile.fallback_enabled ? '是' : '否'} />
-          <Row label="注册时间" value={<span className="font-mono text-xs">{profile.created_at}</span>} />
+          <Row label="注册时间" value={<span className="font-mono text-xs">{formatDateTime(profile.created_at)}</span>} />
         </dl>
       </CardContent>
     </Card>
@@ -114,7 +114,7 @@ function renderApiKey(item: UserApiKeyItem) {
       <div className="min-w-0">
         <div className="text-sm font-medium">{item.name}</div>
         <div className="truncate font-mono text-xs text-muted-foreground">{item.key_prefix}…{item.key_suffix}</div>
-        <div className="text-xs text-muted-foreground">{item.last_used_at ? `最近 ${item.last_used_at}` : '未使用'}</div>
+        <div className="text-xs text-muted-foreground">{item.last_used_at ? `最近 ${formatDateTime(item.last_used_at)}` : '未使用'}</div>
       </div>
       <StatusBadge status={item.status} />
     </div>
@@ -131,7 +131,7 @@ function renderBotKey(item: BotKeyItem) {
           <Badge variant="secondary" className="text-[10px]">{item.scope}</Badge>
         </div>
         <div className="truncate font-mono text-xs text-muted-foreground">{item.key_prefix}…{item.key_suffix}</div>
-        <div className="text-xs text-muted-foreground">{item.last_used_at ? `最近 ${item.last_used_at}` : '未使用'}</div>
+        <div className="text-xs text-muted-foreground">{item.last_used_at ? `最近 ${formatDateTime(item.last_used_at)}` : '未使用'}</div>
       </div>
       <StatusBadge status={item.status} />
     </div>
@@ -161,7 +161,7 @@ function PlansCard({ plans }: { plans: UserPlanItem[] }) {
                   <StatusBadge status={p.status} />
                 </div>
                 <div className="mt-1 text-xs text-muted-foreground">
-                  生效 {p.activated_at?.slice(0, 10)} · 过期 {p.expires_at?.slice(0, 10) ?? '永久'}
+                  生效 {formatDate(p.activated_at)} · 过期 {formatDate(p.expires_at) ?? "永久"}
                 </div>
                 {p.plan && (
                   <div className="mt-2 flex flex-wrap gap-1.5 text-xs text-muted-foreground">

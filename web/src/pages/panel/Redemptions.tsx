@@ -7,7 +7,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { formatNumber } from '@/utils/format';
+import { formatDateTime, formatNumber } from '@/utils/format';
 import type { RedeemCodeRedemptionItem } from '@/types/redeem';
 
 function Redemptions() {
@@ -85,7 +85,7 @@ function RedemptionRow({ item }: { item: RedeemCodeRedemptionItem }) {
           )}
         </div>
       </TableCell>
-      <TableCell className="font-mono text-xs text-muted-foreground">{item.created_at}</TableCell>
+      <TableCell className="font-mono text-xs text-muted-foreground">{formatDateTime(item.created_at)}</TableCell>
     </TableRow>
   );
 }

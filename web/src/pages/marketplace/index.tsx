@@ -13,7 +13,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { formatCompact, formatNumber } from '@/utils/format';
+import { formatCompact, formatDate, formatDateTime, formatNumber } from '@/utils/format';
 import type { MarketplaceQuery } from '@/types/marketplace';
 
 function Marketplace() {
@@ -137,7 +137,7 @@ function ListingsTab() {
                 <TableCell className="text-right tabular-nums">{(l.platform_fee_rate * 100).toFixed(2)}%</TableCell>
                 <TableCell className="text-right tabular-nums text-xs">{l.input_sale_price_per_token}</TableCell>
                 <TableCell className="text-right tabular-nums text-xs">{l.output_sale_price_per_token}</TableCell>
-                <TableCell className="font-mono text-xs text-muted-foreground">{l.published_at?.slice(0, 10) ?? '—'}</TableCell>
+                <TableCell className="font-mono text-xs text-muted-foreground">{l.published_at ? formatDate(l.published_at) : '—'}</TableCell>
               </TableRow>
             ))}</TableBody>
           </Table>
@@ -186,7 +186,7 @@ function SettlementsTab() {
                 <TableCell className="text-right tabular-nums text-xs">{formatCompact(s.platform_fee)}</TableCell>
                 <TableCell><Badge variant="outline" className="text-[10px]">{s.usage_source}</Badge></TableCell>
                 <TableCell><StatusBadge status={s.status} /></TableCell>
-                <TableCell className="font-mono text-xs text-muted-foreground">{s.created_at}</TableCell>
+                <TableCell className="font-mono text-xs text-muted-foreground">{formatDateTime(s.created_at)}</TableCell>
               </TableRow>
             ))}</TableBody>
           </Table>
@@ -230,8 +230,8 @@ function LedgerTab() {
                 <TableCell><Badge variant="secondary" className="text-[10px]">{l.entry_type}</Badge></TableCell>
                 <TableCell className={`text-right tabular-nums ${l.amount < 0 ? 'text-destructive' : 'text-primary'}`}>{formatCompact(l.amount)}</TableCell>
                 <TableCell><StatusBadge status={l.status} /></TableCell>
-                <TableCell className="font-mono text-xs text-muted-foreground">{l.available_at?.slice(0, 16)?.replace('T', ' ') ?? '—'}</TableCell>
-                <TableCell className="font-mono text-xs text-muted-foreground">{l.created_at}</TableCell>
+                <TableCell className="font-mono text-xs text-muted-foreground">{l.available_at ? formatDateTime(l.available_at) : '—'}</TableCell>
+                <TableCell className="font-mono text-xs text-muted-foreground">{formatDateTime(l.created_at)}</TableCell>
               </TableRow>
             ))}</TableBody>
           </Table>

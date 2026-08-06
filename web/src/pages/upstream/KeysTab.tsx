@@ -15,7 +15,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { formatCompact, formatNumber } from '@/utils/format';
+import { formatCompact, formatDate, formatDateTime, formatNumber } from '@/utils/format';
 import type { UpstreamQuery } from '@/types/upstream';
 
 const MARKET_STATUSES = ['online', 'offline', 'paused', 'degraded', 'exhausted', 'suspended'];
@@ -175,7 +175,7 @@ function KeyDetailDrawer({ id, onClose }: { id: string | null; onClose: () => vo
                   <Field label="优先级" value={String(data.key.priority)} />
                   <Field label="并发上限" value={String(data.key.max_concurrency)} />
                   <Field label="已用/总量" value={`${formatNumber(Number(data.key.quota_used) || 0)} / ${data.key.quota_total ? formatNumber(data.key.quota_total) : '不限'}`} />
-                  <Field label="到期" value={data.key.expires_at ?? '永久'} />
+                  <Field label="到期" value={data.key.expires_at ? formatDate(data.key.expires_at) : '永久'} />
                   <Field label="最近校验" value={data.key.verified_at ?? '未校验'} />
                 </dl>
                 {data.key.last_validation_error && (
@@ -243,7 +243,7 @@ function KeyDetailDrawer({ id, onClose }: { id: string | null; onClose: () => vo
                           <div className="mt-1 flex flex-wrap gap-1">{v.verified_models.map((m) => <Badge key={m} variant="outline" className="text-[10px]">{m}</Badge>)}</div>
                         )}
                       </div>
-                      <span className="font-mono text-[10px] text-muted-foreground">{v.created_at}</span>
+                      <span className="font-mono text-[10px] text-muted-foreground">{formatDateTime(v.created_at)}</span>
                     </div>
                   ))}
                 </CardContent>

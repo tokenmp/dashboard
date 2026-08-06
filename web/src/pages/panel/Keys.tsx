@@ -20,6 +20,7 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Skeleton } from '@/components/ui/skeleton';
+import { formatDate, formatDateTime } from '@/utils/format';
 import {
   Table,
   TableBody,
@@ -214,8 +215,8 @@ function KeyTable({
               {kind === 'bot' && <TableCell className="text-xs text-muted-foreground">{r.scope ?? '—'}</TableCell>}
               <TableCell><span className="font-mono text-xs">{r.prefix}…{r.suffix}</span></TableCell>
               <TableCell><StatusBadge status={r.status} /></TableCell>
-              <TableCell className="font-mono text-xs text-muted-foreground">{r.lastUsed ?? '未使用'}</TableCell>
-              <TableCell className="font-mono text-xs text-muted-foreground">{r.createdAt?.slice(0, 10) ?? '—'}</TableCell>
+              <TableCell className="font-mono text-xs text-muted-foreground">{r.lastUsed ? formatDateTime(r.lastUsed) : '未使用'}</TableCell>
+              <TableCell className="font-mono text-xs text-muted-foreground">{formatDate(r.createdAt)}</TableCell>
               <TableCell>
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>

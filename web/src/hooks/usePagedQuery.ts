@@ -68,7 +68,7 @@ export function usePagedQuery<T, Q extends PageQuery = PageQuery>(
         updateParams(() => merged);
       }
       if (fetchingRef.current) {
-        pendingOverrideRef.current = { ...(pendingOverrideRef.current ?? {}), ...(override ?? {}) };
+        pendingOverrideRef.current = { ...(pendingOverrideRef.current ?? {}), ...(override ?? {}) } as Partial<Q>;
         return;
       }
       fetchingRef.current = true;

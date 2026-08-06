@@ -10,7 +10,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
 import { Skeleton } from '@/components/ui/skeleton';
-import { formatNumber } from '@/utils/format';
+import { formatDate, formatDateTime, formatNumber } from '@/utils/format';
 import type { SystemQuery } from '@/types/system';
 
 function Releases() {
@@ -82,7 +82,7 @@ function ReleaseRow({ id, version, title, summary, releaseType, releasedAt }: { 
               <span className="font-mono text-sm font-medium">{version}</span>
               <Badge variant="outline" className="text-[10px]">{releaseType}</Badge>
             </div>
-            <span className="font-mono text-xs text-muted-foreground">{releasedAt?.slice(0, 10)}</span>
+            <span className="font-mono text-xs text-muted-foreground">{formatDate(releasedAt)}</span>
           </div>
           <div className="mt-1 font-medium">{title}</div>
           {summary && <p className="mt-1 text-sm text-muted-foreground line-clamp-2">{summary}</p>}
@@ -117,7 +117,7 @@ function ReleaseDetailDrawer({ id, onClose }: { id: string | null; onClose: () =
             <div className="rounded-lg border bg-muted/30 p-4">
               <Markdown>{data.release.body}</Markdown>
             </div>
-            <div className="text-xs text-muted-foreground">发布时间：{data.release.released_at}</div>
+            <div className="text-xs text-muted-foreground">发布时间：{formatDateTime(data.release.released_at)}</div>
           </div>
         ) : null}
       </SheetContent>

@@ -61,7 +61,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
-import { formatNumber } from '@/utils/format';
+import { formatDate, formatDateTime, formatNumber } from '@/utils/format';
 import { toast } from 'sonner';
 import { getApiError } from '@/utils/error';
 import type { UserBasic, UserListQuery, UserUpdatePayload } from '@/types/user';
@@ -190,7 +190,7 @@ function Users() {
                     <TableCell><Badge variant={u.role === 'admin' ? 'default' : 'secondary'} className="text-[10px]">{u.role}</Badge></TableCell>
                     <TableCell><StatusBadge status={u.status} /></TableCell>
                     <TableCell className="text-xs">{u.preferred_billing}</TableCell>
-                    <TableCell className="font-mono text-xs text-muted-foreground">{u.created_at}</TableCell>
+                    <TableCell className="font-mono text-xs text-muted-foreground">{formatDateTime(u.created_at)}</TableCell>
                     <TableCell onClick={(e) => e.stopPropagation()}>
                       <DropdownMenu>
                         <DropdownMenuTrigger asChild>
@@ -620,7 +620,7 @@ function DetailDrawer({ id, onClose }: { id: string | null; onClose: () => void 
                   <Row label="状态" value={<StatusBadge status={data.user.status} />} />
                   <Row label="首选计费" value={data.user.preferred_billing} />
                   <Row label="回退计费" value={data.user.fallback_enabled ? '是' : '否'} />
-                  <Row label="注册时间" value={<span className="font-mono text-xs">{data.user.created_at}</span>} />
+                  <Row label="注册时间" value={<span className="font-mono text-xs">{formatDateTime(data.user.created_at)}</span>} />
                 </dl>
               </CardContent>
             </Card>
@@ -659,7 +659,7 @@ function DetailDrawer({ id, onClose }: { id: string | null; onClose: () => void 
                             : <Badge className="bg-emerald-600 text-[10px] hover:bg-emerald-600">生效中</Badge>}
                         </div>
                         <div className="text-xs text-muted-foreground">
-                          {p.plan_type} · 生效 {p.activated_at?.slice(0, 10)} · 过期 {p.expires_at?.slice(0, 10) ?? '永久'}
+                          {p.plan_type} · 生效 {formatDate(p.activated_at)} · 过期 {formatDate(p.expires_at) ?? '永久'}
                         </div>
                       </div>
                       <div className="flex items-center gap-2">

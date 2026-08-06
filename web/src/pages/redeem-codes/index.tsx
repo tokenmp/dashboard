@@ -14,7 +14,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { formatNumber } from '@/utils/format';
+import { formatDate, formatDateTime, formatNumber } from '@/utils/format';
 import type { RedeemCodeQuery } from '@/types/redeem';
 
 function RedeemCodes() {
@@ -86,7 +86,7 @@ function RedeemCodes() {
                   <TableCell className="tabular-nums">{formatNumber(c.token_amount)}</TableCell>
                   <TableCell><StatusBadge status={c.status} /></TableCell>
                   <TableCell className="text-xs text-muted-foreground">
-                    {(c.starts_at?.slice(0, 10) ?? '')}~{(c.expires_at?.slice(0, 10) ?? '永久')}
+                    {(c.starts_at ? formatDate(c.starts_at) : '')}~{(c.expires_at ? formatDate(c.expires_at) : '永久')}
                   </TableCell>
                   <TableCell><ChevronRight className="h-4 w-4 text-muted-foreground" /></TableCell>
                 </TableRow>
@@ -154,7 +154,7 @@ function RedemptionsDrawer({ codeId, onClose }: { codeId: string | null; onClose
                         {r.image_plan_id && <Badge variant="outline" className="text-[10px]">image</Badge>}
                       </div>
                     </TableCell>
-                    <TableCell className="font-mono text-xs text-muted-foreground">{r.created_at}</TableCell>
+                    <TableCell className="font-mono text-xs text-muted-foreground">{formatDateTime(r.created_at)}</TableCell>
                   </TableRow>
                 ))}</TableBody>
               </Table>

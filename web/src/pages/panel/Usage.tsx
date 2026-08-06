@@ -18,7 +18,7 @@ import {
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from '@/components/ui/table';
-import { formatCompact, formatNumber } from '@/utils/format';
+import { formatCompact, formatDateTime, formatNumber } from '@/utils/format';
 import type { UsageQuery, UserQuota, QuotaItem } from '@/types/usage';
 
 const LEDGER_TYPES = ['reserve', 'charge', 'refund', 'recharge', 'adjustment', 'plan_grant', 'plan_upgrade', 'plan_renew', 'plan_replace'];
@@ -124,7 +124,7 @@ function LedgerTab() {
               </TableRow></TableHeader>
               <TableBody>{list.map((l) => (
                 <TableRow key={l.id}>
-                  <TableCell className="font-mono text-xs text-muted-foreground">{l.created_at}</TableCell>
+                  <TableCell className="font-mono text-xs text-muted-foreground">{formatDateTime(l.created_at)}</TableCell>
                   <TableCell><Badge variant="secondary" className="text-[10px]">{l.ledger_type}</Badge></TableCell>
                   <TableCell className="text-xs">{l.billing_plan}</TableCell>
                   <TableCell className={`text-right tabular-nums ${Number(l.token_delta) < 0 ? 'text-destructive' : 'text-primary'}`}>{Number(l.token_delta) !== 0 ? formatCompact(Number(l.token_delta)) : '—'}</TableCell>

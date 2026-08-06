@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Plus, Trash2 } from 'lucide-react';
-import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -175,7 +175,6 @@ function MappingEditForm({ mapping, modelId, existingKeyIds, onClose, onSaved }:
         if (updated) onSaved(updated);
       } else {
         await createModelMappingApi(modelId, payload);
-        const all = await getModelMappingsApi(modelId);
         // 新建的没有返回完整对象，刷新全部
         onClose();
         window.dispatchEvent(new CustomEvent('mapping-refresh'));

@@ -45,7 +45,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { useAsync } from '@/hooks/useAsync';
 import { usePagedQuery } from '@/hooks/usePagedQuery';
 import { getApiError } from '@/utils/error';
-import { formatNumber } from '@/utils/format';
+import { formatDate, formatDateTime, formatNumber } from '@/utils/format';
 import type { SystemQuery, VersionReleaseItem } from '@/types/system';
 
 type EditorState = {
@@ -252,7 +252,7 @@ function ReleaseRow({
               {release.summary && <p className="mt-1 line-clamp-2 text-sm text-muted-foreground">{release.summary}</p>}
             </div>
             <div className="flex shrink-0 items-center gap-2">
-              <span className="font-mono text-xs text-muted-foreground">{release.released_at?.slice(0, 10)}</span>
+              <span className="font-mono text-xs text-muted-foreground">{formatDate(release.released_at)}</span>
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
                   <Button
@@ -527,7 +527,7 @@ function ReleaseDetailDrawer({ id, onClose }: { id: string | null; onClose: () =
             <div className="rounded-lg border bg-muted/30 p-4">
               <Markdown>{data.release.body}</Markdown>
             </div>
-            <div className="text-xs text-muted-foreground">发布时间：{data.release.released_at}</div>
+            <div className="text-xs text-muted-foreground">发布时间：{formatDateTime(data.release.released_at)}</div>
           </div>
         ) : null}
       </SheetContent>

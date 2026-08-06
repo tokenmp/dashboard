@@ -32,7 +32,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
-import { formatNumber } from '@/utils/format';
+import { formatDateTime, formatNumber } from '@/utils/format';
 import {
   getDashboardNoticesApi,
   getDashboardConfigApi,
@@ -359,7 +359,7 @@ function ConfigTab() {
                     : String(c.value ?? '—')}
                 </TableCell>
                 <TableCell>{c.sensitive ? <Badge variant="destructive" className="text-[10px]">敏感</Badge> : <span className="text-muted-foreground">—</span>}</TableCell>
-                <TableCell className="font-mono text-xs text-muted-foreground">{c.updated_at}</TableCell>
+                <TableCell className="font-mono text-xs text-muted-foreground">{formatDateTime(c.updated_at)}</TableCell>
               </TableRow>
             ))}</TableBody>
           </Table>
@@ -388,7 +388,7 @@ function MigrationsTab() {
             <TableBody>{list.map((m) => (
               <TableRow key={m.filename}>
                 <TableCell className="font-mono text-xs"><span className="inline-flex items-center gap-1.5"><GitBranch className="h-3 w-3 text-muted-foreground" />{m.filename}</span></TableCell>
-                <TableCell className="font-mono text-xs text-muted-foreground">{m.applied_at}</TableCell>
+                <TableCell className="font-mono text-xs text-muted-foreground">{formatDateTime(m.applied_at)}</TableCell>
               </TableRow>
             ))}</TableBody>
           </Table>
