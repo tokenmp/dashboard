@@ -64,6 +64,42 @@ class Model extends BaseController
         }
         unset($m);
 
+        // 批量取模型在各供应商下的映射（避免 N+1）
+        $modelIds = array_column($data, 'id');
+        $byModel = [];
+        if (!empty($modelIds)) {
+            $placeholders = implode(',', array_fill(0, count($modelIds), '?'));
+            $providerRows = Db::connect('pgsql')->query(
+                "select umm.id as mapping_id, umm.model_id, umm.upstream_key_id, umm.upstream_model_name,"
+                . " umm.input_price_per_token, umm.output_price_per_token, umm.max_tokens, umm.status,"
+                . " uk.name as upstream_key_name, p.name as provider_name, p.display_name as provider_display_name"
+                . " from upstream_model_mappings umm"
+                . " join upstream_keys uk on uk.id = umm.upstream_key_id"
+                . " join providers p on p.id = uk.provider_id"
+                . " where umm.model_id in ($placeholders) and umm.status = 'active' and uk.status = 'active'"
+                . " order by p.name, uk.name",
+                $modelIds
+            );
+            foreach ($providerRows as $pr) {
+                $byModel[$pr['model_id']][] = [
+                    'mapping_id'              => $pr['mapping_id'],
+                    'provider_name'           => $pr['provider_name'],
+                    'provider_display_name'   => $pr['provider_display_name'],
+                    'upstream_key_name'       => $pr['upstream_key_name'],
+                    'upstream_key_id'         => $pr['upstream_key_id'],
+                    'upstream_model_name'     => $pr['upstream_model_name'],
+                    'input_price_per_token'   => $pr['input_price_per_token'] !== null ? (float) $pr['input_price_per_token'] : null,
+                    'output_price_per_token'  => $pr['output_price_per_token'] !== null ? (float) $pr['output_price_per_token'] : null,
+                    'max_tokens'              => $pr['max_tokens'] !== null ? (int) $pr['max_tokens'] : null,
+                    'status'                  => $pr['status'],
+                ];
+            }
+        }
+        foreach ($data as &$m) {
+            $m['providers'] = $byModel[$m['id']] ?? [];
+        }
+        unset($m);
+
         return success(Pagination::wrap($data, $total, $page, $size));
     }
 
