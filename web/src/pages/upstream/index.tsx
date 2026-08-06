@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { ChevronDown, ChevronUp, RefreshCw, Search } from 'lucide-react';
+import { ChevronRight, RefreshCw, Search } from 'lucide-react';
 import { usePagedQuery } from '@/hooks/usePagedQuery';
 import { useUrlQueryState } from '@/hooks/useUrlQueryState';
 import { StatusBadge } from '@/components/StatusBadge';
@@ -9,6 +9,7 @@ import { ModelIcon } from '@/components/ModelIcon';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { DebouncedInput } from '@/components/DebouncedInput';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -174,60 +175,71 @@ function formatPrice(price: number | null): string {
 }
 
 function ModelCard({ m }: { m: AiModelItem }) {
-  const [expanded, setExpanded] = useState(false);
+  const [providerDialogOpen, setProviderDialogOpen] = useState(false);
   const providers = m.providers ?? [];
 
   return (
-    <Card>
-      <CardContent className="p-4">
-        <div className="flex items-start justify-between gap-3">
-          <div className="flex min-w-0 items-center gap-3">
-            <ModelIcon id={m.name} displayName={m.display_name ?? undefined} size={36} />
-            <div className="min-w-0">
-              <div className="truncate font-medium">{m.display_name || m.name}</div>
-              <div className="truncate font-mono text-xs text-muted-foreground">{m.name}</div>
+    <>
+      <Card>
+        <CardContent className="p-4">
+          <div className="flex items-start justify-between gap-3">
+            <div className="flex min-w-0 items-center gap-3">
+              <ModelIcon id={m.name} displayName={m.display_name ?? undefined} size={36} />
+              <div className="min-w-0">
+                <div className="truncate font-medium">{m.display_name || m.name}</div>
+                <div className="truncate font-mono text-xs text-muted-foreground">{m.name}</div>
+              </div>
             </div>
+            <Badge variant={m.billing_mode === 'free_global' ? 'secondary' : 'default'} className="shrink-0 text-[10px]">{m.billing_mode}</Badge>
           </div>
-          <Badge variant={m.billing_mode === 'free_global' ? 'secondary' : 'default'} className="shrink-0 text-[10px]">{m.billing_mode}</Badge>
-        </div>
-        {m.description && <p className="mt-1 line-clamp-2 text-xs text-muted-foreground">{m.description}</p>}
-        <div className="mt-2 flex flex-wrap gap-1">
-          {(m.capabilities ?? []).map((c) => <Badge key={c} variant="outline" className="text-[10px]">{c}</Badge>)}
-        </div>
-        <div className="mt-2 text-xs text-muted-foreground">上下文窗口：{m.context_window_tokens ? formatCompact(m.context_window_tokens) : '—'}</div>
-        <div className="mt-2 border-t pt-2">
+          {m.description && <p className="mt-1 line-clamp-2 text-xs text-muted-foreground">{m.description}</p>}
+          <div className="mt-2 flex flex-wrap gap-1">
+            {(m.capabilities ?? []).map((c) => <Badge key={c} variant="outline" className="text-[10px]">{c}</Badge>)}
+          </div>
+          <div className="mt-2 text-xs text-muted-foreground">上下文窗口：{m.context_window_tokens ? formatCompact(m.context_window_tokens) : '—'}</div>
           <button
             type="button"
-            className="flex w-full items-center justify-between text-[11px] font-medium text-muted-foreground"
-            aria-expanded={expanded}
-            onClick={() => setExpanded((value) => !value)}
+            className="mt-2 flex w-full items-center justify-between border-t pt-2 text-[11px] font-medium text-muted-foreground hover:text-foreground"
+            onClick={() => setProviderDialogOpen(true)}
           >
             <span>供应商映射（{providers.length}）</span>
-            {expanded ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
+            <ChevronRight className="h-3 w-3" />
           </button>
-          {expanded && (
-            providers.length === 0 ? (
-              <div className="mt-1 text-xs text-muted-foreground">暂无可用供应商</div>
+        </CardContent>
+      </Card>
+      <Dialog open={providerDialogOpen} onOpenChange={setProviderDialogOpen}>
+        <DialogContent className="sm:max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>{m.display_name || m.name} · 供应商映射</DialogTitle>
+          </DialogHeader>
+          <div className="max-h-[60vh] overflow-y-auto">
+            {providers.length === 0 ? (
+              <div className="py-6 text-center text-sm text-muted-foreground">暂无可用供应商</div>
             ) : (
-              <div className="mt-1 max-h-60 space-y-1 overflow-y-auto">
+              <div className="space-y-2">
                 {providers.map((p) => (
-                  <div key={p.mapping_id} className="flex flex-wrap items-center gap-x-3 gap-y-0.5 text-[11px]">
-                    <span className="font-medium">{p.provider_display_name || p.provider_name}</span>
-                    <span className="text-muted-foreground">{p.upstream_key_name}</span>
-                    {p.upstream_model_name && p.upstream_model_name !== m.name && (
-                      <span className="font-mono text-muted-foreground">→ {p.upstream_model_name}</span>
-                    )}
-                    <span className="text-muted-foreground">max: {p.max_tokens != null ? formatCompact(p.max_tokens) : '—'}</span>
-                    <span className="text-muted-foreground">in: {formatPrice(p.input_price_per_token)}</span>
-                    <span className="text-muted-foreground">out: {formatPrice(p.output_price_per_token)}</span>
+                  <div key={p.mapping_id} className="rounded-lg border p-3">
+                    <div className="flex items-center justify-between">
+                      <span className="font-medium">{p.provider_display_name || p.provider_name}</span>
+                      <Badge variant="outline" className="text-[10px]">{p.status}</Badge>
+                    </div>
+                    <div className="mt-1.5 grid grid-cols-2 gap-x-4 gap-y-1 text-xs text-muted-foreground">
+                      <div>上游 Key：<span className="text-foreground">{p.upstream_key_name}</span></div>
+                      {p.upstream_model_name && p.upstream_model_name !== m.name && (
+                        <div>转发名：<span className="font-mono text-foreground">{p.upstream_model_name}</span></div>
+                      )}
+                      <div>最大输出：<span className="text-foreground">{p.max_tokens ? formatCompact(p.max_tokens) : '—'}</span></div>
+                      <div>输入价格：<span className="text-foreground">{formatPrice(p.input_price_per_token)}</span></div>
+                      <div>输出价格：<span className="text-foreground">{formatPrice(p.output_price_per_token)}</span></div>
+                    </div>
                   </div>
                 ))}
               </div>
-            )
-          )}
-        </div>
-      </CardContent>
-    </Card>
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
+    </>
   );
 }
 
