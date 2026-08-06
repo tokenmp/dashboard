@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { RefreshCw, Search, ChevronRight } from 'lucide-react';
+import { RefreshCw, Search, ChevronRight, Plus } from 'lucide-react';
 import { getDashboardRedeemCodesApi, getDashboardCodeRedemptionsApi } from '@/api/dashboard';
 import { usePagedQuery } from '@/hooks/usePagedQuery';
 import { useUrlQueryState } from '@/hooks/useUrlQueryState';
@@ -16,9 +16,11 @@ import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sh
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { formatDate, formatDateTime, formatNumber } from '@/utils/format';
 import type { RedeemCodeQuery } from '@/types/redeem';
+import CreateRedeemCodeDialog from './CreateRedeemCodeDialog';
 
 function RedeemCodes() {
   const [detailId, setDetailId] = useState<string | null>(null);
+  const [createOpen, setCreateOpen] = useState(false);
   const { initial: urlInit, write } = useUrlQueryState([
     { name: 'q', key: 'keyword' },
     { name: 'status', key: 'status' },
@@ -36,7 +38,10 @@ function RedeemCodes() {
           <h1 className="text-2xl font-bold">兑换码管理</h1>
           <p className="mt-1 text-sm text-muted-foreground">全平台兑换码 · 共 {formatNumber(total)} 个</p>
         </div>
-        <Button variant="outline" size="sm" onClick={reload} disabled={loading}><RefreshCw className={`mr-1.5 h-4 w-4 ${loading ? 'animate-spin' : ''}`} />刷新</Button>
+        <div className="flex items-center gap-2">
+          <Button size="sm" onClick={() => setCreateOpen(true)}><Plus className="mr-1.5 h-4 w-4" />新建兑换码</Button>
+          <Button variant="outline" size="sm" onClick={reload} disabled={loading}><RefreshCw className={`mr-1.5 h-4 w-4 ${loading ? 'animate-spin' : ''}`} />刷新</Button>
+        </div>
       </div>
 
       <Card><CardContent className="flex flex-wrap items-end gap-3 p-4">
@@ -68,7 +73,7 @@ function RedeemCodes() {
           : list.length === 0 ? <EmptyState className="mx-4 my-6" title="暂无兑换码" />
           : <Table>
               <TableHeader><TableRow>
-                <TableHead>名称</TableHead><TableHead className="w-[140px]">码（脱敏）</TableHead>
+                <TableHead>名称</TableHead><TableHead className="w-[180px]">兑换码</TableHead>
                 <TableHead className="w-[110px]">进度</TableHead><TableHead className="w-[110px]">Token</TableHead>
                 <TableHead className="w-[90px]">状态</TableHead><TableHead className="w-[150px]">有效期</TableHead>
                 <TableHead className="w-[60px]"></TableHead>
@@ -76,7 +81,7 @@ function RedeemCodes() {
               <TableBody>{list.map((c) => (
                 <TableRow key={c.id} className="cursor-pointer" onClick={() => setDetailId(c.id)}>
                   <TableCell className="font-medium">{c.name}</TableCell>
-                  <TableCell className="font-mono text-xs text-muted-foreground">{c.code_prefix ?? ''}…{c.code_suffix ?? ''}</TableCell>
+                  <TableCell className="font-mono text-xs text-muted-foreground">{c.code_plaintext ?? `${c.code_prefix ?? ''}…${c.code_suffix ?? ''}`}</TableCell>
                   <TableCell>
                     <div className="tabular-nums text-xs">{c.redeemed_count}/{c.max_redemptions}</div>
                     <div className="mt-0.5 h-1.5 w-20 overflow-hidden rounded-full bg-muted">
@@ -105,6 +110,7 @@ function RedeemCodes() {
       )}
 
       <RedemptionsDrawer codeId={detailId} onClose={() => setDetailId(null)} />
+      <CreateRedeemCodeDialog open={createOpen} onClose={() => setCreateOpen(false)} onCreated={reload} />
     </div>
   );
 }
@@ -128,7 +134,7 @@ function RedemptionsDrawer({ codeId, onClose }: { codeId: string | null; onClose
               <div className="flex items-center justify-between">
                 <div>
                   <div className="font-medium">{data.code.name}</div>
-                  <div className="font-mono text-xs text-muted-foreground">{data.code.code_prefix ?? ''}…{data.code.code_suffix ?? ''}</div>
+                  <div className="font-mono text-xs text-muted-foreground">{data.code.code_plaintext ?? `${data.code.code_prefix ?? ''}…${data.code.code_suffix ?? ''}`}</div>
                 </div>
                 <div className="text-right">
                   <div className="tabular-nums text-sm">{data.code.redeemed_count}/{data.code.max_redemptions}</div>
@@ -141,7 +147,7 @@ function RedemptionsDrawer({ codeId, onClose }: { codeId: string | null; onClose
               <Table>
                 <TableHeader><TableRow>
                   <TableHead>用户</TableHead><TableHead className="w-[100px] text-right">Token</TableHead>
-                  <TableHead className="w-[120px]">套餐快照</TableHead><TableHead className="w-[140px]">兑换时间</TableHead>
+                  <TableHead className="w-[120px]">套餐快照</TableHead><TableHead className="w-[160px]">码值</TableHead><TableHead className="w-[140px]">兑换时间</TableHead>
                 </TableRow></TableHeader>
                 <TableBody>{data.pagination.list.map((r) => (
                   <TableRow key={r.id}>
@@ -154,6 +160,7 @@ function RedemptionsDrawer({ codeId, onClose }: { codeId: string | null; onClose
                         {r.image_plan_id && <Badge variant="outline" className="text-[10px]">image</Badge>}
                       </div>
                     </TableCell>
+                    <TableCell className="font-mono text-xs text-muted-foreground">{r.code ?? '—'}</TableCell>
                     <TableCell className="font-mono text-xs text-muted-foreground">{formatDateTime(r.created_at)}</TableCell>
                   </TableRow>
                 ))}</TableBody>

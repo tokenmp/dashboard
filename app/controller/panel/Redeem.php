@@ -6,6 +6,8 @@ namespace app\controller\panel;
 use app\BaseController;
 use app\model\RedeemCodeRedemption;
 use app\service\DataScope;
+use app\service\RedeemService;
+use think\exception\HttpException;
 
 /**
  * 用户面：我的兑换（panel，自取）
@@ -27,5 +29,23 @@ class Redeem extends BaseController
             ->select();
 
         return success($list);
+    }
+
+    /**
+     * POST /api/v1/panel/user/redeem
+     * body: { code: string }
+     * 兑换一个兑换码，原子地发放 token 余额与套餐奖励。
+     */
+    public function redeem()
+    {
+        $code = trim((string) $this->request->post('code', ''));
+        if ($code === '') {
+            throw new HttpException(400, '兑换码不能为空');
+        }
+
+        $userId = app('user')->id;
+        $result = (new RedeemService())->redeem($userId, $code);
+
+        return success($result);
     }
 }
