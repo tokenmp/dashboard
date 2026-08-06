@@ -34,6 +34,8 @@ import type {
   RouteGroupItem,
   AiModelItem,
   ModelKeyHealthItem,
+  ModelMappingItem,
+  UpstreamKeyOption,
   UpstreamQuery,
 } from '@/types/upstream';
 import type { UsageLedgerItem, QuotaResult, PriceRuleItem, UsageQuery } from '@/types/usage';
@@ -171,6 +173,57 @@ export async function getModelKeyHealthApi(modelId: string): Promise<ModelKeyHea
     params: { model_id: modelId },
   });
   return res.data.data;
+}
+
+// ── 模型管理 CRUD ──
+export async function createModelApi(payload: ModelPayload): Promise<AiModelItem> {
+  const res = await client.post<ApiResponse<AiModelItem>>('/dashboard/models', payload);
+  return res.data.data;
+}
+export async function updateModelApi(id: string, payload: ModelPayload): Promise<AiModelItem> {
+  const res = await client.put<ApiResponse<AiModelItem>>(`/dashboard/models/${id}`, payload);
+  return res.data.data;
+}
+export async function getModelMappingsApi(id: string): Promise<ModelMappingItem[]> {
+  const res = await client.get<ApiResponse<ModelMappingItem[]>>(`/dashboard/models/${id}/mappings`);
+  return res.data.data;
+}
+export async function createModelMappingApi(modelId: string, payload: MappingPayload): Promise<{ id: string }> {
+  const res = await client.post<ApiResponse<{ id: string }>>(`/dashboard/models/${modelId}/mappings`, payload);
+  return res.data.data;
+}
+export async function updateModelMappingApi(mid: string, payload: MappingPayload): Promise<{ id: string }> {
+  const res = await client.put<ApiResponse<{ id: string }>>(`/dashboard/models/mappings/${mid}`, payload);
+  return res.data.data;
+}
+export async function deleteModelMappingApi(mid: string): Promise<{ id: string }> {
+  const res = await client.delete<ApiResponse<{ id: string }>>(`/dashboard/models/mappings/${mid}`);
+  return res.data.data;
+}
+export async function getModelKeyOptionsApi(keyword?: string): Promise<UpstreamKeyOption[]> {
+  const res = await client.get<ApiResponse<UpstreamKeyOption[]>>('/dashboard/models/key-options', {
+    params: keyword ? { keyword } : {},
+  });
+  return res.data.data;
+}
+
+export interface ModelPayload {
+  name: string;
+  display_name: string | null;
+  description: string | null;
+  billing_mode: string;
+  status: string;
+  capabilities: string[];
+  context_window_tokens: number | null;
+}
+export interface MappingPayload {
+  upstream_key_id: string;
+  upstream_model_name: string | null;
+  input_price_per_token: number | null;
+  output_price_per_token: number | null;
+  max_tokens: number | null;
+  status: string;
+  provider_endpoint_id: string | null;
 }
 
 // ── 全平台用量 + 计费规则 ──
