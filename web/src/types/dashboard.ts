@@ -28,6 +28,10 @@ export interface UserKpi {
   todayRequests: number;
   todayTokens: number;
   todaySuccessRate: number | null;
+  /** 累计总请求数 */
+  totalRequests: number;
+  /** 累计总 Token 消耗 */
+  totalTokens: number;
 }
 
 /** 滚动窗口（编程套餐）：某时段已用请求数与套餐限额 */

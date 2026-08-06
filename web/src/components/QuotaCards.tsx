@@ -10,10 +10,10 @@ const PLAN_LABEL: Record<string, string> = {
 };
 
 /** 额度明细卡组：按套餐模式（window / capped / balance）渲染，dashboard 与 panel 共用。 */
-export function QuotaCards({ items }: { items: QuotaItem[] }) {
+export function QuotaCards({ items, className }: { items: QuotaItem[]; className?: string }) {
   if (items.length === 0) return null;
   return (
-    <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+    <div className={className ?? 'grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3'}>
       {items.map((q) => {
         const name = q.planName || PLAN_LABEL[q.billingPlan] || q.billingPlan;
         return (

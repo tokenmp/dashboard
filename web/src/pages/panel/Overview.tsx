@@ -57,13 +57,13 @@ function OverviewView({ data }: { data: UserOverview }) {
         <StatCard
           label="今日请求"
           value={formatNumber(kpi.todayRequests)}
-          hint={`成功率 ${formatPercent(kpi.todaySuccessRate)}`}
+          hint={`总请求 ${formatNumber(kpi.totalRequests)}`}
           icon={<Activity className="h-4 w-4" />}
         />
         <StatCard
           label="今日 Token 消耗"
           value={formatCompact(kpi.todayTokens)}
-          hint={formatNumber(kpi.todayTokens)}
+          hint={`总消耗 ${formatCompact(kpi.totalTokens)}`}
           icon={<Zap className="h-4 w-4" />}
         />
         {quota.slice(0, 2).map((q) => (
@@ -72,16 +72,7 @@ function OverviewView({ data }: { data: UserOverview }) {
       </div>
 
       {/* 额度明细：每个计费类型一张卡（按套餐类型区分展示） */}
-      {quota.length > 0 && (
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-base">额度明细</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <QuotaCards items={quota} />
-          </CardContent>
-        </Card>
-      )}
+      {quota.length > 0 && <QuotaCards items={quota} className="grid grid-cols-1 gap-4 sm:grid-cols-2" />}
 
       <TrendSection trend={trend} extra={<SuccessNote rate={kpi.todaySuccessRate} />} />
     </>

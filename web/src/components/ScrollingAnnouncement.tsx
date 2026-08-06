@@ -18,6 +18,22 @@ interface Props {
 const ITEM_HEIGHT_REM = 2.5;
 const ROTATION_INTERVAL_MS = 5_000;
 
+/** 带重试的拉取：应对 dev 环境 php -S 单线程并发排队导致的偶发超时。 */
+async function fetchWithRetry<T>(fn: () => Promise<T>, retries = 2): Promise<T> {
+  let lastErr: unknown;
+  for (let attempt = 0; attempt <= retries; attempt++) {
+    try {
+      return await fn();
+    } catch (err) {
+      lastErr = err;
+      // 最后一次不再等待
+      if (attempt === retries) break;
+      await new Promise((r) => setTimeout(r, 300 * (attempt + 1)));
+    }
+  }
+  throw lastErr;
+}
+
 /** Header 中的最新公告垂直轮播。 */
 export function ScrollingAnnouncement({ fetcher, viewAllTo, itemTo, className }: Props) {
   const navigate = useNavigate();
@@ -31,15 +47,18 @@ export function ScrollingAnnouncement({ fetcher, viewAllTo, itemTo, className }:
 
     const load = async () => {
       try {
-        const result = await fetcher({ size: 5, sort: '-created_at' });
+        const result = await fetchWithRetry(() => fetcher({ size: 5, sort: '-created_at' }));
         if (!cancelled) {
           setNotices(result.list.filter((notice) => notice.status === 'published').slice(0, 5));
           setCurrentIndex(0);
           setTransitionEnabled(true);
         }
-      } catch {
-        // 公告不应阻塞 Header 或页面主体的正常展示。
-        if (!cancelled) setNotices([]);
+      } catch (err) {
+        // 公告不应阻塞 Header 或页面主体的正常展示；保留已有数据，仅控制台记录。
+        if (!cancelled) {
+          // eslint-disable-next-line no-console
+          console.warn('[ScrollingAnnouncement] 加载失败：', err);
+        }
       }
     };
 

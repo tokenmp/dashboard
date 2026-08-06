@@ -287,7 +287,7 @@ class QuotaService
             'planName'    => $hasPlan ? $plan['name'] : null,
             'unit'        => 'tokens',
             'mode'        => 'balance',
-            'balance'     => $recharged - $used,
+            'balance'     => max(0, $recharged - $used),
             'used'        => $used,
             'reserved'    => $reserved,
             'available'   => $available,

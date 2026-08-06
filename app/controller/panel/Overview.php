@@ -29,6 +29,7 @@ class Overview extends BaseController
         $todayStart = date('Y-m-d 00:00:00');
 
         $today = $this->todayStats($userId, $todayStart);
+        $total = $this->totalStats($userId);
         $trend = $this->trend30($userId);
         $quota = $this->userQuota($userId);
 
@@ -38,6 +39,8 @@ class Overview extends BaseController
                 'todayRequests'    => $today['total'],
                 'todayTokens'      => $today['tokens'],
                 'todaySuccessRate' => $today['rate'],
+                'totalRequests'    => $total['total'],
+                'totalTokens'      => $total['tokens'],
             ],
             'quota' => $quota,
             'trend' => $trend,
@@ -63,6 +66,22 @@ class Overview extends BaseController
             'success_count' => $successCount,
             'tokens'        => (int) ($row['tokens'] ?? 0),
             'rate'          => $total > 0 ? round($successCount / $total, 4) : null,
+        ];
+    }
+
+    /**
+     * 全量请求统计：总数 / token 消耗（不限时间范围）
+     */
+    private function totalStats(string $userId): array
+    {
+        $row = Db::connect('pgsql')->query(
+            'select count(*) as total, coalesce(sum(total_tokens),0) as tokens'
+            . ' from request_logs where user_id = ?',
+            [$userId]
+        )[0];
+        return [
+            'total'  => (int) ($row['total'] ?? 0),
+            'tokens' => (int) ($row['tokens'] ?? 0),
         ];
     }
 

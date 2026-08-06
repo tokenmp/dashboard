@@ -6,6 +6,7 @@ import { SeverityChip } from '@/components/SeverityChip';
 import { getPanelNotificationsApi, markPanelNotificationReadApi, markAllPanelNotificationsReadApi } from '@/api/panel';
 import type { NotificationItem } from '@/types/system';
 import { cn } from '@/lib/utils';
+import { formatDateTime } from '@/utils/format';
 
 /**
  * 通知铃铛：下拉展示最近通知，带未读计数徽章。
@@ -122,13 +123,13 @@ export function NotificationBell() {
                       {isUnread ? (
                         <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-primary" title="未读" />
                       ) : (
-                        <Check className="h-3.5 w-3.5 shrink-0 text-muted-foreground" title="已读" />
+                        <Check className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
                       )}
                     </div>
                     {n.body && <p className="mt-0.5 line-clamp-2 text-xs text-muted-foreground">{n.body}</p>}
                     <div className="mt-1 flex items-center gap-2">
                       <SeverityChip severity={n.severity} />
-                      <span className="text-[10px] text-muted-foreground">{n.created_at}</span>
+                      <span className="text-[10px] text-muted-foreground">{formatDateTime(n.created_at)}</span>
                       {n.action_url && n.action_label && (
                         <a
                           href={n.action_url}
