@@ -1,10 +1,11 @@
 import { useEffect, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { RefreshCw, Search } from 'lucide-react';
+import { ChevronDown, ChevronUp, RefreshCw, Search } from 'lucide-react';
 import { usePagedQuery } from '@/hooks/usePagedQuery';
 import { useUrlQueryState } from '@/hooks/useUrlQueryState';
 import { StatusBadge } from '@/components/StatusBadge';
 import { EmptyState } from '@/components/EmptyState';
+import { ModelIcon } from '@/components/ModelIcon';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
@@ -175,17 +176,19 @@ function formatPrice(price: number | null): string {
 function ModelCard({ m }: { m: AiModelItem }) {
   const [expanded, setExpanded] = useState(false);
   const providers = m.providers ?? [];
-  const visibleProviders = expanded ? providers : providers.slice(0, 5);
 
   return (
     <Card>
       <CardContent className="p-4">
-        <div className="flex items-start justify-between">
-          <div>
-            <div className="font-medium">{m.display_name || m.name}</div>
-            <div className="font-mono text-xs text-muted-foreground">{m.name}</div>
+        <div className="flex items-start justify-between gap-3">
+          <div className="flex min-w-0 items-center gap-3">
+            <ModelIcon id={m.name} displayName={m.display_name ?? undefined} size={36} />
+            <div className="min-w-0">
+              <div className="truncate font-medium">{m.display_name || m.name}</div>
+              <div className="truncate font-mono text-xs text-muted-foreground">{m.name}</div>
+            </div>
           </div>
-          <Badge variant={m.billing_mode === 'free_global' ? 'secondary' : 'default'} className="text-[10px]">{m.billing_mode}</Badge>
+          <Badge variant={m.billing_mode === 'free_global' ? 'secondary' : 'default'} className="shrink-0 text-[10px]">{m.billing_mode}</Badge>
         </div>
         {m.description && <p className="mt-1 line-clamp-2 text-xs text-muted-foreground">{m.description}</p>}
         <div className="mt-2 flex flex-wrap gap-1">
@@ -193,29 +196,34 @@ function ModelCard({ m }: { m: AiModelItem }) {
         </div>
         <div className="mt-2 text-xs text-muted-foreground">上下文窗口：{m.context_window_tokens ? formatCompact(m.context_window_tokens) : '—'}</div>
         <div className="mt-2 border-t pt-2">
-          <div className="mb-1 text-[11px] font-medium text-muted-foreground">供应商映射（{providers.length}）</div>
-          {providers.length === 0 ? (
-            <div className="text-xs text-muted-foreground">暂无可用供应商</div>
-          ) : (
-            <div className="space-y-1">
-              {visibleProviders.map((p) => (
-                <div key={p.mapping_id} className="flex flex-wrap items-center gap-x-3 gap-y-0.5 text-[11px]">
-                  <span className="font-medium">{p.provider_display_name || p.provider_name}</span>
-                  <span className="text-muted-foreground">{p.upstream_key_name}</span>
-                  {p.upstream_model_name && p.upstream_model_name !== m.name && (
-                    <span className="font-mono text-muted-foreground">→ {p.upstream_model_name}</span>
-                  )}
-                  <span className="text-muted-foreground">max: {p.max_tokens != null ? formatCompact(p.max_tokens) : '—'}</span>
-                  <span className="text-muted-foreground">in: {formatPrice(p.input_price_per_token)}</span>
-                  <span className="text-muted-foreground">out: {formatPrice(p.output_price_per_token)}</span>
-                </div>
-              ))}
-              {providers.length > 5 && (
-                <button type="button" className="text-[11px] text-primary hover:underline" onClick={() => setExpanded((value) => !value)}>
-                  {expanded ? '收起' : `还有 ${providers.length - 5} 个`}
-                </button>
-              )}
-            </div>
+          <button
+            type="button"
+            className="flex w-full items-center justify-between text-[11px] font-medium text-muted-foreground"
+            aria-expanded={expanded}
+            onClick={() => setExpanded((value) => !value)}
+          >
+            <span>供应商映射（{providers.length}）</span>
+            {expanded ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
+          </button>
+          {expanded && (
+            providers.length === 0 ? (
+              <div className="mt-1 text-xs text-muted-foreground">暂无可用供应商</div>
+            ) : (
+              <div className="mt-1 max-h-60 space-y-1 overflow-y-auto">
+                {providers.map((p) => (
+                  <div key={p.mapping_id} className="flex flex-wrap items-center gap-x-3 gap-y-0.5 text-[11px]">
+                    <span className="font-medium">{p.provider_display_name || p.provider_name}</span>
+                    <span className="text-muted-foreground">{p.upstream_key_name}</span>
+                    {p.upstream_model_name && p.upstream_model_name !== m.name && (
+                      <span className="font-mono text-muted-foreground">→ {p.upstream_model_name}</span>
+                    )}
+                    <span className="text-muted-foreground">max: {p.max_tokens != null ? formatCompact(p.max_tokens) : '—'}</span>
+                    <span className="text-muted-foreground">in: {formatPrice(p.input_price_per_token)}</span>
+                    <span className="text-muted-foreground">out: {formatPrice(p.output_price_per_token)}</span>
+                  </div>
+                ))}
+              </div>
+            )
           )}
         </div>
       </CardContent>
