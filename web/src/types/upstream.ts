@@ -137,6 +137,34 @@ export interface AiModelItem {
   providers: AiModelProvider[];
 }
 
+/** 模型映射（管理面，含 disabled） */
+export interface ModelMappingItem {
+  id: string;
+  upstream_key_id: string;
+  upstream_key_name: string;
+  upstream_key_status: string;
+  upstream_model_name: string | null;
+  input_price_per_token: number | null;
+  output_price_per_token: number | null;
+  max_tokens: number | null;
+  status: string;
+  provider_endpoint_id: string | null;
+  provider_name: string;
+  provider_display_name: string | null;
+  protocol: string | null;
+  endpoint_path: string | null;
+  created_at: string;
+}
+
+/** 可选上游 key */
+export interface UpstreamKeyOption {
+  id: string;
+  name: string;
+  status: string;
+  provider_name: string;
+  provider_display_name: string | null;
+}
+
 /** 通用列表查询 */
 export interface UpstreamQuery {
   page?: number;

@@ -149,7 +149,19 @@ Route::group('api/v1', function () {
                     Route::get('routes', 'dashboard/Upstream/routes');
                     Route::get('model-key-health', 'dashboard/Upstream/modelKeyHealth');
                 });
-                Route::get('models', 'dashboard/Upstream/models');
+                // 平台模型 CRUD
+                Route::group('models', function () {
+                    Route::get('', 'dashboard/Model/list');
+                    Route::post('', 'dashboard/Model/create');
+                    Route::get('key-options', 'dashboard/Model/keyOptions');
+                    Route::group('mappings', function () {
+                        Route::put(':mid', 'dashboard/Model/updateMapping')->pattern(['mid' => '[\w\-]+']);
+                        Route::delete(':mid', 'dashboard/Model/deleteMapping')->pattern(['mid' => '[\w\-]+']);
+                    });
+                    Route::get(':id/mappings', 'dashboard/Model/mappings')->pattern(['id' => '[\w\-]+']);
+                    Route::post(':id/mappings', 'dashboard/Model/createMapping')->pattern(['id' => '[\w\-]+']);
+                    Route::put(':id', 'dashboard/Model/update')->pattern(['id' => '[\w\-]+']);
+                });
 
                 // 全平台用量 + 计费规则
                 Route::group('usage', function () {

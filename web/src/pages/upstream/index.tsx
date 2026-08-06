@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { ChevronRight, RefreshCw, Search } from 'lucide-react';
+import { ChevronRight, Pencil, Plus, RefreshCw, Search, Settings2 } from 'lucide-react';
 import { usePagedQuery } from '@/hooks/usePagedQuery';
 import { useUrlQueryState } from '@/hooks/useUrlQueryState';
 import { StatusBadge } from '@/components/StatusBadge';
@@ -19,7 +19,10 @@ import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from '@/components/ui/table';
 import { formatCompact, formatNumber } from '@/utils/format';
+import { billingLabel, billingVariant } from '@/utils/billing';
 import { KeysTab } from './KeysTab';
+import { ModelEditDialog } from './ModelEditDialog';
+import { MappingManageDialog } from './MappingManageDialog';
 import type { AiModelItem, UpstreamQuery } from '@/types/upstream';
 
 function Upstream() {
@@ -176,7 +179,7 @@ function formatPrice(price: number | null): string {
   return `¥${perMillion.toFixed(2)}/M`;
 }
 
-function ModelCard({ m }: { m: AiModelItem }) {
+function ModelCard({ m, onEdit, onManageMappings }: { m: AiModelItem; onEdit: () => void; onManageMappings: () => void }) {
   const [providerDialogOpen, setProviderDialogOpen] = useState(false);
   const [healthData, setHealthData] = useState<Record<string, number[]>>({});
   const [healthLoading, setHealthLoading] = useState(false);
@@ -229,7 +232,12 @@ function ModelCard({ m }: { m: AiModelItem }) {
                 <div className="truncate font-mono text-xs text-muted-foreground">{m.name}</div>
               </div>
             </div>
-            <Badge variant={m.billing_mode === 'free_global' ? 'secondary' : 'default'} className="shrink-0 text-[10px]">{m.billing_mode}</Badge>
+            <div className="flex shrink-0 items-center gap-1">
+              <Badge variant={billingVariant(m.billing_mode)} className="text-[10px]">{billingLabel(m.billing_mode)}</Badge>
+              <Button variant="ghost" size="sm" className="h-7 px-2" onClick={onEdit}>
+                <Pencil className="h-3.5 w-3.5" />
+              </Button>
+            </div>
           </div>
           {m.description && <p className="mt-1 line-clamp-2 text-xs text-muted-foreground">{m.description}</p>}
           <div className="mt-2 flex flex-wrap gap-1">
@@ -239,14 +247,16 @@ function ModelCard({ m }: { m: AiModelItem }) {
             <span>上下文：<span className="text-foreground">{m.context_window_tokens ? formatCompact(m.context_window_tokens) : '—'}</span></span>
             <span>最大输出：<span className="text-foreground">{(() => { const mo = Math.max(0, ...providers.map(p => p.max_tokens ?? 0)); return mo ? formatCompact(mo) : '—'; })()}</span></span>
           </div>
-          <button
-            type="button"
-            className="mt-2 flex w-full items-center justify-between border-t pt-2 text-[11px] font-medium text-muted-foreground hover:text-foreground"
-            onClick={() => setProviderDialogOpen(true)}
-          >
-            <span>供应商映射（{providers.length}）</span>
-            <ChevronRight className="h-3 w-3" />
-          </button>
+          <div className="mt-2 flex w-full items-center justify-between border-t pt-2 text-[11px] font-medium text-muted-foreground">
+            <button type="button" className="flex items-center gap-1 hover:text-foreground" onClick={() => setProviderDialogOpen(true)}>
+              <span>供应商映射（{providers.length}）</span>
+              <ChevronRight className="h-3 w-3" />
+            </button>
+            <button type="button" className="flex items-center gap-1 hover:text-foreground" onClick={onManageMappings}>
+              <Settings2 className="h-3 w-3" />
+              <span>映射管理</span>
+            </button>
+          </div>
         </CardContent>
       </Card>
       <Dialog open={providerDialogOpen} onOpenChange={setProviderDialogOpen}>
@@ -341,6 +351,16 @@ function ModelsTab() {
   const { list, total, page, size, loading, error, params, reload, setPage, setFilters } =
     usePagedQuery(getModelsApiLazy, { initial: { size: 20, sort: 'created_at', ...urlInit } as UpstreamQuery });
   useEffect(() => { write(params); }, [params]);
+  const [editModel, setEditModel] = useState<AiModelItem | null>(null);
+  const [editOpen, setEditOpen] = useState(false);
+  const [manageModel, setManageModel] = useState<AiModelItem | null>(null);
+  const [manageOpen, setManageOpen] = useState(false);
+  // 监听映射刷新事件（新建映射后刷新列表）
+  useEffect(() => {
+    const handler = () => reload();
+    window.addEventListener('mapping-refresh', handler);
+    return () => window.removeEventListener('mapping-refresh', handler);
+  }, [reload]);
   return (
     <div className="space-y-3">
       <Card><CardContent className="flex items-end gap-3 p-4">
@@ -360,14 +380,24 @@ function ModelsTab() {
           <ModelBillingSelect value={params.billingMode ?? 'all'} onChange={(v) => setFilters({ billingMode: v === 'all' ? '' : v })} />
         </div>
         <Button variant="outline" size="sm" onClick={reload} disabled={loading}><RefreshCw className={`mr-1.5 h-4 w-4 ${loading ? 'animate-spin' : ''}`} />刷新</Button>
+        <Button size="sm" onClick={() => { setEditModel(null); setEditOpen(true); }}><Plus className="mr-1.5 h-4 w-4" />新建模型</Button>
       </CardContent></Card>
       {error && <Card className="border-destructive"><CardContent className="py-3 text-sm text-destructive">{error}</CardContent></Card>}
       {loading && list.length === 0 ? <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">{Array.from({ length: 6 }).map((_, i) => <Skeleton key={i} className="h-32" />)}</div>
         : list.length === 0 ? <EmptyState title="暂无模型" />
         : <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
-            {list.map((m) => <ModelCard key={m.id} m={m} />)}
+            {list.map((m) => (
+              <ModelCard
+                key={m.id}
+                m={m}
+                onEdit={() => { setEditModel(m); setEditOpen(true); }}
+                onManageMappings={() => { setManageModel(m); setManageOpen(true); }}
+              />
+            ))}
           </div>}
       <Pager page={page} size={size} total={total} loading={loading} setPage={setPage} />
+      <ModelEditDialog open={editOpen} onOpenChange={setEditOpen} model={editModel} onSaved={reload} />
+      <MappingManageDialog open={manageOpen} onOpenChange={setManageOpen} model={manageModel} />
     </div>
   );
 }
@@ -380,8 +410,8 @@ function ModelBillingSelect({ value, onChange }: { value: string; onChange: (v: 
       <SelectTrigger><SelectValue placeholder="全部" /></SelectTrigger>
       <SelectContent>
         <SelectItem value="all">全部</SelectItem>
-        <SelectItem value="billable">billable</SelectItem>
-        <SelectItem value="free_global">free_global</SelectItem>
+        <SelectItem value="billable">计费</SelectItem>
+        <SelectItem value="free_global">不计费</SelectItem>
       </SelectContent>
     </Select>
   );
