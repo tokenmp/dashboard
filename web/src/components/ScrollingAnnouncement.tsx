@@ -34,10 +34,17 @@ async function fetchWithRetry<T>(fn: () => Promise<T>, retries = 2): Promise<T> 
   throw lastErr;
 }
 
+/**
+ * 模块级公告缓存：按 fetcher 引用缓存最近一次结果。
+ * 避免路由切换导致组件重挂时清空公告（短暂空白/闪烁）。
+ * 挂载时先用缓存立即渲染，再后台刷新。
+ */
+const noticeCache = new WeakMap<(...a: unknown[]) => Promise<unknown>, AnnouncementItem[]>();
+
 /** Header 中的最新公告垂直轮播。 */
 export function ScrollingAnnouncement({ fetcher, viewAllTo, itemTo, className }: Props) {
   const navigate = useNavigate();
-  const [notices, setNotices] = useState<AnnouncementItem[]>([]);
+  const [notices, setNotices] = useState<AnnouncementItem[]>(() => noticeCache.get(fetcher as never) ?? []);
   const [currentIndex, setCurrentIndex] = useState(0);
   const [paused, setPaused] = useState(false);
   const [transitionEnabled, setTransitionEnabled] = useState(true);
@@ -49,9 +56,11 @@ export function ScrollingAnnouncement({ fetcher, viewAllTo, itemTo, className }:
       try {
         const result = await fetchWithRetry(() => fetcher({ size: 5, sort: '-created_at' }));
         if (!cancelled) {
-          setNotices(result.list.filter((notice) => notice.status === 'published').slice(0, 5));
+          const next = result.list.filter((notice) => notice.status === 'published').slice(0, 5);
+          setNotices(next);
           setCurrentIndex(0);
           setTransitionEnabled(true);
+          noticeCache.set(fetcher as never, next);
         }
       } catch (err) {
         // 公告不应阻塞 Header 或页面主体的正常展示；保留已有数据，仅控制台记录。
@@ -72,7 +81,8 @@ export function ScrollingAnnouncement({ fetcher, viewAllTo, itemTo, className }:
     if (notices.length <= 1 || paused) return;
 
     const timer = window.setInterval(() => {
-      setCurrentIndex((index) => index + 1);
+      // 到达末尾副本后，先无动画复位到 0，下一轮再滚动；避免索引无界增长。
+      setCurrentIndex((index) => (index >= notices.length ? 0 : index + 1));
     }, ROTATION_INTERVAL_MS);
 
     return () => window.clearInterval(timer);
