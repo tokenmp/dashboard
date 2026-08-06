@@ -7,6 +7,9 @@ export interface RequestLogItem {
   id: string;
   user_id: string | null;
   user_api_key_id: string | null;
+  user_email: string | null;
+  /** 使用的 API Key 名称（列表 join user_api_keys） */
+  api_key_name: string | null;
   request_id: string | null;
   trace_id: string | null;
   model_name: string | null;
@@ -59,7 +62,9 @@ export interface RequestAttemptItem {
   request_log_id: string;
   upstream_key_id: string | null;
   provider_id: string | null;
+  provider_name: string | null;
   upstream_url: string | null;
+  upstream_key_name: string | null;
   status_code: number | null;
   latency_ms: number | null;
   error_code: string | null;
@@ -111,6 +116,7 @@ export interface RequestLogQuery {
   usageStatus?: string;
   success?: string;
   userId?: string;
+  userApiKeyId?: string;
   from?: string;
   to?: string;
   sort?: string;

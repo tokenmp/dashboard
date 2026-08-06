@@ -1,14 +1,15 @@
 import { useEffect, useState } from 'react';
-import { RefreshCw, Search, ChevronRight, Clock, Cpu, Activity, AlertTriangle } from 'lucide-react';
-import { getPanelRequestsApi, getPanelRequestDetailApi } from '@/api/panel';
+import { RefreshCw, Search, ChevronRight, Clock, Cpu, Activity, AlertTriangle, Network, Brain, Zap, Wallet, CheckCircle2, Info } from 'lucide-react';
+import { getPanelRequestsApi, getPanelRequestDetailApi, getPanelKeysApi } from '@/api/panel';
 import { usePagedQuery } from '@/hooks/usePagedQuery';
 import { useUrlQueryState } from '@/hooks/useUrlQueryState';
 import { useAsync } from '@/hooks/useAsync';
 import { StatusBadge } from '@/components/StatusBadge';
+import { ModelIcon } from '@/components/ModelIcon';
 import { EmptyState } from '@/components/EmptyState';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent } from '@/components/ui/card';
 import { DebouncedInput } from '@/components/DebouncedInput';
 import { Skeleton } from '@/components/ui/skeleton';
 import {
@@ -38,16 +39,15 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from '@/components/ui/tooltip';
-import { formatCompact, formatNumber } from '@/utils/format';
+import { formatCompact, formatDateTime, formatNumber } from '@/utils/format';
 import type {
   RequestLogQuery,
   RequestLogDetail,
   RequestAttemptItem,
 } from '@/types/request-log';
+import type { UserApiKeyItem } from '@/types/user';
 
 const PROTOCOLS = ['openai', 'anthropic', 'openai_chat', 'openai_responses', 'anthropic_messages', 'image_generation', 'tokenmp_gateway', 'custom'];
-const BILLING_PLANS = ['coding', 'token', 'image', 'free'];
-const USAGE_STATUSES = ['final', 'pending', 'estimated', 'missing'];
 
 /** 日期输入校验：空值或标准 YYYY-MM-DD（年份恰好 4 位），拒绝 6 位年份等异常输入 */
 const isDate = (v: string) => v === '' || /^\d{4}-\d{2}-\d{2}$/.test(v);
@@ -61,11 +61,9 @@ function Requests() {
 
   const { initial: urlInit, write } = useUrlQueryState([
     { name: 'q', key: 'keyword' },
-    { name: 'model', key: 'model' },
     { name: 'protocol', key: 'protocol' },
-    { name: 'billing', key: 'billingPlan' },
-    { name: 'usage', key: 'usageStatus' },
     { name: 'success', key: 'success' },
+    { name: 'key', key: 'userApiKeyId' },
     { name: 'from', key: 'from' },
     { name: 'to', key: 'to' },
     { name: 'page', key: 'page', type: 'number', default: 1 },
@@ -76,6 +74,9 @@ function Requests() {
       initial: { size: 20, sort: '-created_at', ...urlInit } as RequestLogQuery,
     });
   useEffect(() => { write(params); }, [params]);
+
+  const { data: keysData } = useAsync(getPanelKeysApi, []);
+  const keys = keysData ?? [];
 
   return (
     <div className="space-y-4">
@@ -95,8 +96,9 @@ function Requests() {
       <FiltersBar
         params={params}
         onFilter={setFilters}
+        keys={keys}
         onReset={() =>
-          setFilters({ keyword: '', model: '', protocol: '', billingPlan: '', usageStatus: '', success: '', from: '', to: '' })
+          setFilters({ keyword: '', protocol: '', success: '', userApiKeyId: '', from: '', to: '' })
         }
       />
 
@@ -121,13 +123,18 @@ function Requests() {
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead className="w-[160px]">时间</TableHead>
-                  <TableHead>模型</TableHead>
+                  <TableHead className="w-[140px]">ID</TableHead>
+                  <TableHead>密钥</TableHead>
                   <TableHead className="w-[110px]">协议</TableHead>
-                  <TableHead className="w-[90px]">计费</TableHead>
-                  <TableHead className="w-[90px]">状态</TableHead>
+                  <TableHead>模型</TableHead>
+                  <TableHead className="w-[70px]">类型</TableHead>
+                  <TableHead className="w-[80px]">思考</TableHead>
                   <TableHead className="w-[110px] text-right">Token</TableHead>
+                  <TableHead className="w-[90px] text-right">推理速度</TableHead>
+                  <TableHead className="w-[90px] text-right">首字输出</TableHead>
                   <TableHead className="w-[90px] text-right">耗时</TableHead>
+                  <TableHead className="w-[90px]">状态</TableHead>
+                  <TableHead className="w-[160px]">时间</TableHead>
                   <TableHead className="w-[60px]"></TableHead>
                 </TableRow>
               </TableHeader>
@@ -135,38 +142,54 @@ function Requests() {
                 {list.map((r) => (
                   <TableRow
                     key={r.id}
-                    className="cursor-pointer"
+                    className="cursor-pointer h-12"
                     onClick={() => setDetailId(r.id)}
                   >
-                    <TableCell className="font-mono text-xs text-muted-foreground">
-                      {r.created_at}
+                    <TableCell className="font-mono text-sm text-muted-foreground">
+                      {r.request_id ? r.request_id.slice(-10) : '—'}
+                    </TableCell>
+                    <TableCell className="text-sm text-muted-foreground">
+                      <span className="max-w-[140px] truncate" title={r.api_key_name ?? ''}>{r.api_key_name ?? '—'}</span>
+                    </TableCell>
+                    <TableCell>
+                      <span className="text-sm">{r.protocol ?? '—'}</span>
                     </TableCell>
                     <TableCell className="font-medium">
                       <div className="flex items-center gap-1.5">
+                        <ModelIcon id={r.model_name ?? ''} displayName={r.model_name ?? undefined} size={20} />
                         <span className="max-w-[220px] truncate">{r.model_name || '—'}</span>
-                        {r.stream && (
-                          <Badge variant="outline" className="px-1 py-0 text-[10px]">stream</Badge>
-                        )}
-                        {r.thinking_mode && (
-                          <TooltipProvider>
-                            <Tooltip>
-                              <TooltipTrigger asChild>
-                                <Badge variant="outline" className="px-1 py-0 text-[10px]">思考</Badge>
-                              </TooltipTrigger>
-                              <TooltipContent>
-                                思考强度：{r.thinking_effort ?? '—'}
-                                {r.thinking_effort_degraded ? '（已降级）' : ''}
-                              </TooltipContent>
-                            </Tooltip>
-                          </TooltipProvider>
-                        )}
                       </div>
                     </TableCell>
                     <TableCell>
-                      <span className="text-xs">{r.protocol ?? '—'}</span>
+                      {r.stream
+                        ? <Badge variant="secondary" className="px-1.5 py-0 text-sm font-normal text-muted-foreground">流式</Badge>
+                        : <span className="text-sm text-muted-foreground">—</span>}
                     </TableCell>
-                    <TableCell>
-                      <Badge variant="secondary" className="text-[10px]">{r.billing_plan ?? '—'}</Badge>
+                    <TableCell className="text-sm">
+                      {r.thinking_mode ? (
+                        <span className="inline-flex items-center gap-1">
+                          <span>{r.thinking_effort ?? '—'}</span>
+                          {r.thinking_effort_degraded && (
+                            <Badge variant="outline" className="px-1 py-0 text-sm text-amber-600">降级</Badge>
+                          )}
+                        </span>
+                      ) : (
+                        <span className="text-muted-foreground">—</span>
+                      )}
+                    </TableCell>
+                    <TableCell className="text-right tabular-nums">
+                      {r.total_tokens !== null ? formatCompact(r.total_tokens) : '—'}
+                    </TableCell>
+                    <TableCell className="text-right tabular-nums text-sm text-muted-foreground">
+                      {r.ttft_ms !== null && r.latency_ms !== null && r.latency_ms > r.ttft_ms && r.output_tokens
+                        ? formatNumber(Math.round((r.output_tokens / (r.latency_ms - r.ttft_ms)) * 1000))
+                        : '—'}
+                    </TableCell>
+                    <TableCell className="text-right tabular-nums text-sm text-muted-foreground">
+                      {r.ttft_ms !== null ? `${formatNumber(r.ttft_ms)}ms` : '—'}
+                    </TableCell>
+                    <TableCell className="text-right tabular-nums text-sm text-muted-foreground">
+                      {r.latency_ms !== null ? `${formatNumber(r.latency_ms)}ms` : '—'}
                     </TableCell>
                     <TableCell>
                       <StatusBadge
@@ -174,11 +197,8 @@ function Requests() {
                         map={{ pending: { variant: 'outline', label: '进行中' } }}
                       />
                     </TableCell>
-                    <TableCell className="text-right tabular-nums">
-                      {r.total_tokens !== null ? formatCompact(r.total_tokens) : '—'}
-                    </TableCell>
-                    <TableCell className="text-right tabular-nums text-xs text-muted-foreground">
-                      {r.latency_ms !== null ? `${formatNumber(r.latency_ms)}ms` : '—'}
+                    <TableCell className="font-mono text-sm text-muted-foreground">
+                      {formatDateTime(r.created_at)}
                     </TableCell>
                     <TableCell>
                       <ChevronRight className="h-4 w-4 text-muted-foreground" />
@@ -219,37 +239,48 @@ function Requests() {
 function FiltersBar({
   params,
   onFilter,
+  keys,
   onReset,
 }: {
   params: RequestLogQuery;
   onFilter: (f: Partial<RequestLogQuery>) => void;
+  keys: UserApiKeyItem[];
   onReset: () => void;
 }) {
   return (
     <Card>
       <CardContent className="flex flex-wrap items-end gap-3 p-4">
         <div className="flex-1 min-w-[200px]">
-          <label className="mb-1 block text-xs text-muted-foreground">关键字（request_id / trace_id）</label>
+          <label className="mb-1 block text-sm text-muted-foreground">关键字（request_id / trace_id / 模型名）</label>
           <div className="relative">
             <Search className="absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
             <DebouncedInput
               className="pl-8"
-              placeholder="搜索 request_id / trace_id"
+              placeholder="搜索 request_id / trace_id / 模型名"
               value={params.keyword ?? ''}
               onDebouncedChange={(v) => onFilter({ keyword: v })}
             />
           </div>
         </div>
         <div className="w-[160px]">
-          <label className="mb-1 block text-xs text-muted-foreground">模型名</label>
-          <DebouncedInput
-            placeholder="如 gpt-4o"
-            value={params.model ?? ''}
-            onDebouncedChange={(v) => onFilter({ model: v })}
-          />
+          <label className="mb-1 block text-sm text-muted-foreground">密钥</label>
+          <Select value={params.userApiKeyId ?? 'all'} onValueChange={(v) => onFilter({ userApiKeyId: v === 'all' ? '' : v })}>
+            <SelectTrigger><span className="truncate">{params.userApiKeyId ? (keys.find((k) => k.id === params.userApiKeyId)?.name ?? '全部') : '全部'}</span></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">全部</SelectItem>
+              {keys.map((k) => (
+                <SelectItem key={k.id} value={k.id}>
+                  <div className="flex flex-col">
+                    <span>{k.name}</span>
+                    <span className="text-muted-foreground">{k.key_prefix}{'•'.repeat(6)}{k.key_suffix}</span>
+                  </div>
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
         </div>
         <div className="w-[140px]">
-          <label className="mb-1 block text-xs text-muted-foreground">协议</label>
+          <label className="mb-1 block text-sm text-muted-foreground">协议</label>
           <Select value={params.protocol ?? 'all'} onValueChange={(v) => onFilter({ protocol: v === 'all' ? '' : v })}>
             <SelectTrigger><SelectValue placeholder="全部" /></SelectTrigger>
             <SelectContent>
@@ -259,27 +290,7 @@ function FiltersBar({
           </Select>
         </div>
         <div className="w-[120px]">
-          <label className="mb-1 block text-xs text-muted-foreground">计费类型</label>
-          <Select value={params.billingPlan ?? 'all'} onValueChange={(v) => onFilter({ billingPlan: v === 'all' ? '' : v })}>
-            <SelectTrigger><SelectValue placeholder="全部" /></SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">全部</SelectItem>
-              {BILLING_PLANS.map((p) => <SelectItem key={p} value={p}>{p}</SelectItem>)}
-            </SelectContent>
-          </Select>
-        </div>
-        <div className="w-[130px]">
-          <label className="mb-1 block text-xs text-muted-foreground">用量状态</label>
-          <Select value={params.usageStatus ?? 'all'} onValueChange={(v) => onFilter({ usageStatus: v === 'all' ? '' : v })}>
-            <SelectTrigger><SelectValue placeholder="全部" /></SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">全部</SelectItem>
-              {USAGE_STATUSES.map((s) => <SelectItem key={s} value={s}>{s}</SelectItem>)}
-            </SelectContent>
-          </Select>
-        </div>
-        <div className="w-[120px]">
-          <label className="mb-1 block text-xs text-muted-foreground">结果</label>
+          <label className="mb-1 block text-sm text-muted-foreground">状态</label>
           <Select value={params.success ?? 'all'} onValueChange={(v) => onFilter({ success: v === 'all' ? '' : v })}>
             <SelectTrigger><SelectValue placeholder="全部" /></SelectTrigger>
             <SelectContent>
@@ -290,11 +301,11 @@ function FiltersBar({
           </Select>
         </div>
         <div className="w-[150px]">
-          <label className="mb-1 block text-xs text-muted-foreground">起始日期</label>
+          <label className="mb-1 block text-sm text-muted-foreground">起始日期</label>
           <DebouncedInput type="date" value={params.from ?? ''} acceptValue={isDate} onDebouncedChange={(v) => onFilter({ from: v })} />
         </div>
         <div className="w-[150px]">
-          <label className="mb-1 block text-xs text-muted-foreground">结束日期</label>
+          <label className="mb-1 block text-sm text-muted-foreground">结束日期</label>
           <DebouncedInput type="date" value={params.to ?? ''} acceptValue={isDate} onDebouncedChange={(v) => onFilter({ to: v })} />
         </div>
         <Button variant="ghost" size="sm" onClick={onReset}>重置</Button>
@@ -335,88 +346,130 @@ function DetailDrawer({ id, onClose }: { id: string | null; onClose: () => void 
 }
 
 function DetailBasic({ log }: { log: RequestLogDetail }) {
-  const rows: { label: string; value: React.ReactNode }[] = [
-    { label: '模型', value: log.model_name || '—' },
-    { label: '请求模型', value: log.requested_model_name || '—' },
-    { label: '解析模型', value: log.resolved_model_name || '—' },
-    { label: '协议', value: log.protocol || '—' },
-    { label: '路由组', value: log.route_group_name || 'default' },
-    { label: '计费', value: <Badge variant="secondary">{log.billing_plan ?? '—'}</Badge> },
-    { label: '计费来源', value: log.billing_source ?? '—' },
-    { label: '计费套餐', value: log.billing_plan_name ?? '—' },
-    { label: '状态码', value: log.final_status_code ?? '—' },
-    { label: '成功', value: <StatusBadge status={log.success === null ? 'pending' : log.success ? 'success' : 'failed'} map={{ pending: { variant: 'outline', label: '进行中' } }} /> },
-    { label: '用量状态', value: <StatusBadge status={log.usage_status} /> },
-    { label: '流式', value: log.stream ? '是' : '否' },
-    { label: '思考模式', value: log.thinking_mode ? `${log.thinking_effort ?? '—'}${log.thinking_effort_degraded ? '（已降级）' : ''}` : '否' },
-    { label: '创建时间', value: <span className="font-mono text-xs">{log.created_at}</span> },
-    { label: '完成时间', value: <span className="font-mono text-xs">{log.completed_at ?? '—'}</span> },
-  ];
-
   const tokens: { label: string; value: number | null }[] = [
     { label: '输入', value: log.input_tokens },
     { label: '输出', value: log.output_tokens },
     { label: '总计', value: log.total_tokens },
-    { label: '缓存', value: log.cache_tokens },
   ];
+
+  const failed = log.success === false;
+  const tps = log.ttft_ms !== null && log.latency_ms !== null && log.latency_ms > log.ttft_ms && log.output_tokens
+    ? Math.round((log.output_tokens / (log.latency_ms - log.ttft_ms)) * 1000)
+    : null;
 
   return (
     <>
-      {/* 请求 ID 单独置顶 */}
-      <div className="rounded-lg border bg-muted/40 p-3">
-        <div className="text-xs text-muted-foreground">请求 ID</div>
-        <div className="mt-0.5 break-all font-mono text-sm">{log.request_id || '—'}</div>
-      </div>
-      <div className="grid grid-cols-3 gap-3">
-        {tokens.map((t) => (
-          <div key={t.label} className="rounded-lg border p-3">
-            <div className="flex items-center gap-1 text-xs text-muted-foreground">
-              <Cpu className="h-3 w-3" />{t.label} Token
-            </div>
-            <div className="mt-1 text-lg font-semibold tabular-nums">{formatCompact(t.value)}</div>
-          </div>
-        ))}
-      </div>
-      {(log.latency_ms !== null || log.ttft_ms !== null) && (
-        <div className="grid grid-cols-2 gap-3">
-          <div className="rounded-lg border p-3">
-            <div className="flex items-center gap-1 text-xs text-muted-foreground"><Clock className="h-3 w-3" />总耗时</div>
-            <div className="mt-1 text-lg font-semibold tabular-nums">{log.latency_ms !== null ? `${formatNumber(log.latency_ms)}ms` : '—'}</div>
-          </div>
-          <div className="rounded-lg border p-3">
-            <div className="flex items-center gap-1 text-xs text-muted-foreground"><Activity className="h-3 w-3" />首 Token</div>
-            <div className="mt-1 text-lg font-semibold tabular-nums">{log.ttft_ms !== null ? `${formatNumber(log.ttft_ms)}ms` : '—'}</div>
-          </div>
+      {/* 请求 ID */}
+      <div className="rounded-lg border p-3">
+        <div className="flex flex-wrap items-center gap-2">
+          <pre className="font-mono text-sm whitespace-pre-wrap break-all">{log.request_id || '—'}</pre>
+          {log.stream && <Badge variant="secondary" className="text-sm font-normal text-muted-foreground">流式</Badge>}
+          {log.protocol && <Badge variant="secondary" className="text-sm font-normal text-muted-foreground">{log.protocol}</Badge>}
         </div>
-      )}
-      <Card>
-        <CardHeader className="pb-2"><CardTitle className="text-sm">基本信息</CardTitle></CardHeader>
-        <CardContent>
-          <dl className="grid grid-cols-2 gap-x-4 gap-y-2 text-sm">
-            {rows.map((r) => (
-              <div key={r.label} className="flex justify-between gap-2 border-b border-dashed py-1">
-                <dt className="text-muted-foreground">{r.label}</dt>
-                <dd className="text-right">{r.value}</dd>
-              </div>
-            ))}
-          </dl>
-        </CardContent>
-      </Card>
-      {log.error_code && (
-        <Card className="border-destructive">
-          <CardContent className="py-3">
+      </div>
+      {/* 模型与路由 */}
+      <div className="grid grid-cols-3 gap-3">
+        <div className="rounded-lg border p-3">
+          <div className="flex items-center gap-1 text-sm text-muted-foreground"><Cpu className="h-3 w-3" />模型</div>
+          <div className="mt-1 truncate font-medium">{log.model_name || '—'}</div>
+        </div>
+        <div className="rounded-lg border p-3">
+          <div className="flex items-center gap-1 text-sm text-muted-foreground"><Network className="h-3 w-3" />路由</div>
+          <div className="mt-1 truncate font-medium">{log.route_group_name || 'default'}</div>
+        </div>
+        <div className="rounded-lg border p-3">
+          <div className="flex items-center gap-1 text-sm text-muted-foreground"><Brain className="h-3 w-3" />思考程度</div>
+          <div className="mt-1 font-medium">{log.thinking_mode ? (log.thinking_effort ?? '—') : '—'}</div>
+        </div>
+      </div>
+      {/* Token / 失败信息 */}
+      {failed ? (
+        log.error_code ? (
+          <div className="rounded-lg border border-destructive p-3">
             <div className="flex items-center gap-2 text-sm font-medium text-destructive">
               <AlertTriangle className="h-4 w-4" />{log.error_code}
             </div>
-            {log.error_message && <p className="mt-1 text-xs text-muted-foreground">{log.error_message}</p>}
+            {log.error_message && <p className="mt-1 text-sm text-muted-foreground">{log.error_message}</p>}
             {(log.provider_error_code || log.provider_http_status) && (
-              <p className="mt-1 text-xs text-muted-foreground">
+              <p className="mt-1 text-sm text-muted-foreground">
                 上游：{log.provider_error_code ?? '—'} / HTTP {log.provider_http_status ?? '—'}
               </p>
             )}
-          </CardContent>
-        </Card>
+          </div>
+        ) : null
+      ) : (
+        <div className="grid grid-cols-3 gap-3">
+          {tokens.map((t) => (
+            <div key={t.label} className="rounded-lg border p-3">
+              <div className="flex items-center justify-between gap-1 text-sm text-muted-foreground">
+                <span className="flex items-center gap-1"><Cpu className="h-3 w-3" />{t.label} Token</span>
+                {t.label === '输入' && log.cache_tokens ? (
+                  <TooltipProvider>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <Info className="h-3.5 w-3.5 cursor-help" />
+                      </TooltipTrigger>
+                      <TooltipContent>输入 + 缓存</TooltipContent>
+                    </Tooltip>
+                  </TooltipProvider>
+                ) : null}
+              </div>
+              <div className="mt-1 flex items-baseline gap-1.5">
+                {t.label === '输入' && log.cache_tokens != null && log.input_tokens != null ? (
+                  <>
+                    <span className="text-lg font-semibold tabular-nums">{formatCompact(Math.max(0, log.input_tokens - log.cache_tokens))}</span>
+                    <span className="text-sm text-muted-foreground tabular-nums">+ {formatCompact(log.cache_tokens)}</span>
+                  </>
+                ) : (
+                  <span className="text-lg font-semibold tabular-nums">{formatCompact(t.value)}</span>
+                )}
+              </div>
+            </div>
+          ))}
+        </div>
       )}
+      {/* 耗时 */}
+      {(log.latency_ms !== null || log.ttft_ms !== null) && (
+        <div className="grid grid-cols-3 gap-3">
+          <div className="rounded-lg border p-3">
+            <div className="flex items-center gap-1 text-sm text-muted-foreground"><Activity className="h-3 w-3" />首字输出</div>
+            <div className="mt-1 text-lg font-semibold tabular-nums">{log.ttft_ms !== null ? `${formatNumber(log.ttft_ms)}ms` : '—'}</div>
+          </div>
+          <div className="rounded-lg border p-3">
+            <div className="flex items-center gap-1 text-sm text-muted-foreground"><Zap className="h-3 w-3" />推理速度</div>
+            <div className="mt-1 text-lg font-semibold tabular-nums">{tps !== null ? formatNumber(tps) : '—'}</div>
+          </div>
+          <div className="rounded-lg border p-3">
+            <div className="flex items-center gap-1 text-sm text-muted-foreground"><Clock className="h-3 w-3" />总耗时</div>
+            <div className="mt-1 text-lg font-semibold tabular-nums">{log.latency_ms !== null ? `${formatNumber(log.latency_ms)}ms` : '—'}</div>
+          </div>
+        </div>
+      )}
+      {/* 计费 & 状态 */}
+      <div className="grid grid-cols-2 gap-3">
+        <div className="rounded-lg border p-3">
+          <div className="flex items-center gap-1 text-sm text-muted-foreground"><Wallet className="h-3 w-3" />计费</div>
+          <div className="mt-1 font-medium">{log.billing_plan_name ?? '—'}{log.billing_plan ? ` · ${log.billing_plan}` : ''}</div>
+        </div>
+        <div className="rounded-lg border p-3">
+          <div className="flex items-center gap-1 text-sm text-muted-foreground"><CheckCircle2 className="h-3 w-3" />状态</div>
+          <div className="mt-1 flex items-center gap-2">
+            <StatusBadge status={log.success === null ? 'pending' : log.success ? 'success' : 'failed'} map={{ pending: { variant: 'outline', label: '进行中' } }} />
+            <span className="tabular-nums">{log.final_status_code ?? '—'}</span>
+          </div>
+        </div>
+      </div>
+      {/* 时间 */}
+      <div className="grid grid-cols-2 gap-3">
+        <div className="rounded-lg border p-3">
+          <div className="flex items-center gap-1 text-sm text-muted-foreground"><Clock className="h-3 w-3" />创建时间</div>
+          <div className="mt-1 font-mono text-sm">{formatDateTime(log.created_at)}</div>
+        </div>
+        <div className="rounded-lg border p-3">
+          <div className="flex items-center gap-1 text-sm text-muted-foreground"><CheckCircle2 className="h-3 w-3" />完成时间</div>
+          <div className="mt-1 font-mono text-sm">{log.completed_at ? formatDateTime(log.completed_at) : '—'}</div>
+        </div>
+      </div>
     </>
   );
 }
@@ -424,47 +477,44 @@ function DetailBasic({ log }: { log: RequestLogDetail }) {
 function AttemptsSection({ attempts }: { attempts: RequestAttemptItem[] }) {
   if (attempts.length === 0) return null;
   return (
-    <Card>
-      <CardHeader className="pb-2"><CardTitle className="text-sm">上游尝试（{attempts.length}）</CardTitle></CardHeader>
-      <CardContent className="p-0">
-        <Table>
+    <div className="rounded-lg border p-3">
+      <div className="mb-2 text-sm text-muted-foreground">上游尝试（{attempts.length}）</div>
+      <Table>
           <TableHeader>
             <TableRow>
               <TableHead className="w-[50px]">#</TableHead>
-              <TableHead>状态</TableHead>
+              <TableHead>供应商</TableHead>
+              <TableHead>密钥</TableHead>
               <TableHead className="text-right">耗时</TableHead>
-              <TableHead>错误</TableHead>
+              <TableHead>状态</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             {attempts.map((a) => (
               <TableRow key={a.id}>
-                <TableCell className="font-mono text-xs">{a.attempt_index}</TableCell>
+                <TableCell className="font-mono text-sm">{a.attempt_index}</TableCell>
+                <TableCell className="text-sm">{a.provider_name ?? '—'}</TableCell>
+                <TableCell className="text-sm text-muted-foreground">
+                  <span className="font-mono">{a.upstream_key_id ? `#${a.upstream_key_id.slice(-10)}` : '—'}</span>
+                </TableCell>
+                <TableCell className="text-right tabular-nums text-sm">{a.latency_ms !== null ? `${formatNumber(a.latency_ms)}ms` : '—'}</TableCell>
                 <TableCell>
                   <div className="flex items-center gap-1.5">
-                    <Badge variant={a.status_code && a.status_code >= 200 && a.status_code < 300 ? 'default' : 'destructive'} className="text-[10px]">
+                    <Badge variant={a.status_code && a.status_code >= 200 && a.status_code < 300 ? 'default' : 'destructive'} className="text-sm">
                       {a.status_code ?? '—'}
                     </Badge>
                   </div>
-                  <div className="mt-0.5 max-w-[200px] truncate text-xs text-muted-foreground" title={a.upstream_url ?? ''}>
-                    {a.upstream_url ?? '—'}
-                  </div>
-                </TableCell>
-                <TableCell className="text-right tabular-nums text-xs">{a.latency_ms !== null ? `${formatNumber(a.latency_ms)}ms` : '—'}</TableCell>
-                <TableCell className="text-xs text-muted-foreground">
-                  {a.error_code ? (
-                    <div>
-                      <div className="font-medium text-destructive">{a.error_code}</div>
-                      {a.error_message && <div className="max-w-[180px] truncate">{a.error_message}</div>}
+                  {a.error_code && (
+                    <div className="mt-0.5 max-w-[200px] truncate text-sm text-destructive" title={a.error_message ?? ''}>
+                      {a.error_code}
                     </div>
-                  ) : '—'}
+                  )}
                 </TableCell>
               </TableRow>
             ))}
           </TableBody>
         </Table>
-      </CardContent>
-    </Card>
+    </div>
   );
 }
 

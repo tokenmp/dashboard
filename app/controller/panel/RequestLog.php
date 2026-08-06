@@ -54,7 +54,8 @@ class RequestLog extends BaseController
         if ($keyword !== '') {
             $query->where(function ($q) use ($keyword) {
                 $q->whereLike('request_id', "%{$keyword}%")
-                  ->whereOr('trace_id', 'like', "%{$keyword}%");
+                  ->whereOr('trace_id', 'like', "%{$keyword}%")
+                  ->whereOr('model_name', 'like', "%{$keyword}%");
             });
         }
 
@@ -70,6 +71,11 @@ class RequestLog extends BaseController
         $protocol = trim((string) $this->request->get('protocol', ''));
         if ($protocol !== '') {
             $query->where('protocol', $protocol);
+        }
+
+        $apiKeyId = trim((string) $this->request->get('userApiKeyId', ''));
+        if ($apiKeyId !== '') {
+            $query->where('user_api_key_id', $apiKeyId);
         }
 
         $billingPlan = trim((string) $this->request->get('billingPlan', ''));
@@ -91,7 +97,15 @@ class RequestLog extends BaseController
 
         $total = $query->count();
         Pagination::applySort($query, $this->request, ['created_at', 'completed_at', 'latency_ms', 'total_tokens'], '-created_at');
-        $list  = $query->page($page, $size)->select();
+        $list  = $query->with(['userApiKey' => function ($r) {
+            $r->field('id,name');
+        }])->page($page, $size)->select();
+
+        $list = $list->each(function ($item) {
+            $item['api_key_name'] = $item->userApiKey?->name;
+            unset($item->userApiKey);
+            return $item;
+        });
 
         return success(Pagination::wrap($list, $total, $page, $size));
     }
@@ -113,6 +127,11 @@ class RequestLog extends BaseController
         }
 
         $attempts = RequestAttempt::where('request_log_id', $id)
+            ->with(['provider' => function ($r) {
+                $r->field('id,name,display_name');
+            }, 'upstreamKey' => function ($r) {
+                $r->field('id,name');
+            }])
             ->order('attempt_index', 'asc')
             ->select();
         $events = RequestLogEvent::where('request_log_id', $id)
@@ -123,6 +142,9 @@ class RequestLog extends BaseController
         // attempts 隐藏调试用 response_body（详情页也裁剪，避免超大响应）
         $attempts->each(function ($a) {
             unset($a->response_body);
+            $a['provider_name'] = $a->provider?->display_name ?: $a->provider?->name;
+            $a['upstream_key_name'] = $a->upstreamKey?->name;
+            unset($a->provider, $a->upstreamKey);
         });
 
         return success([

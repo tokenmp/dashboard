@@ -57,6 +57,25 @@ class User extends BaseController
         return success(Pagination::wrap($list, $total, $page, $size));
     }
 
+    /**
+     * GET /api/v1/dashboard/users/keys
+     * 全平台（或按 userId）的 user_api_keys，供日志页密钥筛选下拉。
+     */
+    public function keys()
+    {
+        $query = UserApiKey::where('status', '<>', 'deleted')
+            ->field(['id', 'name', 'user_id', 'key_prefix', 'key_suffix', 'status']);
+
+        $userId = trim((string) $this->request->get('userId', ''));
+        if ($userId !== '') {
+            $query->where('user_id', $userId);
+        }
+
+        $list = $query->order('created_at', 'desc')->select();
+
+        return success($list);
+    }
+
     /** GET /api/v1/dashboard/users/:id */
     public function detail($id)
     {

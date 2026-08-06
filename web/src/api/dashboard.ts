@@ -17,6 +17,7 @@ import type {
   CreatedUser,
   ResetPasswordResult,
   UserPlanItem,
+  UserApiKeyItem,
 } from '@/types/user';
 import type {
   PlanItem,
@@ -130,6 +131,14 @@ export async function resetDashboardUserPasswordApi(
 }
 
 // ── 上游与模型 ──
+export async function getDashboardUserKeysApi(
+  userId?: string,
+): Promise<UserApiKeyItem[]> {
+  const res = await client.get<ApiResponse<UserApiKeyItem[]>>('/dashboard/users/keys', {
+    params: userId ? { userId } : undefined,
+  });
+  return res.data.data;
+}
 export async function getDashboardUpstreamKeysApi(
   params: UpstreamQuery,
 ): Promise<PageResult<UpstreamKeyItem>> {

@@ -119,6 +119,7 @@ Route::group('api/v1', function () {
                 // 用户管理
                 Route::group('users', function () {
                     Route::get('', 'dashboard/User/list');
+                    Route::get('keys', 'dashboard/User/keys');
                     Route::post('', 'dashboard/User/create');
                     Route::get(':id', 'dashboard/User/detail')->pattern(['id' => '[\w\-]+']);
                     Route::put(':id', 'dashboard/User/update')->pattern(['id' => '[\w\-]+']);
