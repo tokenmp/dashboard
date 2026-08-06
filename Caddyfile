@@ -3,6 +3,7 @@
 
 {
 	skip_install_trust
+	admin off
 	frankenphp
 }
 
