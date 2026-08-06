@@ -1,31 +1,20 @@
 import type { ReactNode } from 'react';
-import { RefreshCw, Key, Bot, Package } from 'lucide-react';
-import {
-  getPanelProfileApi,
-  getPanelKeysApi,
-  getPanelBotKeysApi,
-  getPanelPlansApi,
-} from '@/api/panel';
+import { RefreshCw } from 'lucide-react';
+import { getPanelProfileApi } from '@/api/panel';
 import { useAsync } from '@/hooks/useAsync';
-import { EmptyState } from '@/components/EmptyState';
 import { StatusBadge } from '@/components/StatusBadge';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
-import { formatDate, formatDateTime, formatCompact } from '@/utils/format';
-import type { UserBasic, UserApiKeyItem, BotKeyItem, UserPlanItem } from '@/types/user';
+import { formatDateTime } from '@/utils/format';
+import type { UserBasic } from '@/types/user';
 
 function Account() {
-  // 自取数据：资料 / API Key / Bot Key / 套餐，一次性并行加载
+  // 自取数据：资料
   const { data, loading, error, reload } = useAsync(async () => {
-    const [profile, apiKeys, botKeys, plans] = await Promise.all([
-      getPanelProfileApi(),
-      getPanelKeysApi(),
-      getPanelBotKeysApi(),
-      getPanelPlansApi(),
-    ]);
-    return { profile, apiKeys, botKeys, plans };
+    const profile = await getPanelProfileApi();
+    return { profile };
   });
 
   return (
@@ -33,7 +22,7 @@ function Account() {
       <div className="flex items-center justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold">我的账户</h1>
-          <p className="mt-1 text-sm text-muted-foreground">资料、密钥与持有的套餐</p>
+          <p className="mt-1 text-sm text-muted-foreground">个人资料</p>
         </div>
         <Button variant="outline" size="sm" onClick={reload} disabled={loading}>
           <RefreshCw className={`mr-1.5 h-4 w-4 ${loading ? 'animate-spin' : ''}`} />刷新
@@ -47,14 +36,9 @@ function Account() {
       )}
 
       {loading ? (
-        <div className="space-y-3">{Array.from({ length: 4 }).map((_, i) => <Skeleton key={i} className="h-40 w-full" />)}</div>
+        <Skeleton className="h-40 w-full" />
       ) : data ? (
-        <div className="space-y-4">
-          <ProfileCard profile={data.profile} />
-          <KeySection icon={<Key className="h-3 w-3" />} title="API Key" items={data.apiKeys} render={renderApiKey} />
-          <KeySection icon={<Bot className="h-3 w-3" />} title="Bot Key" items={data.botKeys} render={renderBotKey} />
-          <PlansCard plans={data.plans} />
-        </div>
+        <ProfileCard profile={data.profile} />
       ) : null}
     </div>
   );
@@ -81,103 +65,6 @@ function ProfileCard({ profile }: { profile: UserBasic }) {
 }
 
 /* ------------------------------- 密钥 ------------------------------- */
-
-function KeySection<T extends { id: string }>({
-  icon,
-  title,
-  items,
-  render,
-}: {
-  icon: ReactNode;
-  title: string;
-  items: T[];
-  render: (item: T) => ReactNode;
-}) {
-  return (
-    <Card>
-      <CardHeader className="pb-2"><CardTitle className="text-sm flex items-center gap-1.5">{icon}{title}（{items.length}）</CardTitle></CardHeader>
-      <CardContent>
-        {items.length === 0 ? (
-          <EmptyState title={`暂无${title}`} />
-        ) : (
-          <div className="space-y-2">{items.map((item) => render(item))}</div>
-        )}
-      </CardContent>
-    </Card>
-  );
-}
-
-/** API Key：仅渲染脱敏片段，绝不展示完整密钥 */
-function renderApiKey(item: UserApiKeyItem) {
-  return (
-    <div key={item.id} className="flex items-center justify-between rounded-lg border p-2.5">
-      <div className="min-w-0">
-        <div className="text-sm font-medium">{item.name}</div>
-        <div className="truncate font-mono text-xs text-muted-foreground">{item.key_prefix}…{item.key_suffix}</div>
-        <div className="text-xs text-muted-foreground">{item.last_used_at ? `最近 ${formatDateTime(item.last_used_at)}` : '未使用'}</div>
-      </div>
-      <StatusBadge status={item.status} />
-    </div>
-  );
-}
-
-/** Bot Key：在 API Key 基础上额外展示 scope */
-function renderBotKey(item: BotKeyItem) {
-  return (
-    <div key={item.id} className="flex items-center justify-between rounded-lg border p-2.5">
-      <div className="min-w-0">
-        <div className="flex items-center gap-1.5 text-sm font-medium">
-          {item.name}
-          <Badge variant="secondary" className="text-[10px]">{item.scope}</Badge>
-        </div>
-        <div className="truncate font-mono text-xs text-muted-foreground">{item.key_prefix}…{item.key_suffix}</div>
-        <div className="text-xs text-muted-foreground">{item.last_used_at ? `最近 ${formatDateTime(item.last_used_at)}` : '未使用'}</div>
-      </div>
-      <StatusBadge status={item.status} />
-    </div>
-  );
-}
-
-/* ------------------------------- 套餐 ------------------------------- */
-
-function PlansCard({ plans }: { plans: UserPlanItem[] }) {
-  return (
-    <Card>
-      <CardHeader className="pb-2">
-        <CardTitle className="text-sm flex items-center gap-1.5"><Package className="h-3 w-3" />我的套餐（{plans.length}）</CardTitle>
-      </CardHeader>
-      <CardContent>
-        {plans.length === 0 ? (
-          <EmptyState title="暂无套餐" description="你还没有激活任何套餐" />
-        ) : (
-          <div className="space-y-2">
-            {plans.map((p) => (
-              <div key={p.id} className="rounded-lg border p-3">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <span className="text-sm font-medium">{p.plan?.name ?? '—'}</span>
-                    <Badge variant="outline" className="text-[10px]">{p.plan_type}</Badge>
-                  </div>
-                  <StatusBadge status={p.status} />
-                </div>
-                <div className="mt-1 text-xs text-muted-foreground">
-                  生效 {formatDate(p.activated_at)} · 过期 {formatDate(p.expires_at) ?? "永久"}
-                </div>
-                {p.plan && (
-                  <div className="mt-2 flex flex-wrap gap-1.5 text-xs text-muted-foreground">
-                    {p.plan.token_limit != null && <span className="rounded border px-1.5 py-0.5">Token {formatCompact(p.plan.token_limit)}</span>}
-                    {p.plan.weekly_limit != null && <span className="rounded border px-1.5 py-0.5">周 {formatCompact(p.plan.weekly_limit)}</span>}
-                    {p.plan.monthly_limit != null && <span className="rounded border px-1.5 py-0.5">月 {formatCompact(p.plan.monthly_limit)}</span>}
-                  </div>
-                )}
-              </div>
-            ))}
-          </div>
-        )}
-      </CardContent>
-    </Card>
-  );
-}
 
 function Row({ label, value }: { label: string; value: ReactNode }) {
   return (

@@ -12,18 +12,22 @@ import { cn } from '@/lib/utils';
 
 const NAV_GROUPS: { label: string; items: { to: string; label: string; icon: typeof LayoutDashboard; end?: boolean }[] }[] = [
   { label: '概览', items: [{ to: '/panel', label: '概览', icon: LayoutDashboard, end: true }] },
-  { label: '我的', items: [
-    { to: '/panel/requests', label: '我的请求', icon: ScrollText, end: false },
-    { to: '/panel/usage', label: '我的用量', icon: Gauge, end: false },
-    { to: '/panel/keys', label: '我的密钥', icon: KeyRound, end: false },
-    { to: '/panel/redemptions', label: '我的兑换', icon: Gift, end: false },
-  ]},
-  { label: '信息', items: [
+  { label: '模型与密钥', items: [
     { to: '/panel/models', label: '模型目录', icon: Cpu, end: false },
+    { to: '/panel/keys', label: '我的密钥', icon: KeyRound, end: false },
+  ]},
+  { label: '请求与账单', items: [
+    { to: '/panel/requests', label: '请求日志', icon: ScrollText, end: false },
+    { to: '/panel/usage', label: '计费账单', icon: Gauge, end: false },
+  ]},
+  { label: '公告与更新', items: [
     { to: '/panel/notices', label: '公告', icon: Megaphone, end: false },
     { to: '/panel/releases', label: '更新日志', icon: BookOpen, end: false },
   ]},
-  { label: '账户', items: [{ to: '/panel/account', label: '账户', icon: UserCircle, end: false }] },
+  { label: '账户', items: [
+    { to: '/panel/redemptions', label: '兑换码', icon: Gift, end: false },
+    { to: '/panel/account', label: '账户', icon: UserCircle, end: false },
+  ]},
 ];
 
 /**
