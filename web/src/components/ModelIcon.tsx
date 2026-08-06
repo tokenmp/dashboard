@@ -84,17 +84,20 @@ export function ModelIcon({
   displayName,
   size = 40,
   className = '',
+  rounded = true,
 }: {
   id: string;
   displayName?: string;
   size?: number;
   className?: string;
+  rounded?: boolean;
 }) {
+  const roundCls = rounded ? 'rounded-lg' : '';
   const match = findModelIcon(id, displayName);
   if (!match) {
     return (
       <div
-        className={`flex shrink-0 items-center justify-center rounded-lg bg-muted/50 text-xs font-black text-muted-foreground ${className}`}
+        className={`flex shrink-0 items-center justify-center ${roundCls} bg-muted/50 text-xs font-black text-muted-foreground ${className}`}
         style={{ width: size, height: size }}
         aria-label="默认 AI 模型图标"
       >
@@ -104,7 +107,7 @@ export function ModelIcon({
   }
   return (
     <div
-      className={`flex shrink-0 items-center justify-center overflow-hidden rounded-lg shadow-[inset_0_0_0_1px_rgba(0,0,0,0.06)] ${className}`}
+      className={`flex shrink-0 items-center justify-center overflow-hidden ${roundCls} shadow-[inset_0_0_0_1px_rgba(0,0,0,0.06)] ${className}`}
       style={{
         width: size,
         height: size,

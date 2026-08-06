@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { RefreshCw, Plus, MoreVertical, Pencil, Trash2, Copy, Check, Power } from 'lucide-react';
+import { RefreshCw, Plus, MoreVertical, Pencil, Trash2, Copy, Check, Power, ExternalLink, TriangleAlert, ChevronDown } from 'lucide-react';
 import {
   getPanelKeysApi,
   getPanelBotKeysApi,
@@ -9,6 +9,7 @@ import {
   createPanelBotKeyApi,
   updatePanelBotKeyApi,
   deletePanelBotKeyApi,
+  getPanelModelsApi,
   type CreatedKey,
 } from '@/api/panel';
 import { useAsync } from '@/hooks/useAsync';
@@ -20,7 +21,21 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Skeleton } from '@/components/ui/skeleton';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
+import { SearchableSelect } from '@/components/ui/searchable-select';
+import { ModelIcon } from '@/components/ModelIcon';
 import { formatDate, formatDateTime } from '@/utils/format';
+import {
+  TOOL_IMPORT_TARGETS,
+  buildImportDeepLink,
+  type CCSwitchApp,
+} from '@/utils/ccswitch';
 import {
   Table,
   TableBody,
@@ -280,6 +295,22 @@ function CreateKeyDialog({ open, kind, submitting, onClose, onSubmit }: {
 /** 创建成功后明文一次性展示（仅此一次 + 复制） */
 function RevealKeyDialog({ data, onClose }: { data: CreatedKey | null; onClose: () => void }) {
   const [copied, setCopied] = useState(false);
+  const [importApp, setImportApp] = useState<CCSwitchApp>('claude');
+  const [importExpanded, setImportExpanded] = useState(false);
+  const [confirmClose, setConfirmClose] = useState(false);
+  const open = data !== null;
+  // 模型列表（弹窗打开时拉取）
+  const { data: models, loading: modelsLoading } = useAsync(
+    () => (open ? getPanelModelsApi({ size: 200, sort: 'created_at' }) : Promise.resolve(null)),
+    [open],
+  );
+  const modelList = models?.list ?? [];
+  const [selectedModel, setSelectedModel] = useState('');
+  useEffect(() => {
+    // 默认选第一个可用模型
+    if (!selectedModel && modelList.length > 0) setSelectedModel(modelList[0].name);
+  }, [modelList, selectedModel]);
+
   const copy = async () => {
     if (!data) return;
     try {
@@ -290,28 +321,109 @@ function RevealKeyDialog({ data, onClose }: { data: CreatedKey | null; onClose: 
       /* 忽略 */
     }
   };
+
+  const target = TOOL_IMPORT_TARGETS.find((t) => t.app === importApp) ?? TOOL_IMPORT_TARGETS[0];
+  const handleImport = () => {
+    if (!data) return;
+    const link = buildImportDeepLink(target, {
+      apiKey: data.key,
+      keyName: data.name,
+      model: selectedModel,
+      currentOrigin: window.location.origin,
+    });
+    window.location.href = link;
+  };
+
   return (
-    <Dialog open={data !== null} onOpenChange={(o) => !o && onClose()}>
-      <DialogContent className="max-w-lg">
+    <Dialog open={data !== null} onOpenChange={(o) => { if (!o) setConfirmClose(true); }}>
+      <DialogContent
+        className="max-w-lg"
+        onInteractOutside={(e) => e.preventDefault()}
+        onEscapeKeyDown={(e) => e.preventDefault()}
+      >
         <DialogHeader>
           <DialogTitle>密钥已创建</DialogTitle>
-          <DialogDescription className="text-destructive">
-            ⚠️ 请立即复制保存，关闭后将不再显示完整密钥。
+          <DialogDescription>
+            请立即复制保存，关闭后将不再显示完整密钥。
           </DialogDescription>
         </DialogHeader>
         <div className="space-y-2">
-          <Label>{data?.name ? `「${data.name}」` : ''}完整密钥</Label>
           <div className="flex items-center gap-2">
             <code className="flex-1 break-all rounded-md border bg-muted px-3 py-2 text-sm">{data?.key}</code>
             <Button type="button" size="icon" variant="outline" onClick={copy} aria-label="复制">
               {copied ? <Check className="h-4 w-4 text-green-600" /> : <Copy className="h-4 w-4" />}
             </Button>
           </div>
+          <div className="flex items-start gap-2 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900">
+            <TriangleAlert className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+            <span>完整密钥仅此一次展示，请立即复制并妥善保管，切勿分享或泄露。</span>
+          </div>
         </div>
-        <DialogFooter>
-          <Button type="button" onClick={onClose}>我已保存，关闭</Button>
-        </DialogFooter>
+
+        {/* 导入到指定工具（CC Switch）*/}
+        <div className="rounded-lg border">
+          <button
+            type="button"
+            onClick={() => setImportExpanded((v) => !v)}
+            className="flex w-full items-center justify-between px-3 py-2.5 text-left text-sm font-medium hover:bg-accent/50"
+          >
+            <span>导入到 CC Switch</span>
+            <ChevronDown className={`h-4 w-4 shrink-0 text-muted-foreground transition-transform ${importExpanded ? 'rotate-180' : ''}`} />
+          </button>
+          {importExpanded && (
+            <div className="border-t p-3">
+              <p className="mb-3 text-xs leading-relaxed text-muted-foreground">
+                选择默认模型和目标工具，点击后将唤起 CC Switch 并导入对应 provider。
+              </p>
+              <div className="grid gap-3 sm:grid-cols-2">
+                <div className="space-y-1.5">
+                  <Label className="text-xs text-muted-foreground">默认模型</Label>
+                  <SearchableSelect
+                    options={modelList.map((m) => ({ value: m.name, label: m.display_name || m.name, hint: m.name, icon: <ModelIcon id={m.name} displayName={m.display_name ?? undefined} size={20} rounded={false} /> }))}
+                    value={selectedModel}
+                    onChange={setSelectedModel}
+                    placeholder={modelsLoading ? '加载中…' : '选择模型'}
+                    disabled={modelsLoading || modelList.length === 0}
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <Label className="text-xs text-muted-foreground">指定工具</Label>
+                  <Select value={importApp} onValueChange={(v) => setImportApp(v as CCSwitchApp)}>
+                    <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      {TOOL_IMPORT_TARGETS.map((t) => <SelectItem key={t.app} value={t.app}>{t.label}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+              <Button type="button" className="mt-3 w-full" onClick={handleImport} disabled={!selectedModel}>
+                <ExternalLink className="mr-2 h-4 w-4" />
+                导入 {target.label}
+              </Button>
+            </div>
+          )}
+        </div>
       </DialogContent>
+      {/* 关闭二次确认 */}
+      <AlertDialog open={confirmClose} onOpenChange={(o) => !o && setConfirmClose(false)}>
+        <AlertDialogContent className="max-w-md py-8">
+          <AlertDialogHeader>
+            <AlertDialogTitle>确认密钥已保存</AlertDialogTitle>
+            <AlertDialogDescription>
+              完整密钥关闭后不再展示，请确认已复制并安全存储。
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>返回查看</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => { setConfirmClose(false); onClose(); }}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              我已保存
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </Dialog>
   );
 }
