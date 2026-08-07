@@ -41,7 +41,7 @@ import {
   TooltipTrigger,
 } from '@/components/ui/tooltip';
 import { formatCompact, formatDateTime, formatNumber } from '@/utils/format';
-import { withAttemptPasses } from '@/utils/attempts';
+import { attemptErrorLabel, withAttemptPasses } from '@/utils/attempts';
 import type { RequestLogQuery } from '@/types/request-log';
 import type { UserApiKeyItem } from '@/types/user';
 
@@ -484,15 +484,12 @@ function AttemptsSection({ attempts }: { attempts: import('@/types/request-log')
                 </TableCell>
                 <TableCell className="text-right tabular-nums text-sm">{a.latency_ms !== null ? `${formatNumber(a.latency_ms)}ms` : '—'}</TableCell>
                 <TableCell>
-                  <div className="flex items-center gap-1.5">
-                    <Badge variant={a.status_code && a.status_code >= 200 && a.status_code < 300 ? 'default' : 'destructive'} className="text-sm">
-                      {a.status_code ?? '—'}
+                  {a.error_code ? (
+                    <Badge variant="destructive" className="text-sm" title={a.error_message ?? ''}>
+                      {attemptErrorLabel(a.error_code)}
                     </Badge>
-                  </div>
-                  {a.error_code && (
-                    <div className="mt-0.5 max-w-[200px] truncate text-sm text-destructive" title={a.error_message ?? ''}>
-                      {a.error_code}
-                    </div>
+                  ) : (
+                    <Badge variant="default" className="text-sm">成功</Badge>
                   )}
                 </TableCell>
               </TableRow>
