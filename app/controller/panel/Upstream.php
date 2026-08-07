@@ -111,7 +111,8 @@ class Upstream extends BaseController
     {
         [$page, $size] = Pagination::page($this->request);
 
-        $query = AiModel::where('status', 'active');
+        $query = AiModel::where('status', 'active')
+            ->whereRaw("exists (select 1 from upstream_model_mappings umm join upstream_keys uk on uk.id = umm.upstream_key_id where umm.model_id = models.id and umm.status = 'active' and uk.status = 'active')");
         $keyword = trim((string) $this->request->get('keyword', ''));
         if ($keyword !== '') {
             $query->whereRaw(
@@ -179,6 +180,18 @@ class Upstream extends BaseController
         unset($model);
 
         return success(Pagination::wrap($data, $total, $page, $size));
+    }
+
+    /** GET /api/v1/panel/upstream/model-names —— 有可用供应商映射的模型名（供前端推断系列） */
+    public function modelNames()
+    {
+        $rows = Db::connect('pgsql')->query(
+            "select distinct m.name from models m"
+            . " where m.status = 'active'"
+            . " and exists (select 1 from upstream_model_mappings umm join upstream_keys uk on uk.id = umm.upstream_key_id where umm.model_id = m.id and umm.status = 'active' and uk.status = 'active')"
+            . " order by m.name"
+        );
+        return success(array_map(fn ($r) => ['name' => $r['name']], $rows));
     }
 
     /** GET /api/v1/panel/upstream/model-key-health?model_id=xxx */

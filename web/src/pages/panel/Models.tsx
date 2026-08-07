@@ -1,11 +1,12 @@
 import { useEffect, useMemo, useState } from 'react';
 import { ChevronRight, RefreshCw, Search } from 'lucide-react';
-import { getModelKeyHealthApi, getPanelModelsApi } from '@/api/panel';
+import { getModelKeyHealthApi, getPanelModelsApi, getPanelModelNamesApi } from '@/api/panel';
 import { usePagedQuery } from '@/hooks/usePagedQuery';
+import { useAsync } from '@/hooks/useAsync';
 import { useUrlQueryState } from '@/hooks/useUrlQueryState';
 import { DebouncedInput } from '@/components/DebouncedInput';
 import { EmptyState } from '@/components/EmptyState';
-import { ModelIcon, ModelSeriesSelect } from '@/components/ModelIcon';
+import { ModelIcon, ModelSeriesSelect, findModelIcon } from '@/components/ModelIcon';
 import { Sparkline } from '@/components/Sparkline';
 import { Badge } from '@/components/ui/badge';
 import { CapabilityBadge } from '@/components/CapabilityBadge';
@@ -189,6 +190,7 @@ function ModelCard({ model }: { model: AiModelItem }) {
                             key={key.mapping_id}
                             className="flex flex-wrap items-center gap-x-3 gap-y-1 rounded bg-muted/50 px-2 py-1"
                           >
+                            <span className={key.status === 'active' ? 'text-green-600' : 'text-red-600'}>●</span>
                             <span
                               title={key.upstream_key_id}
                               className="font-mono text-[10px] text-muted-foreground"
@@ -201,7 +203,6 @@ function ModelCard({ model }: { model: AiModelItem }) {
                             <span className="text-[10px] text-muted-foreground">
                               <span className="text-foreground">{key.max_tokens ? formatCompact(key.max_tokens) : '—'}</span> · {formatPrice(key.input_price_per_token)} / {formatPrice(key.output_price_per_token)}
                             </span>
-                            <span className={key.status === 'active' ? 'text-green-600' : 'text-red-600'}>●</span>
                             <div className="ml-auto shrink-0">
                               {healthLoading ? (
                                 <Skeleton className="h-5 w-20" />
@@ -284,6 +285,45 @@ function Models() {
       initial: { size: 20, sort: 'created_at', ...urlInit } as UpstreamQuery,
     });
 
+  const { data: names } = useAsync(getPanelModelNamesApi, []);
+  const availableSeries = useMemo(() => {
+    const set = new Set<string>();
+    for (const n of names ?? []) {
+      const s = findModelIcon(n.name)?.series;
+      if (s) set.add(s);
+    }
+    return Array.from(set);
+  }, [names]);
+
+  // 前端重排：同系列相邻 → 系列间按最近创建 → 系列内按版本降序、创建时间降序
+  const sorted = useMemo(() => {
+    const versionScore = (name: string): number => {
+      const nums = name.toLowerCase().match(/(\d+)/g);
+      if (!nums || nums.length === 0) return 0;
+      const major = parseInt(nums[0], 10);
+      const minor = nums[1] ? parseInt(nums[1], 10) : 0;
+      return major + minor / 100;
+    };
+    const withMeta = list.map((m) => ({
+      m,
+      series: findModelIcon(m.name)?.series ?? `~${m.name}`,
+      version: versionScore(m.name),
+    }));
+    const groupLatest = new Map<string, string>();
+    for (const x of withMeta) {
+      const cur = groupLatest.get(x.series) ?? '';
+      if (x.m.created_at > cur) groupLatest.set(x.series, x.m.created_at);
+    }
+    withMeta.sort((a, b) => {
+      if (a.series !== b.series) {
+        return (groupLatest.get(b.series) ?? '').localeCompare(groupLatest.get(a.series) ?? '');
+      }
+      if (a.version !== b.version) return b.version - a.version;
+      return b.m.created_at.localeCompare(a.m.created_at);
+    });
+    return withMeta.map((x) => x.m);
+  }, [list]);
+
   useEffect(() => { write(params); }, [params]);
 
   return (
@@ -305,6 +345,7 @@ function Models() {
             <ModelSeriesSelect
               value={params.series ?? 'all'}
               onChange={(value) => setFilters({ series: value === 'all' ? '' : value })}
+              available={availableSeries}
             />
           </div>
           <div className="min-w-[220px] flex-1">
@@ -338,7 +379,7 @@ function Models() {
         <EmptyState title="暂无模型" description="尝试调整搜索或计费模式筛选" />
       ) : (
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
-          {list.map((model) => <ModelCard key={model.id} model={model} />)}
+          {sorted.map((model) => <ModelCard key={model.id} model={model} />)}
         </div>
       )}
 

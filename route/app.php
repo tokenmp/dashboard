@@ -82,6 +82,7 @@ Route::group('api/v1', function () {
                     Route::get(':id', 'panel/Upstream/keyDetail')->pattern(['id' => '[\w\-]+']);
                 });
                 Route::get('models', 'panel/Upstream/models');
+                Route::get('model-names', 'panel/Upstream/modelNames');
                 Route::get('model-key-health', 'panel/Upstream/modelKeyHealth');
             });
 

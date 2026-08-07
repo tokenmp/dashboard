@@ -173,6 +173,10 @@ export async function getPanelModelsApi(
   });
   return res.data.data;
 }
+export async function getPanelModelNamesApi(): Promise<{ name: string }[]> {
+  const res = await client.get<ApiResponse<{ name: string }[]>>('/panel/upstream/model-names');
+  return res.data.data;
+}
 export async function getModelKeyHealthApi(modelId: string): Promise<ModelKeyHealthItem[]> {
   const res = await client.get<ApiResponse<ModelKeyHealthItem[]>>('/panel/upstream/model-key-health', {
     params: { model_id: modelId },

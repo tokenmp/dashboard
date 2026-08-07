@@ -321,19 +321,17 @@ function ModelCard({ m, onEdit, onManageMappings }: { m: AiModelItem; onEdit: ()
                         {group.keys.map((key) => (
                           <div
                             key={key.mapping_id}
-                            className="flex flex-wrap items-center gap-x-3 gap-y-1 rounded bg-muted/50 px-2 py-1.5"
+                            className="flex items-center gap-3 rounded bg-muted/50 px-2 py-1.5"
                           >
-                            <span className="text-xs">
-                              <span className="font-medium text-foreground">{key.upstream_key_name}</span>
-                              <span title={key.upstream_key_id} className="ml-1 font-mono text-muted-foreground">{key.upstream_key_id.slice(-10)}</span>
+                            <span className={`shrink-0 ${key.status === 'active' ? 'text-green-600' : 'text-red-600'}`}>●</span>
+                            <span className="flex w-44 shrink-0 items-center gap-1 truncate text-xs">
+                              <span className="truncate font-medium text-foreground">{key.upstream_key_name}</span>
+                              <span title={key.upstream_key_id} className="font-mono text-muted-foreground">{key.upstream_key_id.slice(-10)}</span>
                             </span>
-                            {key.upstream_model_name && key.upstream_model_name !== m.name && (
-                              <span className="truncate text-xs text-muted-foreground/70">→ {key.upstream_model_name}</span>
-                            )}
-                            <span className="text-xs text-muted-foreground">
+                            <span className="w-28 shrink-0 truncate text-xs text-muted-foreground/70">{key.upstream_model_name && key.upstream_model_name !== m.name ? `→ ${key.upstream_model_name}` : ''}</span>
+                            <span className="w-40 shrink-0 text-xs text-muted-foreground">
                               <span className="text-foreground">{key.max_tokens ? formatCompact(key.max_tokens) : '—'}</span> · {formatPrice(key.input_price_per_token)} / {formatPrice(key.output_price_per_token)}
                             </span>
-                            <span className={key.status === 'active' ? 'text-green-600' : 'text-red-600'}>●</span>
                             <div className="ml-auto flex shrink-0 items-center gap-2">
                               {healthLoading ? (
                                 <Skeleton className="h-5 w-20" />

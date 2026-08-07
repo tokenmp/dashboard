@@ -47,13 +47,14 @@ export const MODEL_SERIES: ModelSeries[] = MODEL_ICON_MATCHES
   }))
   .filter((item, index, arr) => arr.findIndex((x) => x.series === item.series) === index);
 
-export function ModelSeriesSelect({ value, onChange }: { value: string; onChange: (value: string) => void }) {
+export function ModelSeriesSelect({ value, onChange, available }: { value: string; onChange: (value: string) => void; available?: string[] }) {
+  const list = available ? MODEL_SERIES.filter((s) => available.includes(s.series)) : MODEL_SERIES;
   return (
     <Select value={value || 'all'} onValueChange={onChange}>
       <SelectTrigger className="w-[160px]"><SelectValue placeholder="全部系列" /></SelectTrigger>
       <SelectContent>
         <SelectItem value="all">全部系列</SelectItem>
-        {MODEL_SERIES.map((modelSeries) => (
+        {list.map((modelSeries) => (
           <SelectItem key={modelSeries.series} value={modelSeries.series}>
             <div className="flex items-center gap-2">
               <span
