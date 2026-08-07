@@ -1,5 +1,28 @@
 import type { RequestAttemptItem } from '@/types/request-log';
 
+/** attempt.error_code 的简短中文标签（用于表格，控制在 4-5 字）。 */
+const ATTEMPT_ERROR_LABELS: Record<string, string> = {
+  UPSTREAM_OVERLOADED: '上游繁忙',
+  UPSTREAM_QUOTA_EXCEEDED: '额度不足',
+  UPSTREAM_RATE_LIMITED: '限流',
+  UPSTREAM_INTERNAL_ERROR: '上游异常',
+  UPSTREAM_PERMISSION_DENIED: '权限不足',
+  UPSTREAM_INVALID_REQUEST: '请求无效',
+  UPSTREAM_AUTH_INVALID: '鉴权失败',
+  UPSTREAM_MODEL_NOT_SUPPORTED: '模型不支持',
+  UPSTREAM_ERROR: '上游异常',
+  UPSTREAM_CONTEXT_LENGTH_EXCEEDED: '超长限制',
+  CLIENT_CANCELED: '客户端取消',
+  UPSTREAM_TIMEOUT: '上游超时',
+  UPSTREAM_CONTENT_BLOCKED: '内容拦截',
+};
+
+/** 返回 error_code 的简短中文标签；未知 code 回退显示原始值。 */
+export function attemptErrorLabel(code: string | null): string | null {
+  if (!code) return null;
+  return ATTEMPT_ERROR_LABELS[code] ?? code;
+}
+
 /**
  * 按时间排序后推断每个 attempt 所属的重试「轮次」。
  *
