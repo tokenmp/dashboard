@@ -497,6 +497,26 @@ function AttemptsSection({ attempts }: { attempts: import('@/types/request-log')
   );
 }
 
+const STAGE_LABELS: Record<string, string> = {
+  request_received: '请求接收',
+  api_key_verified: '密钥校验',
+  request_body_parsed: '请求解析',
+  route_selected: '路由选择',
+  lease_acquired: '通道锁定',
+  upstream_attempt_started: '上游发起',
+  upstream_attempt_finished: '上游返回',
+  quota_reserved: '额度预扣',
+  quota_finalized: '额度结算',
+  request_completed: '请求完成',
+  free_model_billing: '免费计费',
+  route_quarantined: '通道熔断',
+  route: '路由',
+  response: '响应',
+  upstream: '上游',
+  auth: '认证',
+  received: '接收',
+};
+
 function EventsSection({ events }: { events: import('@/types/request-log').RequestLogEventItem[] }) {
   if (events.length === 0) return null;
   return (
@@ -507,12 +527,11 @@ function EventsSection({ events }: { events: import('@/types/request-log').Reque
             <li key={e.id} className="relative">
               <span
                 className={`absolute -left-[21px] top-1 h-2.5 w-2.5 rounded-full ring-2 ring-background ${
-                  e.status === 'success' ? 'bg-primary' : e.status === 'failed' ? 'bg-destructive' : 'bg-muted-foreground'
+                  e.status === 'success' ? 'bg-emerald-500' : e.status === 'failed' ? 'bg-red-500' : 'bg-muted-foreground/40'
                 }`}
               />
               <div className="flex items-center gap-2">
-                <span className="text-sm font-medium">{e.stage}</span>
-                <StatusBadge status={e.status} />
+                <span className="text-sm font-medium">{STAGE_LABELS[e.stage] ?? e.stage}</span>
                 {e.duration_ms !== null && (
                   <span className="text-sm text-muted-foreground">{formatNumber(e.duration_ms)}ms</span>
                 )}
@@ -520,7 +539,6 @@ function EventsSection({ events }: { events: import('@/types/request-log').Reque
                   <Badge variant="outline" className="text-sm">{e.status_code}</Badge>
                 )}
               </div>
-              {e.message && <p className="mt-0.5 text-sm text-muted-foreground">{e.message}</p>}
               <span className="font-mono text-sm text-muted-foreground">{formatDateTime(e.created_at)}</span>
             </li>
           ))}
