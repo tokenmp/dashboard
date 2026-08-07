@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
-import { useSearchParams } from 'react-router-dom';
-import { ChevronRight, Pencil, Plus, RefreshCw, Search, Settings2 } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
+import { ChevronRight, Pencil, Plus, RefreshCw, Search, Settings2, Plug } from 'lucide-react';
 import { usePagedQuery } from '@/hooks/usePagedQuery';
 import { useUrlQueryState } from '@/hooks/useUrlQueryState';
 import { StatusBadge } from '@/components/StatusBadge';
@@ -14,44 +14,37 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { DebouncedInput } from '@/components/DebouncedInput';
 import { Skeleton } from '@/components/ui/skeleton';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from '@/components/ui/table';
 import { formatCompact, formatNumber } from '@/utils/format';
 import { billingLabel, billingVariant } from '@/utils/billing';
+import { ProviderCreateDialog } from './ProviderCreateDialog';
+import { ProviderEndpointsDialog } from './ProviderEndpointsDialog';
 import { KeysTab } from './KeysTab';
 import { ModelEditDialog } from './ModelEditDialog';
-import { MappingManageDialog } from './MappingManageDialog';
+import { ConfirmDialog } from '@/components/ConfirmDialog';
 import type { AiModelItem, UpstreamQuery } from '@/types/upstream';
 
-function Upstream() {
-  const [sp, setSp] = useSearchParams();
-  const tab = sp.get('tab') ?? 'keys';
-  const switchTab = (t: string) => {
-    const next = new URLSearchParams();
-    if (t !== 'keys') next.set('tab', t);
-    setSp(next, { replace: true });
-  };
+const UPSTREAM_META: Record<string, { title: string; desc: string }> = {
+  providers: { title: '供应商', desc: '供应商与端点' },
+  keys: { title: '上游账号', desc: '上游密钥与账号管理' },
+  routes: { title: '路由组', desc: '路由组与成员映射' },
+  models: { title: '平台模型', desc: '平台模型目录与计费' },
+};
 
+function Upstream({ section }: { section: string }) {
+  const meta = UPSTREAM_META[section] ?? UPSTREAM_META.providers;
   return (
     <div className="space-y-4">
       <div>
-        <h1 className="text-2xl font-bold">上游与模型</h1>
-        <p className="mt-1 text-sm text-muted-foreground">供应商、上游 Key、路由组与平台模型目录</p>
+        <h1 className="text-2xl font-bold">{meta.title}</h1>
+        <p className="mt-1 text-sm text-muted-foreground">{meta.desc}</p>
       </div>
-      <Tabs value={tab} onValueChange={switchTab}>
-        <TabsList>
-          <TabsTrigger value="keys">上游 Key</TabsTrigger>
-          <TabsTrigger value="providers">供应商</TabsTrigger>
-          <TabsTrigger value="routes">路由组</TabsTrigger>
-          <TabsTrigger value="models">平台模型</TabsTrigger>
-        </TabsList>
-        <TabsContent value="keys"><KeysTab /></TabsContent>
-        <TabsContent value="providers"><ProvidersTab /></TabsContent>
-        <TabsContent value="routes"><RoutesTab /></TabsContent>
-        <TabsContent value="models"><ModelsTab /></TabsContent>
-      </Tabs>
+      {section === 'providers' && <ProvidersTab />}
+      {section === 'keys' && <KeysTab />}
+      {section === 'routes' && <RoutesTab />}
+      {section === 'models' && <ModelsTab />}
     </div>
   );
 }
@@ -81,6 +74,8 @@ function ProvidersTab() {
   const { list, total, page, size, loading, error, params, reload, setPage, setFilters } =
     usePagedQuery(getProvidersApiLazy, { initial: { size: 20, sort: '-created_at', ...urlInit } as UpstreamQuery });
   useEffect(() => { write(params); }, [params]);
+  const [createOpen, setCreateOpen] = useState(false);
+  const [endpointsProvider, setEndpointsProvider] = useState<{ id: string; name?: string } | null>(null);
   return (
     <div className="space-y-3">
       <Card>
@@ -93,6 +88,7 @@ function ProvidersTab() {
             </div>
           </div>
           <Button variant="outline" size="sm" onClick={reload} disabled={loading}><RefreshCw className={`mr-1.5 h-4 w-4 ${loading ? 'animate-spin' : ''}`} />刷新</Button>
+          <Button size="sm" onClick={() => setCreateOpen(true)}><Plus className="mr-1.5 h-4 w-4" />新增供应商</Button>
         </CardContent>
       </Card>
       {error && <Card className="border-destructive"><CardContent className="py-3 text-sm text-destructive">{error}</CardContent></Card>}
@@ -103,20 +99,25 @@ function ProvidersTab() {
               <TableHeader><TableRow>
                 <TableHead>名称</TableHead><TableHead className="w-[90px]">状态</TableHead>
                 <TableHead>base_url</TableHead><TableHead className="w-[80px] text-right">端点</TableHead>
-                <TableHead className="w-[80px] text-right">Key</TableHead>
               </TableRow></TableHeader>
               <TableBody>{list.map((p) => (
                 <TableRow key={p.id}>
                   <TableCell className="font-medium">{p.display_name || p.name}</TableCell>
                   <TableCell><StatusBadge status={p.status} /></TableCell>
                   <TableCell className="max-w-[300px] truncate font-mono text-xs text-muted-foreground">{p.base_url}</TableCell>
-                  <TableCell className="text-right tabular-nums">{p.endpoint_count}</TableCell>
-                  <TableCell className="text-right tabular-nums">{p.key_count}</TableCell>
+                  <TableCell className="text-right">
+                    <button type="button" className="inline-flex items-center gap-1 rounded text-muted-foreground hover:text-foreground" onClick={() => setEndpointsProvider({ id: p.id, name: p.display_name || p.name })}>
+                      <Plug className="h-3.5 w-3.5" />
+                      <span className="tabular-nums text-xs">{p.endpoint_count}</span>
+                    </button>
+                  </TableCell>
                 </TableRow>
               ))}</TableBody>
             </Table>}
       </CardContent></Card>
       <Pager page={page} size={size} total={total} loading={loading} setPage={setPage} />
+      <ProviderCreateDialog open={createOpen} onOpenChange={setCreateOpen} onCreated={reload} />
+      <ProviderEndpointsDialog open={!!endpointsProvider} onOpenChange={(o) => !o && setEndpointsProvider(null)} providerId={endpointsProvider?.id ?? null} providerName={endpointsProvider?.name} />
     </div>
   );
 }
@@ -183,6 +184,23 @@ function ModelCard({ m, onEdit, onManageMappings }: { m: AiModelItem; onEdit: ()
   const [providerDialogOpen, setProviderDialogOpen] = useState(false);
   const [healthData, setHealthData] = useState<Record<string, number[]>>({});
   const [healthLoading, setHealthLoading] = useState(false);
+  const [togglingId, setTogglingId] = useState<string | null>(null);
+  const [pendingDisable, setPendingDisable] = useState<string | null>(null);
+  const doToggle = async (mappingId: string, next: 'active' | 'disabled') => {
+    setTogglingId(mappingId);
+    try {
+      await updateMappingStatusApi(mappingId, next);
+      toast.success(next === 'active' ? '已启用' : '已禁用');
+      window.dispatchEvent(new CustomEvent('mapping-refresh'));
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : '操作失败');
+    } finally { setTogglingId(null); }
+  };
+  const toggleMapping = (mappingId: string, current: string) => {
+    const next = current === 'active' ? 'disabled' : 'active';
+    if (next === 'disabled') { setPendingDisable(mappingId); return; }
+    doToggle(mappingId, 'active');
+  };
   const providers = useMemo(() => m.providers ?? [], [m.providers]);
   const grouped = useMemo(() => {
     const map = new Map<string, { providerName: string; keys: typeof providers }>();
@@ -303,27 +321,33 @@ function ModelCard({ m, onEdit, onManageMappings }: { m: AiModelItem; onEdit: ()
                         {group.keys.map((key) => (
                           <div
                             key={key.mapping_id}
-                            className="flex flex-wrap items-center gap-x-3 gap-y-1 rounded bg-muted/50 px-2 py-1"
+                            className="flex flex-wrap items-center gap-x-3 gap-y-1 rounded bg-muted/50 px-2 py-1.5"
                           >
-                            <span
-                              title={key.upstream_key_id}
-                              className="font-mono text-[10px] text-muted-foreground"
-                            >
-                              {key.upstream_key_id.slice(-10)}
+                            <span className="text-xs">
+                              <span className="font-medium text-foreground">{key.upstream_key_name}</span>
+                              <span title={key.upstream_key_id} className="ml-1 font-mono text-muted-foreground">{key.upstream_key_id.slice(-10)}</span>
                             </span>
                             {key.upstream_model_name && key.upstream_model_name !== m.name && (
-                              <span className="truncate text-[10px] text-muted-foreground/70">→ {key.upstream_model_name}</span>
+                              <span className="truncate text-xs text-muted-foreground/70">→ {key.upstream_model_name}</span>
                             )}
-                            <span className="text-[10px] text-muted-foreground">
+                            <span className="text-xs text-muted-foreground">
                               <span className="text-foreground">{key.max_tokens ? formatCompact(key.max_tokens) : '—'}</span> · {formatPrice(key.input_price_per_token)} / {formatPrice(key.output_price_per_token)}
                             </span>
                             <span className={key.status === 'active' ? 'text-green-600' : 'text-red-600'}>●</span>
-                            <div className="ml-auto shrink-0">
+                            <div className="ml-auto flex shrink-0 items-center gap-2">
                               {healthLoading ? (
                                 <Skeleton className="h-5 w-20" />
                               ) : (
                                 <Sparkline data={healthData[key.upstream_key_id] ?? []} width={80} height={20} />
                               )}
+                              <button
+                                type="button"
+                                className={`rounded px-2 py-0.5 text-xs disabled:opacity-50 ${key.status === 'active' ? 'text-destructive hover:bg-destructive/10' : 'text-muted-foreground hover:bg-accent hover:text-foreground'}`}
+                                disabled={togglingId === key.mapping_id}
+                                onClick={() => toggleMapping(key.mapping_id, key.status)}
+                              >
+                                {togglingId === key.mapping_id ? '…' : key.status === 'active' ? '禁用' : '启用'}
+                              </button>
                             </div>
                           </div>
                         ))}
@@ -336,6 +360,15 @@ function ModelCard({ m, onEdit, onManageMappings }: { m: AiModelItem; onEdit: ()
           </div>
         </DialogContent>
       </Dialog>
+      <ConfirmDialog
+        open={!!pendingDisable}
+        onOpenChange={(o) => !o && setPendingDisable(null)}
+        title="禁用映射"
+        description="确认禁用该映射？禁用后该映射不再被调用。"
+        confirmText="禁用"
+        variant="destructive"
+        onConfirm={() => { if (pendingDisable) doToggle(pendingDisable, 'disabled'); }}
+      />
     </>
   );
 }
@@ -351,10 +384,9 @@ function ModelsTab() {
   const { list, total, page, size, loading, error, params, reload, setPage, setFilters } =
     usePagedQuery(getModelsApiLazy, { initial: { size: 20, sort: 'created_at', ...urlInit } as UpstreamQuery });
   useEffect(() => { write(params); }, [params]);
+  const navigate = useNavigate();
   const [editModel, setEditModel] = useState<AiModelItem | null>(null);
   const [editOpen, setEditOpen] = useState(false);
-  const [manageModel, setManageModel] = useState<AiModelItem | null>(null);
-  const [manageOpen, setManageOpen] = useState(false);
   // 监听映射刷新事件（新建映射后刷新列表）
   useEffect(() => {
     const handler = () => reload();
@@ -391,17 +423,17 @@ function ModelsTab() {
                 key={m.id}
                 m={m}
                 onEdit={() => { setEditModel(m); setEditOpen(true); }}
-                onManageMappings={() => { setManageModel(m); setManageOpen(true); }}
+                onManageMappings={() => navigate(`/dashboard/upstream/models/${m.id}/mappings`, { state: { name: m.display_name || m.name } })}
               />
             ))}
           </div>}
       <Pager page={page} size={size} total={total} loading={loading} setPage={setPage} />
       <ModelEditDialog open={editOpen} onOpenChange={setEditOpen} model={editModel} onSaved={reload} />
-      <MappingManageDialog open={manageOpen} onOpenChange={setManageOpen} model={manageModel} />
     </div>
   );
 }
-import { getDashboardModelsApi, getModelKeyHealthApi } from '@/api/dashboard';
+import { getDashboardModelsApi, getModelKeyHealthApi, updateMappingStatusApi } from '@/api/dashboard';
+import { toast } from 'sonner';
 const getModelsApiLazy = (p: UpstreamQuery) => getDashboardModelsApi(p);
 
 function ModelBillingSelect({ value, onChange }: { value: string; onChange: (v: string) => void }) {

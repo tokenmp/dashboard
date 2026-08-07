@@ -30,12 +30,14 @@ import type {
 import type { AnnouncementPayload, NotificationItem, SystemQuery } from '@/types/system';
 import type {
   ProviderItem,
+  ProviderEndpointItem,
   UpstreamKeyItem,
   UpstreamKeyDetailResult,
   RouteGroupItem,
   AiModelItem,
   ModelKeyHealthItem,
   ModelMappingItem,
+  RouteGroupOption,
   UpstreamKeyOption,
   UpstreamQuery,
 } from '@/types/upstream';
@@ -149,10 +151,34 @@ export async function getDashboardUpstreamKeysApi(
   });
   return res.data.data;
 }
+export async function createUpstreamKeyApi(providerId: string, body: { name: string; key: string; quota_type?: string; max_concurrency?: number; priority?: number; expires_at?: string }): Promise<{ id: string }> {
+  const res = await client.post<ApiResponse<{ id: string }>>(`/dashboard/upstream/providers/${providerId}/keys`, body);
+  return res.data.data;
+}
 export async function getDashboardUpstreamKeyDetailApi(
   id: string,
 ): Promise<UpstreamKeyDetailResult> {
   const res = await client.get<ApiResponse<UpstreamKeyDetailResult>>(`/dashboard/upstream/keys/${id}`);
+  return res.data.data;
+}
+export interface ProbeResult {
+  status: string;
+  http_status: number | null;
+  latency_ms: number;
+  error_code: string;
+  error_message: string;
+  verified_models: string[];
+}
+export async function probeUpstreamKeyApi(id: string): Promise<ProbeResult> {
+  const res = await client.post<ApiResponse<ProbeResult>>(`/dashboard/upstream/keys/${id}/probe`);
+  return res.data.data;
+}
+export async function updateUpstreamKeyStatusApi(id: string, status: 'active' | 'disabled'): Promise<{ id: string }> {
+  const res = await client.post<ApiResponse<{ id: string }>>(`/dashboard/upstream/keys/${id}/status`, { status });
+  return res.data.data;
+}
+export async function deleteUpstreamKeyApi(id: string): Promise<{ id: string }> {
+  const res = await client.post<ApiResponse<{ id: string }>>(`/dashboard/upstream/keys/${id}/delete`);
   return res.data.data;
 }
 export async function getDashboardProvidersApi(
@@ -161,6 +187,26 @@ export async function getDashboardProvidersApi(
   const res = await client.get<ApiResponse<PageResult<ProviderItem>>>('/dashboard/upstream/providers', {
     params: toParams(params as Record<string, unknown>),
   });
+  return res.data.data;
+}
+export async function createDashboardProviderApi(body: { name: string; display_name?: string | null; base_url?: string }): Promise<{ id: string }> {
+  const res = await client.post<ApiResponse<{ id: string }>>('/dashboard/upstream/providers', body);
+  return res.data.data;
+}
+export async function getProviderEndpointsApi(id: string): Promise<ProviderEndpointItem[]> {
+  const res = await client.get<ApiResponse<ProviderEndpointItem[]>>(`/dashboard/upstream/providers/${id}/endpoints`);
+  return res.data.data;
+}
+export async function createProviderEndpointApi(id: string, body: Partial<ProviderEndpointItem>): Promise<{ id: string }> {
+  const res = await client.post<ApiResponse<{ id: string }>>(`/dashboard/upstream/providers/${id}/endpoints`, body);
+  return res.data.data;
+}
+export async function updateProviderEndpointApi(eid: string, body: Partial<ProviderEndpointItem>): Promise<{ id: string }> {
+  const res = await client.put<ApiResponse<{ id: string }>>(`/dashboard/upstream/endpoints/${eid}`, body);
+  return res.data.data;
+}
+export async function deleteProviderEndpointApi(eid: string): Promise<{ id: string }> {
+  const res = await client.delete<ApiResponse<{ id: string }>>(`/dashboard/upstream/endpoints/${eid}`);
   return res.data.data;
 }
 export async function getDashboardRouteGroupsApi(
@@ -195,8 +241,8 @@ export async function updateModelApi(id: string, payload: ModelPayload): Promise
   const res = await client.put<ApiResponse<AiModelItem>>(`/dashboard/models/${id}`, payload);
   return res.data.data;
 }
-export async function getModelMappingsApi(id: string): Promise<ModelMappingItem[]> {
-  const res = await client.get<ApiResponse<ModelMappingItem[]>>(`/dashboard/models/${id}/mappings`);
+export async function getModelMappingsApi(id: string, params?: { keyword?: string; status?: string }): Promise<ModelMappingItem[]> {
+  const res = await client.get<ApiResponse<ModelMappingItem[]>>(`/dashboard/models/${id}/mappings`, { params });
   return res.data.data;
 }
 export async function createModelMappingApi(modelId: string, payload: MappingPayload): Promise<{ id: string }> {
@@ -205,6 +251,10 @@ export async function createModelMappingApi(modelId: string, payload: MappingPay
 }
 export async function updateModelMappingApi(mid: string, payload: MappingPayload): Promise<{ id: string }> {
   const res = await client.put<ApiResponse<{ id: string }>>(`/dashboard/models/mappings/${mid}`, payload);
+  return res.data.data;
+}
+export async function updateMappingStatusApi(mid: string, status: 'active' | 'disabled'): Promise<{ id: string }> {
+  const res = await client.post<ApiResponse<{ id: string }>>(`/dashboard/models/mappings/${mid}/status`, { status });
   return res.data.data;
 }
 export async function deleteModelMappingApi(mid: string): Promise<{ id: string }> {
@@ -235,6 +285,12 @@ export interface MappingPayload {
   max_tokens: number | null;
   status: string;
   provider_endpoint_id: string | null;
+  route_group_ids?: string[];
+}
+
+export async function getRouteGroupsApi(): Promise<RouteGroupOption[]> {
+  const res = await client.get<ApiResponse<RouteGroupOption[]>>('/dashboard/models/route-groups');
+  return res.data.data;
 }
 
 // ── 全平台用量 + 计费规则 ──

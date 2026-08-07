@@ -3,12 +3,7 @@ import { Columns3 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { TableCell } from '@/components/ui/table';
-import {
-  DropdownMenu,
-  DropdownMenuCheckboxItem,
-  DropdownMenuContent,
-  DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu';
+import { MultiSelect } from '@/components/ui/multi-select';
 import { ModelIcon } from '@/components/ModelIcon';
 import { formatCompact, formatDateTime, formatNumber } from '@/utils/format';
 import type { RequestLogItem } from '@/types/request-log';
@@ -18,6 +13,8 @@ export interface RequestLogColumn {
   label: string;
   headClass?: string;
   cell: (r: RequestLogItem) => ReactNode;
+  /** 必须列：始终可见且不可在列选择中取消 */
+  required?: boolean;
 }
 
 /** 请求日志列表的全部列配置（顺序即展示顺序）。 */
@@ -26,6 +23,7 @@ export const REQUEST_LOG_COLUMNS: RequestLogColumn[] = [
     key: 'id',
     label: 'ID',
     headClass: 'w-[140px]',
+    required: true,
     cell: (r) => (
       <TableCell className="font-mono text-sm text-muted-foreground">
         {r.request_id ? r.request_id.slice(-10) : '—'}
@@ -63,6 +61,7 @@ export const REQUEST_LOG_COLUMNS: RequestLogColumn[] = [
   {
     key: 'model',
     label: '模型',
+    required: true,
     cell: (r) => (
       <TableCell className="font-medium">
         <div className="flex items-center gap-1.5">
@@ -149,6 +148,7 @@ export const REQUEST_LOG_COLUMNS: RequestLogColumn[] = [
     key: 'status',
     label: '状态',
     headClass: 'w-[90px]',
+    required: true,
     cell: (r) => (
       <TableCell>
         <div className="flex items-center gap-1.5 text-sm" title={r.error_code ?? undefined}>
@@ -162,6 +162,7 @@ export const REQUEST_LOG_COLUMNS: RequestLogColumn[] = [
     key: 'time',
     label: '时间',
     headClass: 'w-[160px]',
+    required: true,
     cell: (r) => (
       <TableCell className="font-mono text-sm text-muted-foreground">
         {formatDateTime(r.created_at)}
@@ -171,20 +172,22 @@ export const REQUEST_LOG_COLUMNS: RequestLogColumn[] = [
 ];
 
 /** 列可见性状态，持久化到 localStorage。默认全部可见。 */
-export function useColumnVisibility(storageKey: string, allKeys: string[]) {
+export function useColumnVisibility(storageKey: string, allKeys: string[], requiredKeys: string[] = []) {
+  const merge = (keys: string[]) => Array.from(new Set([...keys.filter((k) => allKeys.includes(k)), ...requiredKeys]));
   const [visibleKeys, setVisibleKeys] = useState<string[]>(() => {
     try {
       const saved = localStorage.getItem(storageKey);
       if (saved) {
         const parsed = JSON.parse(saved) as string[];
         const valid = allKeys.filter((k) => parsed.includes(k));
-        if (valid.length) return valid;
+        if (valid.length) return merge(valid);
       }
     } catch {
       /* ignore */
     }
-    return allKeys;
+    return merge(allKeys);
   });
+  const setVisible = (keys: string[]) => setVisibleKeys(merge(keys));
   useEffect(() => {
     try {
       localStorage.setItem(storageKey, JSON.stringify(visibleKeys));
@@ -192,7 +195,7 @@ export function useColumnVisibility(storageKey: string, allKeys: string[]) {
       /* ignore */
     }
   }, [visibleKeys, storageKey]);
-  return [visibleKeys, setVisibleKeys] as const;
+  return [visibleKeys, setVisible] as const;
 }
 
 /** 列选择下拉（多选），用于筛选区。 */
@@ -206,26 +209,17 @@ export function ColumnToggle({
   onChange: (keys: string[]) => void;
 }) {
   return (
-    <DropdownMenu>
-      <DropdownMenuTrigger asChild>
+    <MultiSelect
+      options={columns.map((c) => ({ value: c.key, label: c.label, disabled: c.required }))}
+      value={visibleKeys}
+      onChange={onChange}
+      variant="header"
+      align="end"
+      trigger={
         <Button variant="ghost" size="icon" className="h-7 w-7" title="选择显示的列">
           <Columns3 className="h-4 w-4" />
         </Button>
-      </DropdownMenuTrigger>
-      <DropdownMenuContent align="end">
-        {columns.map((c) => (
-          <DropdownMenuCheckboxItem
-            key={c.key}
-            checked={visibleKeys.includes(c.key)}
-            onCheckedChange={(checked) =>
-              onChange(checked ? [...visibleKeys, c.key] : visibleKeys.filter((k) => k !== c.key))
-            }
-            onSelect={(e) => e.preventDefault()}
-          >
-            {c.label}
-          </DropdownMenuCheckboxItem>
-        ))}
-      </DropdownMenuContent>
-    </DropdownMenu>
+      }
+    />
   );
 }

@@ -15,6 +15,20 @@ export interface ProviderItem {
   updated_at: string;
 }
 
+/** 供应商端点 */
+export interface ProviderEndpointItem {
+  id: string;
+  provider_id: string;
+  protocol: string;
+  path: string;
+  status: string;
+  kind: string | null;
+  adapter: string | null;
+  method: string | null;
+  auth_type: string | null;
+  request_mode: string | null;
+}
+
 /** 上游 Key（脱敏后） */
 export interface UpstreamKeyItem {
   id: string;
@@ -153,7 +167,16 @@ export interface ModelMappingItem {
   provider_display_name: string | null;
   protocol: string | null;
   endpoint_path: string | null;
+  route_group_ids: string[];
   created_at: string;
+}
+
+/** 路由组（映射编辑用） */
+export interface RouteGroupOption {
+  id: string;
+  name: string;
+  display_name: string | null;
+  is_system: boolean;
 }
 
 /** 可选上游 key */
@@ -173,6 +196,7 @@ export interface UpstreamQuery {
   status?: string;
   sourceType?: string;
   marketStatus?: string;
+  providerId?: string;
   billingMode?: string;
   series?: string;
   from?: string;

@@ -145,21 +145,32 @@ class Model extends BaseController
         if ($model === null) {
             throw new HttpException(404, '模型不存在');
         }
-        $rows = Db::connect('pgsql')->query(
-            "select umm.id, umm.upstream_key_id, umm.upstream_model_name, "
+        $keyword = trim((string) $this->request->get('keyword', ''));
+        $status = trim((string) $this->request->get('status', ''));
+        $sql = "select umm.id, umm.upstream_key_id, umm.upstream_model_name, "
             . " umm.input_price_per_token, umm.output_price_per_token, umm.max_tokens, "
             . " umm.status, umm.provider_endpoint_id, umm.created_at, "
             . " uk.name as upstream_key_name, uk.status as upstream_key_status, "
             . " p.name as provider_name, p.display_name as provider_display_name, "
-            . " pe.protocol, pe.path as endpoint_path "
+            . " pe.protocol, pe.path as endpoint_path, "
+            . " coalesce((select jsonb_agg(urgm.route_group_id) from upstream_route_group_memberships urgm where urgm.upstream_model_mapping_id = umm.id and urgm.status <> 'deleted'), '[]'::jsonb) as route_group_ids "
             . " from upstream_model_mappings umm"
             . " join upstream_keys uk on uk.id = umm.upstream_key_id"
             . " join providers p on p.id = uk.provider_id"
             . " left join provider_endpoints pe on pe.id = umm.provider_endpoint_id"
-            . " where umm.model_id = ? and umm.status <> 'deleted'"
-            . " order by p.name, uk.name",
-            [$id]
-        );
+            . " where umm.model_id = ? and umm.status <> 'deleted'";
+        $params = [$id];
+        if ($status !== '' && in_array($status, ['active', 'disabled'], true)) {
+            $sql .= " and umm.status = ?";
+            $params[] = $status;
+        }
+        if ($keyword !== '') {
+            $sql .= " and (uk.name ILIKE ? or p.name ILIKE ? or p.display_name ILIKE ? or umm.upstream_model_name ILIKE ?)";
+            $kw = "%{$keyword}%";
+            array_push($params, $kw, $kw, $kw, $kw);
+        }
+        $sql .= " order by p.name, uk.name";
+        $rows = Db::connect('pgsql')->query($sql, $params);
         $data = array_map(function ($r) {
             return [
                 'id'                     => $r['id'],
@@ -176,6 +187,7 @@ class Model extends BaseController
                 'provider_display_name'  => $r['provider_display_name'],
                 'protocol'               => $r['protocol'],
                 'endpoint_path'          => $r['endpoint_path'],
+                'route_group_ids'        => isset($r['route_group_ids']) ? json_decode((string) $r['route_group_ids'], true) ?: [] : [],
                 'created_at'             => $r['created_at'],
             ];
         }, $rows);
@@ -210,6 +222,13 @@ class Model extends BaseController
              $row['input_price_per_token'], $row['output_price_per_token'], $row['max_tokens'],
              $row['status'], $row['provider_endpoint_id']]
         );
+        // 默认加入 default 路由组（调用方未显式传 route_group_ids 时）
+        $routeGroupIds = $this->request->post('route_group_ids');
+        if (!is_array($routeGroupIds)) {
+            $defaultGroup = Db::connect('pgsql')->query("select id from route_groups where name = 'default' and status <> 'deleted' limit 1");
+            $routeGroupIds = !empty($defaultGroup) ? [$defaultGroup[0]['id']] : [];
+        }
+        $this->syncRouteGroups($mid, $routeGroupIds);
         return success(['id' => $mid]);
     }
 
@@ -229,6 +248,10 @@ class Model extends BaseController
              $row['input_price_per_token'], $row['output_price_per_token'], $row['max_tokens'],
              $row['status'], $row['provider_endpoint_id'], $mid]
         );
+        $routeGroupIds = $this->request->post('route_group_ids');
+        if (is_array($routeGroupIds)) {
+            $this->syncRouteGroups($mid, $routeGroupIds);
+        }
         return success(['id' => $mid]);
     }
 
@@ -244,6 +267,60 @@ class Model extends BaseController
             [$mid]
         );
         return success(['id' => $mid]);
+    }
+
+    /** POST /api/v1/dashboard/models/mappings/:mid/status —— 启用/禁用映射 */
+    public function updateMappingStatus($mid)
+    {
+        $status = trim((string) $this->request->post('status', ''));
+        if (!in_array($status, ['active', 'disabled'], true)) {
+            throw new HttpException(400, 'status 非法');
+        }
+        Db::connect('pgsql')->execute(
+            "UPDATE upstream_model_mappings SET status = ?, updated_at = NOW() WHERE id = ? AND status <> 'deleted'",
+            [$status, $mid]
+        );
+        return success(['id' => $mid]);
+    }
+
+    /** 同步映射的路由组成员（差异更新） */
+    private function syncRouteGroups(string $mid, array $groupIds): void
+    {
+        $groupIds = array_values(array_unique(array_filter($groupIds, fn ($x) => is_string($x) && $x !== '')));
+        $current = Db::connect('pgsql')->query(
+            "select id, route_group_id from upstream_route_group_memberships where upstream_model_mapping_id = ? and status <> 'deleted'",
+            [$mid]
+        );
+        $currentMap = [];
+        foreach ($current as $c) {
+            $currentMap[$c['route_group_id']] = $c['id'];
+        }
+        $keep = array_flip($groupIds);
+        foreach ($currentMap as $gid => $memId) {
+            if (!isset($keep[$gid])) {
+                Db::connect('pgsql')->execute(
+                    "UPDATE upstream_route_group_memberships SET status = 'deleted', updated_at = NOW() WHERE id = ?",
+                    [$memId]
+                );
+            }
+        }
+        foreach ($groupIds as $gid) {
+            if (!isset($currentMap[$gid])) {
+                Db::connect('pgsql')->execute(
+                    "INSERT INTO upstream_route_group_memberships (id, upstream_model_mapping_id, route_group_id, status) VALUES (?,?,?,'active')",
+                    [$this->genUuid(), $mid, $gid]
+                );
+            }
+        }
+    }
+
+    /** GET /api/v1/dashboard/models/route-groups —— 所有路由组（映射编辑用） */
+    public function routeGroups()
+    {
+        $rows = Db::connect('pgsql')->query(
+            "select id, name, display_name, is_system from route_groups where status <> 'deleted' order by is_system desc, name"
+        );
+        return success($rows);
     }
 
     /** GET /api/v1/dashboard/models/key-options —— 可挂映射的 active 上游 key */

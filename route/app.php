@@ -146,8 +146,21 @@ Route::group('api/v1', function () {
                     Route::group('keys', function () {
                         Route::get('', 'dashboard/Upstream/keys');
                         Route::get(':id', 'dashboard/Upstream/keyDetail')->pattern(['id' => '[\w\-]+']);
+                        Route::post(':id/probe', 'dashboard/Upstream/probeKey')->pattern(['id' => '[\w\-]+']);
+                        Route::post(':id/status', 'dashboard/Upstream/updateKeyStatus')->pattern(['id' => '[\w\-]+']);
+                        Route::post(':id/delete', 'dashboard/Upstream/deleteKey')->pattern(['id' => '[\w\-]+']);
                     });
                     Route::get('providers', 'dashboard/Upstream/providers');
+                    Route::post('providers', 'dashboard/Upstream/createProvider');
+                    Route::group('providers', function () {
+                        Route::get(':id/endpoints', 'dashboard/Upstream/endpoints')->pattern(['id' => '[\w\-]+']);
+                        Route::post(':id/endpoints', 'dashboard/Upstream/createEndpoint')->pattern(['id' => '[\w\-]+']);
+                        Route::post(':id/keys', 'dashboard/Upstream/createKey')->pattern(['id' => '[\w\-]+']);
+                    });
+                    Route::group('endpoints', function () {
+                        Route::put(':id', 'dashboard/Upstream/updateEndpoint')->pattern(['id' => '[\w\-]+']);
+                        Route::delete(':id', 'dashboard/Upstream/deleteEndpoint')->pattern(['id' => '[\w\-]+']);
+                    });
                     Route::get('routes', 'dashboard/Upstream/routes');
                     Route::get('model-key-health', 'dashboard/Upstream/modelKeyHealth');
                 });
@@ -156,9 +169,11 @@ Route::group('api/v1', function () {
                     Route::get('', 'dashboard/Model/list');
                     Route::post('', 'dashboard/Model/create');
                     Route::get('key-options', 'dashboard/Model/keyOptions');
+                    Route::get('route-groups', 'dashboard/Model/routeGroups');
                     Route::group('mappings', function () {
                         Route::put(':mid', 'dashboard/Model/updateMapping')->pattern(['mid' => '[\w\-]+']);
                         Route::delete(':mid', 'dashboard/Model/deleteMapping')->pattern(['mid' => '[\w\-]+']);
+                        Route::post(':mid/status', 'dashboard/Model/updateMappingStatus')->pattern(['mid' => '[\w\-]+']);
                     });
                     Route::get(':id/mappings', 'dashboard/Model/mappings')->pattern(['id' => '[\w\-]+']);
                     Route::post(':id/mappings', 'dashboard/Model/createMapping')->pattern(['id' => '[\w\-]+']);
