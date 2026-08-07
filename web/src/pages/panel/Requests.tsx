@@ -40,6 +40,7 @@ import {
   TooltipTrigger,
 } from '@/components/ui/tooltip';
 import { formatCompact, formatDateTime, formatNumber } from '@/utils/format';
+import { withAttemptPasses } from '@/utils/attempts';
 import type {
   RequestLogQuery,
   RequestLogDetail,
@@ -476,13 +477,14 @@ function DetailBasic({ log }: { log: RequestLogDetail }) {
 
 function AttemptsSection({ attempts }: { attempts: RequestAttemptItem[] }) {
   if (attempts.length === 0) return null;
+  const labeled = withAttemptPasses(attempts);
   return (
     <div className="rounded-lg border p-3">
-      <div className="mb-2 text-sm text-muted-foreground">上游尝试（{attempts.length}）</div>
+      <div className="mb-2 text-sm text-muted-foreground">上游尝试（{labeled.length}）</div>
       <Table>
           <TableHeader>
             <TableRow>
-              <TableHead className="w-[50px]">#</TableHead>
+              <TableHead className="w-[70px]">#</TableHead>
               <TableHead>供应商</TableHead>
               <TableHead>密钥</TableHead>
               <TableHead className="text-right">耗时</TableHead>
@@ -490,9 +492,9 @@ function AttemptsSection({ attempts }: { attempts: RequestAttemptItem[] }) {
             </TableRow>
           </TableHeader>
           <TableBody>
-            {attempts.map((a) => (
+            {labeled.map((a) => (
               <TableRow key={a.id}>
-                <TableCell className="font-mono text-sm">{a.attempt_index}</TableCell>
+                <TableCell className="font-mono text-sm">#{a.pass}-{a.attempt_index}</TableCell>
                 <TableCell className="text-sm">{a.provider_name ?? '—'}</TableCell>
                 <TableCell className="text-sm text-muted-foreground">
                   <span className="font-mono">{a.upstream_key_id ? `#${a.upstream_key_id.slice(-10)}` : '—'}</span>
