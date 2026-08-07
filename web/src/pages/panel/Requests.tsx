@@ -193,10 +193,10 @@ function Requests() {
                       {r.latency_ms !== null ? `${formatNumber(r.latency_ms)}ms` : '—'}
                     </TableCell>
                     <TableCell>
-                      <StatusBadge
-                        status={r.success === null ? 'pending' : r.success ? 'success' : 'failed'}
-                        map={{ pending: { variant: 'outline', label: '进行中' } }}
-                      />
+                      <div className="flex items-center gap-1.5 text-sm" title={r.error_code ?? undefined}>
+                        <span className={r.success === null ? 'h-1.5 w-1.5 rounded-full bg-muted-foreground/40' : r.success ? 'h-1.5 w-1.5 rounded-full bg-emerald-500' : 'h-1.5 w-1.5 rounded-full bg-red-500'} />
+                        <span className="tabular-nums text-muted-foreground">{r.final_status_code ?? '—'}</span>
+                      </div>
                     </TableCell>
                     <TableCell className="font-mono text-sm text-muted-foreground">
                       {formatDateTime(r.created_at)}
