@@ -37,6 +37,9 @@ RUN sed -i 's#dl-cdn.alpinelinux.org#mirrors.aliyun.com#g' /etc/apk/repositories
 # 生产所需 PHP 扩展（pdo_mysql / pdo_pgsql 为后续真实用户/数据库预留）
 RUN install-php-extensions pdo_mysql pdo_pgsql pgsql
 
+# git：scripts/sync-releases.php 需读取 git tag 同步版本日志
+RUN apk add --no-cache git
+
 WORKDIR /app
 
 # 应用源码（直接来自构建上下文，避免把 web/ 源码带入运行时）
@@ -48,6 +51,7 @@ COPY view view
 COPY public public
 COPY think .
 COPY composer.json .
+COPY scripts scripts
 
 # 优化后的 vendor（来自 composer 阶段）
 COPY --from=composer /app/vendor vendor
