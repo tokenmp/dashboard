@@ -1,8 +1,10 @@
-import { useEffect, useState } from 'react';
-import { RefreshCw, Search, ChevronRight } from 'lucide-react';
-import { getDashboardUpstreamKeysApi, getDashboardUpstreamKeyDetailApi } from '@/api/dashboard';
+import { useState } from 'react';
+import { toast } from 'sonner';
+import { RefreshCw, Search, Plus, Zap, Trash2 } from 'lucide-react';
+import { getDashboardUpstreamKeysApi, getDashboardUpstreamKeyDetailApi, probeUpstreamKeyApi, updateUpstreamKeyStatusApi, deleteUpstreamKeyApi } from '@/api/dashboard';
+import { CreateKeyDialog } from './CreateKeyDialog';
+import { ConfirmDialog } from '@/components/ConfirmDialog';
 import { usePagedQuery } from '@/hooks/usePagedQuery';
-import { useUrlQueryState } from '@/hooks/useUrlQueryState';
 import { useAsync } from '@/hooks/useAsync';
 import { useRole } from '@/hooks/useRole';
 import { StatusBadge } from '@/components/StatusBadge';
@@ -20,20 +22,39 @@ import type { UpstreamQuery } from '@/types/upstream';
 
 const MARKET_STATUSES = ['online', 'offline', 'paused', 'degraded', 'exhausted', 'suspended'];
 
-export function KeysTab() {
+export function KeysTab({ providerId }: { providerId?: string }) {
   const { isAdmin } = useRole();
   const [detailId, setDetailId] = useState<string | null>(null);
-  const { initial: urlInit, write } = useUrlQueryState([
-    { name: 'q', key: 'keyword' },
-    { name: 'source', key: 'sourceType' },
-    { name: 'market', key: 'marketStatus' },
-    { name: 'status', key: 'status', default: 'active' },
-    { name: 'page', key: 'page', type: 'number', default: 1 },
-    { name: 'size', key: 'size', type: 'number', default: 20 },
-  ]);
+  const [createOpen, setCreateOpen] = useState(false);
+  const [probingId, setProbingId] = useState<string | null>(null);
+  const probeRow = async (id: string, name: string) => {
+    setProbingId(id);
+    try {
+      const r = await probeUpstreamKeyApi(id);
+      if (r.status === 'success') {
+        toast.success(`「${name}」探测成功`, { description: `延迟 ${r.latency_ms}ms` });
+      } else {
+        toast.error(`「${name}」探测失败`, { description: [r.http_status ? `HTTP ${r.http_status}` : '', r.error_message].filter(Boolean).join(' · ') || '未知错误' });
+      }
+      reload();
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : '探测失败');
+    } finally { setProbingId(null); }
+  };
+  const [pendingDelete, setPendingDelete] = useState<{ id: string; name: string } | null>(null);
+  const deleteRow = (id: string, name: string) => setPendingDelete({ id, name });
+  const confirmDelete = async () => {
+    if (!pendingDelete) return;
+    try {
+      await deleteUpstreamKeyApi(pendingDelete.id);
+      toast.success(`已删除「${pendingDelete.name}」`);
+      reload();
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : '删除失败');
+    }
+  };
   const { list, total, page, size, loading, error, params, reload, setPage, setFilters } =
-    usePagedQuery(getDashboardUpstreamKeysApi, { initial: { size: 20, sort: '-created_at', status: 'active', ...urlInit } as UpstreamQuery });
-  useEffect(() => { write(params); }, [params]);
+    usePagedQuery(getDashboardUpstreamKeysApi, { initial: { size: 20, sort: '-created_at', status: 'active', ...(providerId ? { providerId } : {}) } as UpstreamQuery });
 
   return (
     <div className="space-y-3">
@@ -81,6 +102,7 @@ export function KeysTab() {
             </Select>
           </div>
           <Button variant="outline" size="sm" onClick={reload} disabled={loading}><RefreshCw className={`mr-1.5 h-4 w-4 ${loading ? 'animate-spin' : ''}`} />刷新</Button>
+          {isAdmin && <Button size="sm" onClick={() => setCreateOpen(true)}><Plus className="mr-1.5 h-4 w-4" />新建账号</Button>}
         </CardContent>
       </Card>
 
@@ -91,10 +113,10 @@ export function KeysTab() {
           : list.length === 0 ? <EmptyState className="mx-4 my-6" title="暂无上游 Key" description={isAdmin ? undefined : '你还没有自有的上游 Key'} />
           : <Table>
               <TableHeader><TableRow>
-                <TableHead>名称</TableHead><TableHead className="w-[110px]">供应商</TableHead>
+                <TableHead>名称</TableHead>{!providerId && <TableHead className="w-[110px]">供应商</TableHead>}
                 <TableHead className="w-[90px]">来源</TableHead><TableHead className="w-[100px]">市场状态</TableHead>
                 <TableHead className="w-[80px]">审核</TableHead><TableHead className="w-[100px] text-right">用量</TableHead>
-                <TableHead className="w-[60px]"></TableHead>
+                <TableHead className="w-[100px]"></TableHead>
               </TableRow></TableHeader>
               <TableBody>{list.map((k) => (
                 <TableRow key={k.id} className="cursor-pointer" onClick={() => setDetailId(k.id)}>
@@ -102,14 +124,23 @@ export function KeysTab() {
                     <div className="font-medium">{k.name}</div>
                     <div className="font-mono text-xs text-muted-foreground">{k.key_prefix ?? ''}…{k.key_suffix ?? ''}</div>
                   </TableCell>
-                  <TableCell className="text-xs">{k.provider?.display_name || k.provider?.name || '—'}</TableCell>
+                  {!providerId && <TableCell className="text-xs">{k.provider?.display_name || k.provider?.name || '—'}</TableCell>}
                   <TableCell><Badge variant={k.source_type === 'user' ? 'secondary' : 'outline'} className="text-[10px]">{k.source_type}</Badge></TableCell>
                   <TableCell><StatusBadge status={k.market_status} /></TableCell>
                   <TableCell><StatusBadge status={k.review_status} /></TableCell>
                   <TableCell className="text-right">
                     <UsageBar used={Number(k.quota_used) || 0} total={k.quota_total} />
                   </TableCell>
-                  <TableCell><ChevronRight className="h-4 w-4 text-muted-foreground" /></TableCell>
+                  <TableCell className="text-right">
+                    <div className="flex items-center justify-end gap-1">
+                      <Button variant="ghost" size="icon" className="h-7 w-7" title="测试" disabled={probingId === k.id} onClick={(e) => { e.stopPropagation(); probeRow(k.id, k.name); }}>
+                        <Zap className="h-4 w-4" />
+                      </Button>
+                      <Button variant="ghost" size="icon" className="h-7 w-7 hover:text-destructive" title="删除" onClick={(e) => { e.stopPropagation(); deleteRow(k.id, k.name); }}>
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  </TableCell>
                 </TableRow>
               ))}</TableBody>
             </Table>}
@@ -125,7 +156,17 @@ export function KeysTab() {
         </div>
       )}
 
-      <KeyDetailDrawer id={detailId} onClose={() => setDetailId(null)} />
+      {isAdmin && <CreateKeyDialog open={createOpen} onOpenChange={setCreateOpen} providerId={providerId ?? null} onCreated={reload} />}
+      <KeyDetailDrawer id={detailId} onClose={() => setDetailId(null)} onProbed={reload} />
+      <ConfirmDialog
+        open={!!pendingDelete}
+        onOpenChange={(o) => !o && setPendingDelete(null)}
+        title="删除账号"
+        description={pendingDelete ? `确认删除账号「${pendingDelete.name}」？删除后不可恢复。` : ''}
+        confirmText="删除"
+        variant="destructive"
+        onConfirm={confirmDelete}
+      />
     </div>
   );
 }
@@ -145,15 +186,59 @@ function UsageBar({ used, total }: { used: number; total: number | null }) {
   );
 }
 
-function KeyDetailDrawer({ id, onClose }: { id: string | null; onClose: () => void }) {
-  const { data, loading, error } = useAsync(
+function KeyDetailDrawer({ id, onClose, onProbed }: { id: string | null; onClose: () => void; onProbed?: () => void }) {
+  const { data, loading, error, reload } = useAsync(
     () => (id ? getDashboardUpstreamKeyDetailApi(id) : Promise.resolve(null)),
     [id],
   );
+  const [probing, setProbing] = useState(false);
+  const [probeMsg, setProbeMsg] = useState('');
+  const onProbe = async () => {
+    if (!id) return;
+    setProbing(true); setProbeMsg('');
+    try {
+      const r = await probeUpstreamKeyApi(id);
+      setProbeMsg(r.status === 'success'
+        ? `探测成功 · ${r.latency_ms}ms`
+        : `探测失败 · ${r.http_status ?? ''} ${r.error_message}`.trim());
+      reload();
+      onProbed?.();
+    } catch (e) {
+      setProbeMsg(e instanceof Error ? e.message : '探测失败');
+    } finally { setProbing(false); }
+  };
+  const [pendingDisable, setPendingDisable] = useState(false);
+  const doToggle = async (next: 'active' | 'disabled') => {
+    if (!id) return;
+    try {
+      await updateUpstreamKeyStatusApi(id, next);
+      reload();
+      onProbed?.();
+    } catch (e) {
+      setProbeMsg(e instanceof Error ? e.message : '操作失败');
+    }
+  };
+  const onToggleStatus = () => {
+    if (!id || !data) return;
+    const next = data.key.status === 'active' ? 'disabled' : 'active';
+    if (next === 'disabled') { setPendingDisable(true); return; }
+    doToggle('active');
+  };
   return (
     <Sheet open={id !== null} onOpenChange={(open) => !open && onClose()}>
       <SheetContent side="right" className="w-full overflow-y-auto sm:max-w-2xl">
-        <SheetHeader><SheetTitle>上游 Key 详情</SheetTitle></SheetHeader>
+        <SheetHeader>
+          <div className="flex items-center justify-between gap-2">
+            <SheetTitle>上游 Key 详情</SheetTitle>
+            {id !== null && data && (
+              <div className="flex items-center gap-2">
+                <Button size="sm" variant="outline" onClick={onProbe} disabled={probing}><Zap className="mr-1.5 h-4 w-4" />{probing ? '测试中…' : '测试'}</Button>
+                <Button size="sm" variant={data.key.status === 'active' ? 'destructive' : 'default'} onClick={onToggleStatus}>{data.key.status === 'active' ? '禁用' : '启用'}</Button>
+              </div>
+            )}
+          </div>
+        </SheetHeader>
+        {probeMsg && <div className={`px-4 py-2 text-sm ${probeMsg.startsWith('探测成功') ? 'text-emerald-600' : 'text-destructive'}`}>{probeMsg}</div>}
         {id === null ? null : loading ? (
           <div className="space-y-3 p-4">{Array.from({ length: 6 }).map((_, i) => <Skeleton key={i} className="h-12 w-full" />)}</div>
         ) : error ? (
@@ -252,6 +337,15 @@ function KeyDetailDrawer({ id, onClose }: { id: string | null; onClose: () => vo
           </div>
         ) : null}
       </SheetContent>
+      <ConfirmDialog
+        open={pendingDisable}
+        onOpenChange={setPendingDisable}
+        title="禁用账号"
+        description={data ? `确认禁用账号「${data.key.name}」？禁用后该账号不再被调用。` : ''}
+        confirmText="禁用"
+        variant="destructive"
+        onConfirm={() => doToggle('disabled')}
+      />
     </Sheet>
   );
 }

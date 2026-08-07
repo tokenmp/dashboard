@@ -1,6 +1,6 @@
 import { useEffect } from 'react';
 import { NavLink, Outlet, useNavigate } from 'react-router-dom';
-import { LayoutDashboard, ScrollText, Users, Network, Gauge, Ticket, Store, Settings2, BookOpen, ExternalLink, LogOut, Package, ChevronDown, UserCircle } from 'lucide-react';
+import { LayoutDashboard, ScrollText, Users, Gauge, Ticket, Store, Settings2, BookOpen, ExternalLink, LogOut, Package, ChevronDown, UserCircle, Building2, Waypoints, Brain, KeyRound } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator } from '@/components/ui/dropdown-menu';
 import { useAuthStore } from '@/store/auth';
@@ -16,31 +16,39 @@ const NAV_GROUPS: { label: string; items: { to: string; label: string; icon: typ
     items: [{ to: '/dashboard', label: '概览', icon: LayoutDashboard }],
   },
   {
-    label: '监控',
+    label: '上游配置',
+    items: [
+      { to: '/dashboard/upstream/providers', label: '供应商', icon: Building2 },
+      { to: '/dashboard/upstream/keys', label: '上游账号', icon: KeyRound },
+      { to: '/dashboard/upstream/routes', label: '路由组', icon: Waypoints },
+      { to: '/dashboard/upstream/models', label: '平台模型', icon: Brain },
+    ],
+  },
+  {
+    label: '数据监控',
     items: [
       { to: '/dashboard/requests', label: '请求日志', icon: ScrollText },
       { to: '/dashboard/usage', label: '计费用量', icon: Gauge },
     ],
   },
   {
-    label: '管理',
+    label: '业务管理',
     items: [
       { to: '/dashboard/users', label: '用户管理', icon: Users },
       { to: '/dashboard/plans', label: '套餐管理', icon: Package },
-      { to: '/dashboard/upstream', label: '上游与模型', icon: Network },
       { to: '/dashboard/redeem/codes', label: '兑换码管理', icon: Ticket },
       { to: '/dashboard/marketplace', label: '市场分账', icon: Store },
     ],
   },
   {
-    label: '系统',
+    label: '平台运维',
     items: [
       { to: '/dashboard/system', label: '系统', icon: Settings2 },
       { to: '/dashboard/releases', label: '更新日志', icon: BookOpen },
     ],
   },
   {
-    label: '切换',
+    label: '用户面板',
     items: [{ to: '/panel', label: '用户面板', icon: ExternalLink }],
   },
 ];

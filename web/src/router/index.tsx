@@ -1,4 +1,4 @@
-import { createBrowserRouter } from 'react-router-dom';
+import { createBrowserRouter, Navigate } from 'react-router-dom';
 import Login from '@/pages/login';
 import ForgotPassword from '@/pages/forgot-password';
 import NotFound from '@/pages/not-found';
@@ -14,6 +14,7 @@ import Requests from '@/pages/requests';
 import Users from '@/pages/users';
 import Plans from '@/pages/plans';
 import Upstream from '@/pages/upstream';
+import { MappingManagePage } from '@/pages/upstream/MappingManagePage';
 import Usage from '@/pages/usage';
 import RedeemCodes from '@/pages/redeem-codes';
 import Marketplace from '@/pages/marketplace';
@@ -62,7 +63,14 @@ export const router = createBrowserRouter([
       { path: 'requests', element: <Requests /> },
       { path: 'users', element: <Users /> },
       { path: 'plans', element: <Plans /> },
-      { path: 'upstream', element: <Upstream /> },
+      { path: 'upstream', children: [
+        { index: true, element: <Navigate to="providers" replace /> },
+        { path: 'providers', element: <Upstream section="providers" /> },
+        { path: 'routes', element: <Upstream section="routes" /> },
+        { path: 'models', element: <Upstream section="models" /> },
+        { path: 'models/:id/mappings', element: <MappingManagePage /> },
+        { path: 'keys', element: <Upstream section="keys" /> },
+      ] },
       { path: 'usage', element: <Usage /> },
       { path: 'redeem/codes', element: <RedeemCodes /> },
       { path: 'marketplace', element: <Marketplace /> },
