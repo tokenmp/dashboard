@@ -23,7 +23,7 @@ import type {
   UpstreamKeyDetailResult,
   UpstreamQuery,
 } from '@/types/upstream';
-import type { UsageLedgerItem, QuotaResult, UsageQuery } from '@/types/usage';
+import type { UsageLedgerItem, QuotaResult, UsageQuery, UsageTimelineItem, UsageByModelItem } from '@/types/usage';
 import type {
   MarketplaceListingItem,
   MarketplaceSettlementItem,
@@ -195,6 +195,14 @@ export async function getPanelUsageLedgerApi(
 }
 export async function getPanelUsageQuotaApi(): Promise<QuotaResult> {
   const res = await client.get<ApiResponse<QuotaResult>>('/panel/usage/quota');
+  return res.data.data;
+}
+export async function getPanelUsageTimelineApi(params: { interval: string; hours: number }): Promise<UsageTimelineItem[]> {
+  const res = await client.get<ApiResponse<UsageTimelineItem[]>>('/panel/usage/timeline', { params });
+  return res.data.data;
+}
+export async function getPanelUsageByModelApi(params: { hours: number }): Promise<UsageByModelItem[]> {
+  const res = await client.get<ApiResponse<UsageByModelItem[]>>('/panel/usage/by-model', { params });
   return res.data.data;
 }
 

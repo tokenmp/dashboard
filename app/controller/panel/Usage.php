@@ -32,6 +32,10 @@ class Usage extends BaseController
         $ledgerType = trim((string) $this->request->get('ledgerType', ''));
         if ($ledgerType !== '') {
             $query->where('ledger_type', $ledgerType);
+        } else {
+            // 默认隐藏预扣/释放中间态（reserve 与 quota release 互相抵消，净 0）
+            $query->where('ledger_type', '<>', 'reserve')
+                ->whereRaw("(ledger_type <> 'refund' OR reason <> 'quota release')");
         }
         $billingPlan = trim((string) $this->request->get('billingPlan', ''));
         if ($billingPlan !== '') {
@@ -100,5 +104,55 @@ class Usage extends BaseController
             ];
         }
         return ['role' => 'user', 'plans' => $plans];
+    }
+
+    /** GET /api/v1/panel/usage/timeline —— 按时间桶聚合最近扣费 */
+    public function timeline()
+    {
+        $ctx = DataScope::forSelf(app('user'));
+        $interval = trim((string) $this->request->get('interval', 'hour'));
+        $step = $interval === '10min' ? "interval '10 minutes'" : "interval '1 hour'";
+        $hours = max(1, min(168, (int) $this->request->get('hours', 24)));
+        $rows = Db::connect('pgsql')->query(
+            "select ul.billing_plan, to_char(date_bin({$step}, ul.created_at, timestamp '2000-01-01') at time zone 'UTC', 'YYYY-MM-DD\"T\"HH24:MI:SS\"Z\"') as bucket,"
+            . " coalesce(sum(ul.token_delta),0) as token_delta, coalesce(sum(ul.request_delta),0) as request_delta, count(*) as cnt"
+            . " from usage_ledger ul where ul.user_id = ? and ul.created_at >= now() - interval '{$hours} hours'"
+            . " and ul.ledger_type <> 'reserve' and not (ul.ledger_type = 'refund' and ul.reason = 'quota release')"
+            . " group by ul.billing_plan, 2 order by ul.billing_plan, 2",
+            [$ctx->userId()]
+        );
+        return success(array_map(fn ($r) => [
+            'billing_plan' => $r['billing_plan'],
+            'bucket' => $r['bucket'],
+            'token_delta' => (int) $r['token_delta'],
+            'request_delta' => (int) $r['request_delta'],
+            'cnt' => (int) $r['cnt'],
+        ], $rows));
+    }
+
+    /** GET /api/v1/panel/usage/by-model —— 按模型×计费套餐聚合扣费 */
+    public function byModel()
+    {
+        $ctx = DataScope::forSelf(app('user'));
+        $hours = max(1, min(168, (int) $this->request->get('hours', 24)));
+        $rows = Db::connect('pgsql')->query(
+            "select ul.billing_plan, coalesce(rl.model_name,'unknown') as model_name,"
+            . " coalesce(sum(abs(ul.token_delta)),0) as token_charge,"
+            . " coalesce(sum(abs(ul.request_delta)),0) as request_charge,"
+            . " count(*) as cnt"
+            . " from usage_ledger ul join request_logs rl on rl.id = ul.request_log_id"
+            . " where ul.user_id = ? and ul.created_at >= now() - interval '{$hours} hours'"
+            . " and ul.ledger_type = 'charge'"
+            . " group by ul.billing_plan, rl.model_name"
+            . " order by ul.billing_plan, token_charge desc, request_charge desc",
+            [$ctx->userId()]
+        );
+        return success(array_map(fn ($r) => [
+            'billing_plan' => $r['billing_plan'],
+            'model' => $r['model_name'],
+            'token_charge' => (int) $r['token_charge'],
+            'request_charge' => (int) $r['request_charge'],
+            'cnt' => (int) $r['cnt'],
+        ], $rows));
     }
 }

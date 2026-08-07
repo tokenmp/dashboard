@@ -15,6 +15,24 @@ export interface UsageLedgerItem {
   created_at: string;
 }
 
+/** 时间桶聚合（最近扣费趋势） */
+export interface UsageTimelineItem {
+  billing_plan: string;
+  bucket: string;
+  token_delta: number;
+  request_delta: number;
+  cnt: number;
+}
+
+/** 按模型聚合扣费 */
+export interface UsageByModelItem {
+  billing_plan: string;
+  model: string;
+  token_charge: number;
+  request_charge: number;
+  cnt: number;
+}
+
 /** 额度项（平台/用户共用） */
 export interface QuotaItem {
   billingPlan: string;

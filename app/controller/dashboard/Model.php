@@ -76,7 +76,7 @@ class Model extends BaseController
                 . " from upstream_model_mappings umm"
                 . " join upstream_keys uk on uk.id = umm.upstream_key_id"
                 . " join providers p on p.id = uk.provider_id"
-                . " where umm.model_id in ($placeholders) and umm.status = 'active' and uk.status = 'active'"
+                . " where umm.model_id in ($placeholders) and umm.status <> 'deleted' and uk.status <> 'deleted'"
                 . " order by p.name, uk.name",
                 $modelIds
             );

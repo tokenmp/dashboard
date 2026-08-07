@@ -1,7 +1,7 @@
-import { useEffect } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { RefreshCw, Search } from 'lucide-react';
-import { getPanelUsageLedgerApi, getPanelUsageQuotaApi } from '@/api/panel';
+import { getPanelUsageLedgerApi, getPanelUsageQuotaApi, getPanelUsageTimelineApi, getPanelUsageByModelApi } from '@/api/panel';
 import { usePagedQuery } from '@/hooks/usePagedQuery';
 import { useUrlQueryState } from '@/hooks/useUrlQueryState';
 import { useAsync } from '@/hooks/useAsync';
@@ -12,6 +12,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { DebouncedInput } from '@/components/DebouncedInput';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { ModelIcon } from '@/components/ModelIcon';
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from '@/components/ui/select';
@@ -19,9 +20,9 @@ import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from '@/components/ui/table';
 import { formatCompact, formatDateTime, formatNumber } from '@/utils/format';
-import type { UsageQuery, UserQuota, QuotaItem } from '@/types/usage';
+import type { UsageQuery, UserQuota, QuotaItem, UsageByModelItem, UsageLedgerItem, UsageTimelineItem } from '@/types/usage';
 
-const LEDGER_TYPES = ['reserve', 'charge', 'refund', 'recharge', 'adjustment', 'plan_grant', 'plan_upgrade', 'plan_renew', 'plan_replace'];
+const LEDGER_TYPES = ['charge', 'refund', 'recharge', 'adjustment', 'plan_grant', 'plan_upgrade', 'plan_renew', 'plan_replace'];
 const BILLING_PLANS = ['coding', 'token', 'image', 'free'];
 
 /**
@@ -30,23 +31,27 @@ const BILLING_PLANS = ['coding', 'token', 'image', 'free'];
  */
 function Usage() {
   const [sp, setSp] = useSearchParams();
-  const tab = sp.get('tab') ?? 'ledger';
+  const tab = sp.get('tab') ?? 'timeline';
   const switchTab = (t: string) => {
     const next = new URLSearchParams();
-    if (t !== 'ledger') next.set('tab', t);
+    if (t !== 'timeline') next.set('tab', t);
     setSp(next, { replace: true });
   };
   return (
     <div className="space-y-4">
       <div>
         <h1 className="text-2xl font-bold">我的用量</h1>
-        <p className="mt-1 text-sm text-muted-foreground">用量流水与额度总览</p>
+        <p className="mt-1 text-sm text-muted-foreground">最近扣费趋势、账本流水与额度总览</p>
       </div>
       <Tabs value={tab} onValueChange={switchTab}>
         <TabsList>
+          <TabsTrigger value="timeline">最近扣费</TabsTrigger>
+          <TabsTrigger value="by-model">按模型</TabsTrigger>
           <TabsTrigger value="ledger">账本流水</TabsTrigger>
           <TabsTrigger value="quota">额度总览</TabsTrigger>
         </TabsList>
+        <TabsContent value="timeline"><TimelineTab /></TabsContent>
+        <TabsContent value="by-model"><ByModelTab /></TabsContent>
         <TabsContent value="ledger"><LedgerTab /></TabsContent>
         <TabsContent value="quota"><QuotaTab /></TabsContent>
       </Tabs>
@@ -64,6 +69,190 @@ function Pager({ page, size, total, loading, setPage }: { page: number; size: nu
         <Button variant="outline" size="sm" disabled={page <= 1 || loading} onClick={() => setPage(page - 1)}>上一页</Button>
         <Button variant="outline" size="sm" disabled={page >= pages || loading} onClick={() => setPage(page + 1)}>下一页</Button>
       </div>
+    </div>
+  );
+}
+
+/* ----------------------------- 最近扣费 ----------------------------- */
+function TimelineTab() {
+  const [interval, setIntervalSel] = useState('hour');
+  const [hours, setHoursSel] = useState(24);
+  const { data, loading, error, reload } = useAsync(() => getPanelUsageTimelineApi({ interval, hours }), [interval, hours]);
+
+  const plans = useMemo(() => {
+    const map = new Map<string, UsageTimelineItem[]>();
+    for (const d of data ?? []) {
+      if (!map.has(d.billing_plan)) map.set(d.billing_plan, []);
+      map.get(d.billing_plan)!.push(d);
+    }
+    return Array.from(map.entries());
+  }, [data]);
+
+  const bucketsFor = (items: UsageTimelineItem[], byReq: boolean) => {
+    const stepMs = interval === '10min' ? 600_000 : 3_600_000;
+    const count = (hours * 3_600_000) / stepMs;
+    const valMap = new Map(items.map((d) => [Date.parse(d.bucket), byReq ? d.request_delta : d.token_delta]));
+    const cntMap = new Map(items.map((d) => [Date.parse(d.bucket), d.cnt]));
+    const nowMs = Date.now();
+    const start = Math.floor(nowMs / stepMs) * stepMs;
+    const arr: { ts: number; v: number; cnt: number }[] = [];
+    for (let i = count - 1; i >= 0; i--) {
+      const ts = start - i * stepMs;
+      arr.push({ ts, v: valMap.get(ts) ?? 0, cnt: cntMap.get(ts) ?? 0 });
+    }
+    return arr;
+  };
+
+  return (
+    <div className="space-y-3">
+      <Card><CardContent className="flex flex-wrap items-end gap-3 p-4">
+        <div className="w-[140px]">
+          <label className="mb-1 block text-xs text-muted-foreground">时间粒度</label>
+          <Select value={interval} onValueChange={setIntervalSel}>
+            <SelectTrigger><SelectValue /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="hour">每小时</SelectItem>
+              <SelectItem value="10min">每 10 分钟</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+        <div className="w-[150px]">
+          <label className="mb-1 block text-xs text-muted-foreground">时间范围</label>
+          <Select value={String(hours)} onValueChange={(v) => setHoursSel(Number(v))}>
+            <SelectTrigger><SelectValue /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="24">最近 24 小时</SelectItem>
+              <SelectItem value="72">最近 3 天</SelectItem>
+              <SelectItem value="168">最近 7 天</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+        <Button variant="outline" size="sm" onClick={reload} disabled={loading}><RefreshCw className={`mr-1.5 h-4 w-4 ${loading ? 'animate-spin' : ''}`} />刷新</Button>
+      </CardContent></Card>
+
+      {error && <Card className="border-destructive"><CardContent className="py-3 text-sm text-destructive">{error}</CardContent></Card>}
+
+      {loading ? <Skeleton className="h-48 w-full" />
+        : plans.length === 0 ? <EmptyState title="暂无扣费数据" />
+        : plans.map(([plan, items]) => {
+          const byReq = planByRequest(plan);
+          const unit = byReq ? '次' : 'token';
+          const buckets = bucketsFor(items, byReq);
+          const sum = buckets.reduce((s, b) => s + b.v, 0);
+          const sumCnt = buckets.reduce((s, b) => s + b.cnt, 0);
+          const maxAbs = Math.max(1, ...buckets.map((b) => Math.abs(b.v)));
+          return (
+            <Card key={plan}><CardContent className="p-4">
+              <div className="mb-3 flex items-baseline justify-between">
+                <div>
+                  <span className="text-sm font-medium">{PLAN_LABEL[plan] ?? plan}</span>
+                  <span className="ml-2 text-xs text-muted-foreground">按 {byReq ? '请求次数' : 'Token'} 扣费</span>
+                </div>
+                <span className="text-sm tabular-nums text-muted-foreground">净 <span className={`font-semibold ${sum < 0 ? 'text-destructive' : sum > 0 ? 'text-primary' : 'text-foreground'}`}>{byReq ? formatNumber(sum) : formatCompact(sum)}</span> {unit} · {formatNumber(sumCnt)} 笔</span>
+              </div>
+              <div className="max-h-[320px] overflow-y-auto">
+                {buckets.slice().reverse().map((b) => (
+                  <div key={b.ts} className="flex items-center gap-3 border-b py-1.5 text-sm last:border-0">
+                    <span className="w-[110px] shrink-0 font-mono text-xs text-muted-foreground">{formatBucketTime(b.ts)}</span>
+                    <div className="flex-1">
+                      <div className="h-2 w-full rounded-full bg-muted">
+                        <div className={`h-full rounded-full ${b.v < 0 ? 'bg-destructive' : b.v > 0 ? 'bg-primary' : ''}`} style={{ width: `${Math.min(100, (Math.abs(b.v) / maxAbs) * 100)}%` }} />
+                      </div>
+                    </div>
+                    <span className={`w-[90px] shrink-0 text-right tabular-nums ${b.v < 0 ? 'text-destructive' : b.v > 0 ? 'text-primary' : 'text-muted-foreground'}`}>{b.v !== 0 ? (byReq ? formatNumber(b.v) : formatCompact(b.v)) : '—'}</span>
+                    <span className="w-[50px] shrink-0 text-right text-xs text-muted-foreground">{b.cnt > 0 ? `${b.cnt}` : ''}</span>
+                  </div>
+                ))}
+              </div>
+            </CardContent></Card>
+          );
+        })}
+    </div>
+  );
+}
+
+function formatBucketTime(ts: number): string {
+  const d = new Date(ts);
+  const pad = (n: number) => String(n).padStart(2, '0');
+  return `${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+
+/* ----------------------------- 按模型 ----------------------------- */
+const PLAN_LABEL: Record<string, string> = { coding: '编程套餐', token: 'Token 套餐', image: '图像套餐' };
+const planByRequest = (plan: string) => plan === 'coding';
+
+function ByModelTab() {
+  const [hours, setHoursSel] = useState(24);
+  const { data, loading, error, reload } = useAsync(() => getPanelUsageByModelApi({ hours }), [hours]);
+
+  const plans = useMemo(() => {
+    const map = new Map<string, UsageByModelItem[]>();
+    for (const d of data ?? []) {
+      if (!map.has(d.billing_plan)) map.set(d.billing_plan, []);
+      map.get(d.billing_plan)!.push(d);
+    }
+    return Array.from(map.entries());
+  }, [data]);
+
+  return (
+    <div className="space-y-3">
+      <Card><CardContent className="flex flex-wrap items-end gap-3 p-4">
+        <div className="w-[150px]">
+          <label className="mb-1 block text-xs text-muted-foreground">时间范围</label>
+          <Select value={String(hours)} onValueChange={(v) => setHoursSel(Number(v))}>
+            <SelectTrigger><SelectValue /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="24">最近 24 小时</SelectItem>
+              <SelectItem value="72">最近 3 天</SelectItem>
+              <SelectItem value="168">最近 7 天</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+        <Button variant="outline" size="sm" onClick={reload} disabled={loading}><RefreshCw className={`mr-1.5 h-4 w-4 ${loading ? 'animate-spin' : ''}`} />刷新</Button>
+      </CardContent></Card>
+
+      {error && <Card className="border-destructive"><CardContent className="py-3 text-sm text-destructive">{error}</CardContent></Card>}
+
+      {loading ? <Skeleton className="h-48 w-full" />
+        : plans.length === 0 ? <EmptyState title="暂无扣费数据" />
+        : plans.map(([plan, items]) => {
+          const byReq = planByRequest(plan);
+          const unit = byReq ? '次' : 'token';
+          const vals = items.map((i) => (byReq ? i.request_charge : i.token_charge));
+          const max = Math.max(1, ...vals);
+          const total = vals.reduce((s, v) => s + v, 0);
+          return (
+            <Card key={plan}><CardContent className="p-4">
+              <div className="mb-3 flex items-baseline justify-between">
+                <div>
+                  <span className="text-sm font-medium">{PLAN_LABEL[plan] ?? plan}</span>
+                  <span className="ml-2 text-xs text-muted-foreground">按 {byReq ? '请求次数' : 'Token'} 扣费</span>
+                </div>
+                <span className="text-sm tabular-nums text-muted-foreground">合计 <span className="font-semibold text-foreground">{byReq ? formatNumber(total) : formatCompact(total)}</span> {unit}</span>
+              </div>
+              <div className="space-y-2">
+                {items.map((m) => {
+                  const v = byReq ? m.request_charge : m.token_charge;
+                  const pct = (v / max) * 100;
+                  return (
+                    <div key={m.model} className="flex items-center gap-3" title={`${m.model}：${formatNumber(v)} ${unit} · ${m.cnt} 笔`}>
+                      <span className="flex w-36 shrink-0 items-center gap-1.5 text-sm" title={m.model}>
+                        <ModelIcon id={m.model} size={16} />
+                        <span className="truncate">{m.model}</span>
+                      </span>
+                      <div className="h-6 flex-1 overflow-hidden rounded bg-muted">
+                        <div className="flex h-full items-center justify-end rounded bg-foreground px-2" style={{ width: `${Math.max(pct, 3)}%` }}>
+                          {pct > 18 && <span className="text-[10px] font-medium text-white">{byReq ? formatNumber(v) : formatCompact(v)}</span>}
+                        </div>
+                      </div>
+                      <span className="w-24 shrink-0 text-right text-sm tabular-nums text-muted-foreground">{byReq ? formatNumber(v) : formatCompact(v)}</span>
+                    </div>
+                  );
+                })}
+              </div>
+            </CardContent></Card>
+          );
+        })}
     </div>
   );
 }
@@ -119,16 +308,15 @@ function LedgerTab() {
           : <Table>
               <TableHeader><TableRow>
                 <TableHead className="w-[160px]">时间</TableHead><TableHead className="w-[110px]">类型</TableHead>
-                <TableHead className="w-[90px]">计费</TableHead><TableHead className="w-[120px] text-right">Token Δ</TableHead>
-                <TableHead className="w-[110px] text-right">请求 Δ</TableHead><TableHead>原因</TableHead>
+                <TableHead className="w-[90px]">计费</TableHead><TableHead className="w-[120px] text-right">变动</TableHead>
+                <TableHead>原因</TableHead>
               </TableRow></TableHeader>
               <TableBody>{list.map((l) => (
                 <TableRow key={l.id}>
                   <TableCell className="font-mono text-xs text-muted-foreground">{formatDateTime(l.created_at)}</TableCell>
                   <TableCell><Badge variant="secondary" className="text-[10px]">{l.ledger_type}</Badge></TableCell>
                   <TableCell className="text-xs">{l.billing_plan}</TableCell>
-                  <TableCell className={`text-right tabular-nums ${Number(l.token_delta) < 0 ? 'text-destructive' : 'text-primary'}`}>{Number(l.token_delta) !== 0 ? formatCompact(Number(l.token_delta)) : '—'}</TableCell>
-                  <TableCell className={`text-right tabular-nums ${l.request_delta < 0 ? 'text-destructive' : 'text-primary'}`}>{l.request_delta !== 0 ? formatNumber(l.request_delta) : '—'}</TableCell>
+                  <TableCell className={`text-right tabular-nums ${deltaFor(l) < 0 ? 'text-destructive' : deltaFor(l) > 0 ? 'text-primary' : ''}`}>{deltaFor(l) !== 0 ? (l.billing_plan === 'coding' ? formatNumber(deltaFor(l)) : formatCompact(deltaFor(l))) : '—'}</TableCell>
                   <TableCell className="max-w-[260px] truncate text-xs text-muted-foreground">{l.reason ?? '—'}</TableCell>
                 </TableRow>
               ))}</TableBody>
@@ -188,6 +376,11 @@ function UserQuotaView({ data }: { data: UserQuota }) {
 
 function planLabel(plan: string): string {
   return { coding: '编程套餐', token: 'Token 套餐', image: '图像套餐', free: '免费' }[plan] ?? plan;
+}
+
+/** 按计费套餐取该流水的实际变动值（coding=请求次数，其余=token） */
+function deltaFor(l: UsageLedgerItem): number {
+  return l.billing_plan === 'coding' ? l.request_delta : Number(l.token_delta);
 }
 
 export default Usage;

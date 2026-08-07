@@ -90,6 +90,8 @@ Route::group('api/v1', function () {
             Route::group('usage', function () {
                 Route::get('ledger', 'panel/Usage/ledger');
                 Route::get('quota', 'panel/Usage/quota');
+                Route::get('timeline', 'panel/Usage/timeline');
+                Route::get('by-model', 'panel/Usage/byModel');
             });
 
             // 我参与的市场分账
