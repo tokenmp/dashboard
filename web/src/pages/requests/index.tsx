@@ -484,13 +484,10 @@ function AttemptsSection({ attempts }: { attempts: import('@/types/request-log')
                 </TableCell>
                 <TableCell className="text-right tabular-nums text-sm">{a.latency_ms !== null ? `${formatNumber(a.latency_ms)}ms` : '—'}</TableCell>
                 <TableCell>
-                  {a.error_code ? (
-                    <Badge variant="destructive" className="text-sm" title={a.error_message ?? ''}>
-                      {attemptErrorLabel(a.error_code)}
-                    </Badge>
-                  ) : (
-                    <Badge variant="default" className="text-sm">成功</Badge>
-                  )}
+                  <div className="flex items-center gap-1.5 text-sm" title={a.error_code ? (a.error_message ?? '') : undefined}>
+                    <span className={a.error_code ? 'h-1.5 w-1.5 rounded-full bg-red-500' : 'h-1.5 w-1.5 rounded-full bg-emerald-500'} />
+                    <span className="text-muted-foreground">{a.error_code ? attemptErrorLabel(a.error_code) : '成功'}</span>
+                  </div>
                 </TableCell>
               </TableRow>
             ))}
