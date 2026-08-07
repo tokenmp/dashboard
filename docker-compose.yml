@@ -21,6 +21,8 @@ services:
       # 密钥哈希 pepper（须与 executor 一致，否则生成的密钥无法鉴权）：
       #   export API_KEY_PEPPER='<与生产 executor 相同的 pepper>'
       API_KEY_PEPPER: ${API_KEY_PEPPER:-}
+      # 上游账号加密主密钥（须与 executor 一致，否则创建/探测账号报未配置）：
+      MASTER_ENCRYPTION_KEY: ${MASTER_ENCRYPTION_KEY:-}
       # 接入数据库时按需补充（镜像已装 pdo_mysql / pdo_pgsql / pgsql 扩展）：
       # DB_TYPE: mysql
       # DB_HOST: db
