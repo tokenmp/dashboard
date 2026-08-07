@@ -17,6 +17,10 @@ interface Props {
   /** 已选中的 option 不显示在列表中（避免重复绑定） */
   excludeValues?: string[];
   disabled?: boolean;
+  /** 异步搜索回调：传入后输入会触发外部搜索（options 由外部按 query 提供，取代本地过滤） */
+  onQueryChange?: (q: string) => void;
+  /** 异步加载态：显示「加载中…」 */
+  loading?: boolean;
 }
 
 /**
@@ -24,7 +28,7 @@ interface Props {
  * - 不用 Portal，用绝对定位 dropdown，避免 Dialog 内 z-index 冲突
  * - 支持搜索过滤（label + hint）
  */
-export function SearchableSelect({ options, value, onChange, placeholder, excludeValues = [], disabled }: Props) {
+export function SearchableSelect({ options, value, onChange, placeholder, excludeValues = [], disabled, onQueryChange, loading }: Props) {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState('');
   const ref = useRef<HTMLDivElement>(null);
@@ -40,19 +44,22 @@ export function SearchableSelect({ options, value, onChange, placeholder, exclud
   }, [open]);
 
   const excludeSet = new Set(excludeValues);
-  const filtered = options.filter((o) => {
-    if (excludeSet.has(o.value) && o.value !== value) return false;
-    if (!query) return true;
-    const q = query.toLowerCase();
-    return o.label.toLowerCase().includes(q) || (o.hint?.toLowerCase().includes(q) ?? false);
-  });
+  // 异步模式（传入 onQueryChange）：options 由外部按 query 提供，不再本地过滤
+  const filtered = onQueryChange
+    ? options.filter((o) => !(excludeSet.has(o.value) && o.value !== value))
+    : options.filter((o) => {
+        if (excludeSet.has(o.value) && o.value !== value) return false;
+        if (!query) return true;
+        const q = query.toLowerCase();
+        return o.label.toLowerCase().includes(q) || (o.hint?.toLowerCase().includes(q) ?? false);
+      });
 
   return (
     <div className="relative" ref={ref}>
       <button
         type="button"
         disabled={disabled}
-        onClick={() => { setOpen((v) => !v); setQuery(''); }}
+        onClick={() => { setOpen((v) => !v); setQuery(''); onQueryChange?.(''); }}
         className="flex h-9 w-full items-center justify-between rounded-md border border-input bg-transparent px-3 py-2 text-left text-sm ring-offset-background placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
       >
         <span className={selected ? '' : 'text-muted-foreground'}>
@@ -72,14 +79,16 @@ export function SearchableSelect({ options, value, onChange, placeholder, exclud
               <Input
                 autoFocus
                 value={query}
-                onChange={(e) => setQuery(e.target.value)}
+                onChange={(e) => { setQuery(e.target.value); onQueryChange?.(e.target.value); }}
                 placeholder="搜索…"
                 className="h-8 border-0 pl-7 shadow-none focus-visible:ring-0"
               />
             </div>
           </div>
           <div className="max-h-[200px] overflow-y-auto p-1">
-            {filtered.length === 0 ? (
+            {loading ? (
+              <div className="py-3 text-center text-xs text-muted-foreground">加载中…</div>
+            ) : filtered.length === 0 ? (
               <div className="py-3 text-center text-xs text-muted-foreground">无匹配项</div>
             ) : (
               filtered.map((o) => (

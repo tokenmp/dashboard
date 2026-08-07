@@ -1,13 +1,14 @@
 import { Fragment, useEffect, useState } from 'react';
 import { RefreshCw, Search, ChevronRight, ChevronDown, Clock, Cpu, Activity, AlertTriangle, Network, Brain, Zap, Wallet, CheckCircle2, Info } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { getDashboardRequestsApi, getDashboardRequestDetailApi, getDashboardUserKeysApi } from '@/api/dashboard';
+import { getDashboardRequestsApi, getDashboardRequestDetailApi } from '@/api/dashboard';
 import { usePagedQuery } from '@/hooks/usePagedQuery';
 import { useUrlQueryState } from '@/hooks/useUrlQueryState';
 import { useAsync } from '@/hooks/useAsync';
 import { useRole } from '@/hooks/useRole';
 import { StatusBadge } from '@/components/StatusBadge';
-import { ModelIcon } from '@/components/ModelIcon';
+import { REQUEST_LOG_COLUMNS, ColumnToggle, useColumnVisibility } from '@/components/RequestLogColumns';
+import { UserSearchSelect } from '@/components/UserSearchSelect';
 import { EmptyState } from '@/components/EmptyState';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -44,7 +45,6 @@ import {
 import { formatCompact, formatDateTime, formatNumber } from '@/utils/format';
 import { attemptErrorLabel, withAttemptPasses } from '@/utils/attempts';
 import type { RequestLogQuery } from '@/types/request-log';
-import type { UserApiKeyItem } from '@/types/user';
 
 const PROTOCOLS = ['openai', 'anthropic', 'openai_chat', 'openai_responses', 'anthropic_messages', 'image_generation', 'tokenmp_gateway', 'custom'];
 
@@ -56,7 +56,7 @@ function Requests() {
     { name: 'q', key: 'keyword' },
     { name: 'protocol', key: 'protocol' },
     { name: 'success', key: 'success' },
-    { name: 'key', key: 'userApiKeyId' },
+    { name: 'user', key: 'userId' },
     { name: 'page', key: 'page', type: 'number', default: 1 },
     { name: 'size', key: 'size', type: 'number', default: 20 },
   ]);
@@ -66,8 +66,10 @@ function Requests() {
     });
   useEffect(() => { write(params); }, [params]);
 
-  const { data: keysData } = useAsync(getDashboardUserKeysApi, []);
-  const keys = keysData ?? [];
+  const allCols = REQUEST_LOG_COLUMNS;
+  const [visibleKeys, setVisibleKeys] = useColumnVisibility('dashboard-req-cols', allCols.map((c) => c.key));
+  const visibleCols = allCols.filter((c) => visibleKeys.includes(c.key));
+
 
   return (
     <div className="space-y-4">
@@ -86,7 +88,7 @@ function Requests() {
       </div>
 
       {/* 筛选条 */}
-      <FiltersBar params={params} onFilter={setFilters} keys={keys} onReset={() => setFilters({ keyword: '', protocol: '', success: '', userApiKeyId: '' })} />
+      <FiltersBar params={params} onFilter={setFilters} onReset={() => setFilters({ keyword: '', protocol: '', success: '', userId: '' })} />
 
       {error && (
         <Card className="border-destructive">
@@ -109,20 +111,12 @@ function Requests() {
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead className="w-[140px]">ID</TableHead>
-                  <TableHead>用户</TableHead>
-                  <TableHead>密钥</TableHead>
-                  <TableHead className="w-[110px]">协议</TableHead>
-                  <TableHead>模型</TableHead>
-                  <TableHead className="w-[70px]">类型</TableHead>
-                  <TableHead className="w-[80px]">思考</TableHead>
-                  <TableHead className="w-[110px] text-right">Token</TableHead>
-                  <TableHead className="w-[90px] text-right">推理速度</TableHead>
-                  <TableHead className="w-[90px] text-right">首字输出</TableHead>
-                  <TableHead className="w-[90px] text-right">耗时</TableHead>
-                  <TableHead className="w-[90px]">状态</TableHead>
-                  <TableHead className="w-[160px]">时间</TableHead>
-                  <TableHead className="w-[60px]"></TableHead>
+                  {visibleCols.map((c) => (
+                    <TableHead key={c.key} className={c.headClass}>{c.label}</TableHead>
+                  ))}
+                  <TableHead className="w-[60px] text-right">
+                    <ColumnToggle columns={allCols} visibleKeys={visibleKeys} onChange={setVisibleKeys} />
+                  </TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -132,64 +126,7 @@ function Requests() {
                     className="cursor-pointer h-12"
                     onClick={() => setDetailId(r.id)}
                   >
-                    <TableCell className="font-mono text-sm text-muted-foreground">
-                      {r.request_id ? r.request_id.slice(-10) : '—'}
-                    </TableCell>
-                    <TableCell className="text-sm text-muted-foreground">
-                      <span className="max-w-[160px] truncate" title={r.user_email ?? ''}>{r.user_email ?? '—'}</span>
-                    </TableCell>
-                    <TableCell className="text-sm text-muted-foreground">
-                      <span className="max-w-[140px] truncate" title={r.api_key_name ?? ''}>{r.api_key_name ?? '—'}</span>
-                    </TableCell>
-                    <TableCell>
-                      <span className="text-sm">{r.protocol ?? '—'}</span>
-                    </TableCell>
-                    <TableCell className="font-medium">
-                      <div className="flex items-center gap-1.5">
-                        <ModelIcon id={r.model_name ?? ''} displayName={r.model_name ?? undefined} size={20} />
-                        <span className="max-w-[220px] truncate">{r.model_name || '—'}</span>
-                      </div>
-                    </TableCell>
-                    <TableCell>
-                      {r.stream
-                        ? <Badge variant="secondary" className="px-1.5 py-0 text-sm font-normal text-muted-foreground">流式</Badge>
-                        : <span className="text-sm text-muted-foreground">—</span>}
-                    </TableCell>
-                    <TableCell className="text-sm">
-                      {r.thinking_mode ? (
-                        <span className="inline-flex items-center gap-1">
-                          <span>{r.thinking_effort ?? '—'}</span>
-                          {r.thinking_effort_degraded && (
-                            <Badge variant="outline" className="px-1 py-0 text-sm text-amber-600">降级</Badge>
-                          )}
-                        </span>
-                      ) : (
-                        <span className="text-muted-foreground">—</span>
-                      )}
-                    </TableCell>
-                    <TableCell className="text-right tabular-nums">
-                      {r.total_tokens !== null ? formatCompact(r.total_tokens) : '—'}
-                    </TableCell>
-                    <TableCell className="text-right tabular-nums text-sm text-muted-foreground">
-                      {r.ttft_ms !== null && r.latency_ms !== null && r.latency_ms > r.ttft_ms && r.output_tokens
-                        ? formatNumber(Math.round((r.output_tokens / (r.latency_ms - r.ttft_ms)) * 1000))
-                        : '—'}
-                    </TableCell>
-                    <TableCell className="text-right tabular-nums text-sm text-muted-foreground">
-                      {r.ttft_ms !== null ? `${formatNumber(r.ttft_ms)}ms` : '—'}
-                    </TableCell>
-                    <TableCell className="text-right tabular-nums text-sm text-muted-foreground">
-                      {r.latency_ms !== null ? `${formatNumber(r.latency_ms)}ms` : '—'}
-                    </TableCell>
-                    <TableCell>
-                      <div className="flex items-center gap-1.5 text-sm" title={r.error_code ?? undefined}>
-                        <span className={r.success === null ? 'h-1.5 w-1.5 rounded-full bg-muted-foreground/40' : r.success ? 'h-1.5 w-1.5 rounded-full bg-emerald-500' : 'h-1.5 w-1.5 rounded-full bg-red-500'} />
-                        <span className="tabular-nums text-muted-foreground">{r.final_status_code ?? '—'}</span>
-                      </div>
-                    </TableCell>
-                    <TableCell className="font-mono text-sm text-muted-foreground">
-                      {formatDateTime(r.created_at)}
-                    </TableCell>
+                    {visibleCols.map((c) => <Fragment key={c.key}>{c.cell(r)}</Fragment>)}
                     <TableCell>
                       <ChevronRight className="h-4 w-4 text-muted-foreground" />
                     </TableCell>
@@ -229,12 +166,10 @@ function Requests() {
 function FiltersBar({
   params,
   onFilter,
-  keys,
   onReset,
 }: {
   params: RequestLogQuery;
   onFilter: (f: Partial<RequestLogQuery>) => void;
-  keys: UserApiKeyItem[];
   onReset: () => void;
 }) {
   return (
@@ -252,22 +187,12 @@ function FiltersBar({
             />
           </div>
         </div>
-        <div className="w-[160px]">
-          <label className="mb-1 block text-sm text-muted-foreground">密钥</label>
-          <Select value={params.userApiKeyId ?? 'all'} onValueChange={(v) => onFilter({ userApiKeyId: v === 'all' ? '' : v })}>
-            <SelectTrigger><span className="truncate">{params.userApiKeyId ? (keys.find((k) => k.id === params.userApiKeyId)?.name ?? '全部') : '全部'}</span></SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">全部</SelectItem>
-              {keys.map((k) => (
-                <SelectItem key={k.id} value={k.id}>
-                  <div className="flex flex-col">
-                    <span>{k.name}</span>
-                    <span className="text-muted-foreground">{k.key_prefix}{'•'.repeat(6)}{k.key_suffix}</span>
-                  </div>
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+        <div className="w-[200px]">
+          <label className="mb-1 block text-sm text-muted-foreground">用户</label>
+          <UserSearchSelect
+            value={params.userId ?? ''}
+            onChange={(v) => onFilter({ userId: v })}
+          />
         </div>
         <div className="w-[140px]">
           <label className="mb-1 block text-sm text-muted-foreground">协议</label>

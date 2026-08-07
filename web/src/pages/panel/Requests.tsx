@@ -1,11 +1,10 @@
-import { useEffect, useState } from 'react';
+import { Fragment, useEffect, useState } from 'react';
 import { RefreshCw, Search, ChevronRight, Clock, Cpu, Activity, AlertTriangle, Network, Brain, Zap, Wallet, CheckCircle2, Info } from 'lucide-react';
 import { getPanelRequestsApi, getPanelRequestDetailApi, getPanelKeysApi } from '@/api/panel';
 import { usePagedQuery } from '@/hooks/usePagedQuery';
 import { useUrlQueryState } from '@/hooks/useUrlQueryState';
 import { useAsync } from '@/hooks/useAsync';
 import { StatusBadge } from '@/components/StatusBadge';
-import { ModelIcon } from '@/components/ModelIcon';
 import { EmptyState } from '@/components/EmptyState';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -40,6 +39,7 @@ import {
   TooltipTrigger,
 } from '@/components/ui/tooltip';
 import { formatCompact, formatDateTime, formatNumber } from '@/utils/format';
+import { REQUEST_LOG_COLUMNS, ColumnToggle, useColumnVisibility } from '@/components/RequestLogColumns';
 import { attemptErrorLabel, withAttemptPasses } from '@/utils/attempts';
 import type {
   RequestLogQuery,
@@ -75,6 +75,10 @@ function Requests() {
       initial: { size: 20, sort: '-created_at', ...urlInit } as RequestLogQuery,
     });
   useEffect(() => { write(params); }, [params]);
+
+  const allCols = REQUEST_LOG_COLUMNS.filter((c) => c.key !== 'user');
+  const [visibleKeys, setVisibleKeys] = useColumnVisibility('panel-req-cols', allCols.map((c) => c.key));
+  const visibleCols = allCols.filter((c) => visibleKeys.includes(c.key));
 
   const { data: keysData } = useAsync(getPanelKeysApi, []);
   const keys = keysData ?? [];
@@ -124,19 +128,12 @@ function Requests() {
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead className="w-[140px]">ID</TableHead>
-                  <TableHead>密钥</TableHead>
-                  <TableHead className="w-[110px]">协议</TableHead>
-                  <TableHead>模型</TableHead>
-                  <TableHead className="w-[70px]">类型</TableHead>
-                  <TableHead className="w-[80px]">思考</TableHead>
-                  <TableHead className="w-[110px] text-right">Token</TableHead>
-                  <TableHead className="w-[90px] text-right">推理速度</TableHead>
-                  <TableHead className="w-[90px] text-right">首字输出</TableHead>
-                  <TableHead className="w-[90px] text-right">耗时</TableHead>
-                  <TableHead className="w-[90px]">状态</TableHead>
-                  <TableHead className="w-[160px]">时间</TableHead>
-                  <TableHead className="w-[60px]"></TableHead>
+                  {visibleCols.map((c) => (
+                    <TableHead key={c.key} className={c.headClass}>{c.label}</TableHead>
+                  ))}
+                  <TableHead className="w-[60px] text-right">
+                    <ColumnToggle columns={allCols} visibleKeys={visibleKeys} onChange={setVisibleKeys} />
+                  </TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -146,61 +143,7 @@ function Requests() {
                     className="cursor-pointer h-12"
                     onClick={() => setDetailId(r.id)}
                   >
-                    <TableCell className="font-mono text-sm text-muted-foreground">
-                      {r.request_id ? r.request_id.slice(-10) : '—'}
-                    </TableCell>
-                    <TableCell className="text-sm text-muted-foreground">
-                      <span className="max-w-[140px] truncate" title={r.api_key_name ?? ''}>{r.api_key_name ?? '—'}</span>
-                    </TableCell>
-                    <TableCell>
-                      <span className="text-sm">{r.protocol ?? '—'}</span>
-                    </TableCell>
-                    <TableCell className="font-medium">
-                      <div className="flex items-center gap-1.5">
-                        <ModelIcon id={r.model_name ?? ''} displayName={r.model_name ?? undefined} size={20} />
-                        <span className="max-w-[220px] truncate">{r.model_name || '—'}</span>
-                      </div>
-                    </TableCell>
-                    <TableCell>
-                      {r.stream
-                        ? <Badge variant="secondary" className="px-1.5 py-0 text-sm font-normal text-muted-foreground">流式</Badge>
-                        : <span className="text-sm text-muted-foreground">—</span>}
-                    </TableCell>
-                    <TableCell className="text-sm">
-                      {r.thinking_mode ? (
-                        <span className="inline-flex items-center gap-1">
-                          <span>{r.thinking_effort ?? '—'}</span>
-                          {r.thinking_effort_degraded && (
-                            <Badge variant="outline" className="px-1 py-0 text-sm text-amber-600">降级</Badge>
-                          )}
-                        </span>
-                      ) : (
-                        <span className="text-muted-foreground">—</span>
-                      )}
-                    </TableCell>
-                    <TableCell className="text-right tabular-nums">
-                      {r.total_tokens !== null ? formatCompact(r.total_tokens) : '—'}
-                    </TableCell>
-                    <TableCell className="text-right tabular-nums text-sm text-muted-foreground">
-                      {r.ttft_ms !== null && r.latency_ms !== null && r.latency_ms > r.ttft_ms && r.output_tokens
-                        ? formatNumber(Math.round((r.output_tokens / (r.latency_ms - r.ttft_ms)) * 1000))
-                        : '—'}
-                    </TableCell>
-                    <TableCell className="text-right tabular-nums text-sm text-muted-foreground">
-                      {r.ttft_ms !== null ? `${formatNumber(r.ttft_ms)}ms` : '—'}
-                    </TableCell>
-                    <TableCell className="text-right tabular-nums text-sm text-muted-foreground">
-                      {r.latency_ms !== null ? `${formatNumber(r.latency_ms)}ms` : '—'}
-                    </TableCell>
-                    <TableCell>
-                      <div className="flex items-center gap-1.5 text-sm" title={r.error_code ?? undefined}>
-                        <span className={r.success === null ? 'h-1.5 w-1.5 rounded-full bg-muted-foreground/40' : r.success ? 'h-1.5 w-1.5 rounded-full bg-emerald-500' : 'h-1.5 w-1.5 rounded-full bg-red-500'} />
-                        <span className="tabular-nums text-muted-foreground">{r.final_status_code ?? '—'}</span>
-                      </div>
-                    </TableCell>
-                    <TableCell className="font-mono text-sm text-muted-foreground">
-                      {formatDateTime(r.created_at)}
-                    </TableCell>
+                    {visibleCols.map((c) => <Fragment key={c.key}>{c.cell(r)}</Fragment>)}
                     <TableCell>
                       <ChevronRight className="h-4 w-4 text-muted-foreground" />
                     </TableCell>
