@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ChevronRight, Pencil, Plus, RefreshCw, Search, Settings2, Plug } from 'lucide-react';
+import { ChevronRight, Copy, Pencil, Plus, RefreshCw, Search, Settings2, Plug } from 'lucide-react';
 import { usePagedQuery } from '@/hooks/usePagedQuery';
 import { useUrlQueryState } from '@/hooks/useUrlQueryState';
 import { StatusBadge } from '@/components/StatusBadge';
@@ -203,11 +203,11 @@ function ModelCard({ m, onEdit, onManageMappings }: { m: AiModelItem; onEdit: ()
   };
   const providers = useMemo(() => m.providers ?? [], [m.providers]);
   const grouped = useMemo(() => {
-    const map = new Map<string, { providerName: string; keys: typeof providers }>();
+    const map = new Map<string, { providerName: string; providerKey: string; keys: typeof providers }>();
     for (const p of providers) {
       const name = p.provider_display_name || p.provider_name;
       if (!map.has(p.provider_name)) {
-        map.set(p.provider_name, { providerName: name, keys: [] });
+        map.set(p.provider_name, { providerName: name, providerKey: p.provider_name, keys: [] });
       }
       map.get(p.provider_name)!.keys.push(p);
     }
@@ -304,7 +304,22 @@ function ModelCard({ m, onEdit, onManageMappings }: { m: AiModelItem; onEdit: ()
                   return (
                     <div key={group.providerName} className="rounded-lg border p-3">
                       <div className="flex items-center justify-between">
-                        <span className="font-medium">{group.providerName}</span>
+                        <div className="flex items-center gap-2">
+                          <span className="font-medium">{group.providerName}</span>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const selector = `${m.name}@${group.providerKey}`;
+                              navigator.clipboard.writeText(selector);
+                              toast.success(`已复制选择器：${selector}`);
+                            }}
+                            className="inline-flex items-center gap-1 rounded bg-muted px-1.5 py-0.5 font-mono text-[10px] text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+                            title="复制选择器"
+                          >
+                            {m.name}@{group.providerKey}
+                            <Copy className="h-2.5 w-2.5" />
+                          </button>
+                        </div>
                         <Badge
                           variant={allActive ? 'secondary' : 'destructive'}
                           className="text-[10px]"
