@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react';
-import { ChevronDown, Search } from 'lucide-react';
+import { ChevronDown, ChevronUp, Search } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 
 export interface ComboOption {
@@ -31,6 +31,7 @@ interface Props {
 export function SearchableSelect({ options, value, onChange, placeholder, excludeValues = [], disabled, onQueryChange, loading }: Props) {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState('');
+  const [dropUp, setDropUp] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
   const selected = options.find((o) => o.value === value);
 
@@ -41,6 +42,13 @@ export function SearchableSelect({ options, value, onChange, placeholder, exclud
     };
     document.addEventListener('mousedown', handler);
     return () => document.removeEventListener('mousedown', handler);
+  }, [open]);
+
+  useEffect(() => {
+    if (!open || !ref.current) return;
+    const rect = ref.current.getBoundingClientRect();
+    const spaceBelow = window.innerHeight - rect.bottom;
+    setDropUp(spaceBelow < 240 && rect.top > spaceBelow);
   }, [open]);
 
   const excludeSet = new Set(excludeValues);
@@ -69,10 +77,10 @@ export function SearchableSelect({ options, value, onChange, placeholder, exclud
             </span>
           ) : (placeholder ?? '请选择')}
         </span>
-        <ChevronDown className="h-4 w-4 shrink-0 opacity-50" />
+        {dropUp ? <ChevronUp className="h-4 w-4 shrink-0 opacity-50" /> : <ChevronDown className="h-4 w-4 shrink-0 opacity-50" />}
       </button>
       {open && (
-        <div className="absolute z-[100] mt-1 w-full rounded-md border bg-popover shadow-md">
+        <div className={`absolute z-[100] min-w-[200px] w-full rounded-md border bg-popover shadow-md ${dropUp ? 'bottom-full mb-1' : 'mt-1'}`}>
           <div className="border-b p-1">
             <div className="relative">
               <Search className="absolute left-2 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />

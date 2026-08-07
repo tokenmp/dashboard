@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { Bell, Check, CheckCheck } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent } from '@/components/ui/dropdown-menu';
 import { SeverityChip } from '@/components/SeverityChip';
 import { getPanelNotificationsApi, markPanelNotificationReadApi, markAllPanelNotificationsReadApi } from '@/api/panel';
 import type { NotificationItem } from '@/types/system';
@@ -71,19 +72,18 @@ export function NotificationBell() {
   };
 
   return (
-    <div className="relative">
-      <Button variant="ghost" size="icon" onClick={() => { setOpen((o) => !o); if (!open) load(); }} aria-label="通知">
-        <Bell className="h-4 w-4" />
-        {unread > 0 && (
-          <Badge variant="destructive" className="absolute -right-1 -top-1 h-4 min-w-4 px-1 text-[10px]">
-            {unread > 99 ? '99+' : unread}
-          </Badge>
-        )}
-      </Button>
-      {open && (
-        <>
-          <div className="fixed inset-0 z-40" onClick={() => setOpen(false)} />
-          <div className="absolute right-0 top-full z-50 mt-2 w-80 rounded-lg border bg-popover p-1 shadow-md">
+    <DropdownMenu open={open} onOpenChange={(o) => { setOpen(o); if (o) load(); }}>
+      <DropdownMenuTrigger asChild>
+        <Button variant="ghost" size="icon" className="relative" aria-label="通知">
+          <Bell className="h-4 w-4" />
+          {unread > 0 && (
+            <Badge variant="destructive" className="absolute -right-1 -top-1 h-4 min-w-4 px-1 text-[10px]">
+              {unread > 99 ? '99+' : unread}
+            </Badge>
+          )}
+        </Button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end" className="w-80 p-1">
             <div className="flex items-center justify-between px-3 py-2">
               <span className="text-sm font-medium">通知</span>
               <div className="flex items-center gap-2">
@@ -144,10 +144,8 @@ export function NotificationBell() {
                 );
               })}
             </div>
-          </div>
-        </>
-      )}
-    </div>
+      </DropdownMenuContent>
+    </DropdownMenu>
   );
 }
 

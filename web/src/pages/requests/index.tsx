@@ -67,7 +67,7 @@ function Requests() {
   useEffect(() => { write(params); }, [params]);
 
   const allCols = REQUEST_LOG_COLUMNS;
-  const [visibleKeys, setVisibleKeys] = useColumnVisibility('dashboard-req-cols', allCols.map((c) => c.key));
+  const [visibleKeys, setVisibleKeys] = useColumnVisibility('dashboard-req-cols', allCols.map((c) => c.key), allCols.filter((c) => c.required).map((c) => c.key));
   const visibleCols = allCols.filter((c) => visibleKeys.includes(c.key));
 
 

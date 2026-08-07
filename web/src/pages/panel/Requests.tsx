@@ -77,7 +77,7 @@ function Requests() {
   useEffect(() => { write(params); }, [params]);
 
   const allCols = REQUEST_LOG_COLUMNS.filter((c) => c.key !== 'user');
-  const [visibleKeys, setVisibleKeys] = useColumnVisibility('panel-req-cols', allCols.map((c) => c.key));
+  const [visibleKeys, setVisibleKeys] = useColumnVisibility('panel-req-cols', allCols.map((c) => c.key), allCols.filter((c) => c.required).map((c) => c.key));
   const visibleCols = allCols.filter((c) => visibleKeys.includes(c.key));
 
   const { data: keysData } = useAsync(getPanelKeysApi, []);
