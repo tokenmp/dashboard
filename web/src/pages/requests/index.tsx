@@ -1,5 +1,6 @@
-import { useEffect, useState } from 'react';
-import { RefreshCw, Search, ChevronRight, Clock, Cpu, Activity, AlertTriangle, Network, Brain, Zap, Wallet, CheckCircle2, Info } from 'lucide-react';
+import { Fragment, useEffect, useState } from 'react';
+import { RefreshCw, Search, ChevronRight, ChevronDown, Clock, Cpu, Activity, AlertTriangle, Network, Brain, Zap, Wallet, CheckCircle2, Info } from 'lucide-react';
+import { cn } from '@/lib/utils';
 import { getDashboardRequestsApi, getDashboardRequestDetailApi, getDashboardUserKeysApi } from '@/api/dashboard';
 import { usePagedQuery } from '@/hooks/usePagedQuery';
 import { useUrlQueryState } from '@/hooks/useUrlQueryState';
@@ -517,31 +518,124 @@ const STAGE_LABELS: Record<string, string> = {
   received: '接收',
 };
 
+/** metadata key 的中文 label 映射（未覆盖的回退原 key）。 */
+const META_KEY_LABELS: Record<string, string> = {
+  protocol: '协议',
+  billing_plan: '计费方案',
+  billing_source: '计费来源',
+  billing_plan_name: '计费套餐',
+  billing_plan_id: '计费方案 ID',
+  billing_user_plan_id: '用户套餐 ID',
+  model: '模型',
+  requested_model: '请求模型',
+  resolved_model: '解析模型',
+  platform_model: '平台模型',
+  upstream_model: '上游模型',
+  stream: '流式',
+  route_group: '路由组',
+  route_count: '候选数',
+  kind: '类型',
+  adapter: '适配器',
+  priority: '优先级',
+  provider_name: '供应商',
+  user_id: '用户 ID',
+  api_key_id: 'API Key ID',
+  reservation_id: '预留 ID',
+  reserved_tokens: '预留 Token',
+  reserved_requests: '预留请求数',
+  lease_id: '租约 ID',
+  max_concurrency: '并发上限',
+  status_code: '状态码',
+  error_code: '错误码',
+  error_message: '错误信息',
+  provider_error_code: '上游错误码',
+  provider_error_type: '上游错误类型',
+  provider_http_status: '上游状态码',
+  provider_error_message: '上游错误信息',
+  safety_tier: '安全等级',
+  hardcoded_code: '原始错误码',
+  normalized_code: '归一错误码',
+  hardcoded_action: '原始动作',
+  normalized_action: '归一动作',
+  normalization_source: '归一来源',
+};
+
+function formatMetaValue(v: unknown): string {
+  if (v === null || v === undefined) return '—';
+  if (typeof v === 'boolean') return v ? '是' : '否';
+  if (typeof v === 'string') {
+    if (/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(v)) return v.slice(0, 8);
+    return v;
+  }
+  if (typeof v === 'number') return String(v);
+  return JSON.stringify(v);
+}
+
+function formatDuration(ms: number): string {
+  return ms >= 1000 ? `${(ms / 1000).toFixed(2)}s` : `${Math.round(ms)}ms`;
+}
+
 function EventsSection({ events }: { events: import('@/types/request-log').RequestLogEventItem[] }) {
+  const [openId, setOpenId] = useState<string | null>(null);
   if (events.length === 0) return null;
+  // 无 duration_ms 时，用下一个事件的 created_at 与当前事件的差值作为耗时
+  const withDur = events.map((e, i) => {
+    let dur = e.duration_ms;
+    if (dur == null) {
+      const next = events[i + 1];
+      if (next) {
+        const diff = new Date(next.created_at).getTime() - new Date(e.created_at).getTime();
+        if (diff > 0) dur = diff;
+      }
+    }
+    return { ...e, _dur: dur };
+  });
   return (
     <div className="rounded-lg border p-3">
       <div className="mb-2 text-sm text-muted-foreground">事件时间线（{events.length}）</div>
       <ol className="relative space-y-3 border-l pl-4">
-          {events.map((e) => (
+          {withDur.map((e) => {
+            const meta = Object.entries(e.metadata ?? {});
+            const hasMeta = meta.length > 0;
+            const isOpen = openId === e.id;
+            return (
             <li key={e.id} className="relative">
               <span
                 className={`absolute -left-[21px] top-1 h-2.5 w-2.5 rounded-full ring-2 ring-background ${
                   e.status === 'success' ? 'bg-emerald-500' : e.status === 'failed' ? 'bg-red-500' : 'bg-muted-foreground/40'
                 }`}
               />
-              <div className="flex items-center gap-2">
+              <button
+                type="button"
+                disabled={!hasMeta}
+                onClick={() => hasMeta && setOpenId(isOpen ? null : e.id)}
+                className={cn('flex w-full items-center gap-2 text-left', hasMeta && 'cursor-pointer')}
+              >
                 <span className="text-sm font-medium">{STAGE_LABELS[e.stage] ?? e.stage}</span>
-                {e.duration_ms !== null && (
-                  <span className="text-sm text-muted-foreground">{formatNumber(e.duration_ms)}ms</span>
+                {e._dur != null && (
+                  <span className="text-sm text-muted-foreground">{formatDuration(e._dur)}</span>
                 )}
-                {e.status_code !== null && (
+                {e.status_code != null && (
                   <Badge variant="outline" className="text-sm">{e.status_code}</Badge>
                 )}
-              </div>
+                {hasMeta && (
+                  <ChevronDown className={cn('ml-auto h-4 w-4 text-muted-foreground transition-transform', isOpen && 'rotate-180')} />
+                )}
+              </button>
+              {isOpen && hasMeta && (
+                <dl className="mt-1.5 grid grid-cols-[auto_1fr] gap-x-3 gap-y-0.5 text-sm">
+                  {meta.map(([k, v]) => (
+                    <Fragment key={k}>
+                      <dt className="text-muted-foreground">{META_KEY_LABELS[k] ?? k}</dt>
+                      <dd className="break-all font-mono text-xs">{formatMetaValue(v)}</dd>
+                    </Fragment>
+                  ))}
+                </dl>
+              )}
               <span className="font-mono text-sm text-muted-foreground">{formatDateTime(e.created_at)}</span>
             </li>
-          ))}
+            );
+          })}
         </ol>
     </div>
   );
