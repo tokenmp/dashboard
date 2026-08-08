@@ -20,7 +20,7 @@
 
 	# 其余前端路由：真实文件直接返回，否则回退 SPA index.html（支持深层路由刷新）
 	handle {
-		try_files {path} /index.html
+		try_files {path} /static/index.html
 		file_server
 	}
 }
