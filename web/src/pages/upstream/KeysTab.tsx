@@ -115,7 +115,7 @@ export function KeysTab({ providerId }: { providerId?: string }) {
               <TableHeader><TableRow>
                 <TableHead>名称</TableHead>{!providerId && <TableHead className="w-[110px]">供应商</TableHead>}
                 <TableHead className="w-[90px]">来源</TableHead><TableHead className="w-[100px]">市场状态</TableHead>
-                <TableHead className="w-[80px]">审核</TableHead><TableHead className="w-[100px] text-right">用量</TableHead>
+                <TableHead className="w-[80px]">审核</TableHead><TableHead className="w-[100px] text-right">用量</TableHead><TableHead className="w-[90px] text-right">总调用</TableHead>
                 <TableHead className="w-[100px]"></TableHead>
               </TableRow></TableHeader>
               <TableBody>{list.map((k) => (
@@ -131,6 +131,7 @@ export function KeysTab({ providerId }: { providerId?: string }) {
                   <TableCell className="text-right">
                     <UsageBar used={Number(k.quota_used) || 0} total={k.quota_total} />
                   </TableCell>
+                  <TableCell className="text-right text-xs tabular-nums text-muted-foreground">{formatNumber(Number(k.total_attempts) || 0)}</TableCell>
                   <TableCell className="text-right">
                     <div className="flex items-center justify-end gap-1">
                       <Button variant="ghost" size="icon" className="h-7 w-7" title="测试" disabled={probingId === k.id} onClick={(e) => { e.stopPropagation(); probeRow(k.id, k.name); }}>

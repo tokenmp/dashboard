@@ -52,6 +52,7 @@ export interface UpstreamKeyItem {
   market_status: string;
   verified_at: string | null;
   last_validation_error: string | null;
+  total_attempts: number | string;
   created_at: string;
   updated_at: string;
   provider?: { id: string; name: string; display_name: string | null } | null;
