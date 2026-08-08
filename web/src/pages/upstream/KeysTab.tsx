@@ -131,7 +131,10 @@ export function KeysTab({ providerId }: { providerId?: string }) {
                   <TableCell className="text-right">
                     <UsageBar used={Number(k.quota_used) || 0} total={k.quota_total} />
                   </TableCell>
-                  <TableCell className="text-right text-xs tabular-nums text-muted-foreground">{formatNumber(Number(k.total_attempts) || 0)}</TableCell>
+                  <TableCell className="text-right text-xs tabular-nums">
+                    <div className="font-medium text-foreground">{formatNumber(Number(k.total_attempts) || 0)}</div>
+                    <div className="text-[10px] text-emerald-600">成功 {formatNumber(Number(k.total_success_attempts) || 0)}</div>
+                  </TableCell>
                   <TableCell className="text-right">
                     <div className="flex items-center justify-end gap-1">
                       <Button variant="ghost" size="icon" className="h-7 w-7" title="测试" disabled={probingId === k.id} onClick={(e) => { e.stopPropagation(); probeRow(k.id, k.name); }}>
