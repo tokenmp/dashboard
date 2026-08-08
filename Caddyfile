@@ -8,15 +8,19 @@
 }
 
 {$SERVER_NAME::80} {
-	root {$SERVER_ROOT:/app/public}
+	root * {$SERVER_ROOT:/app/public}
 	encode zstd br gzip
 
-	# ThinkPHP 兼容模式：
-	# 已存在的静态文件（含 /static/assets/*）直接返回；其余内部重写到
-	# /index.php?s=<path>，由 ThinkPHP 经 $_GET['s'] 解析 pathinfo。
-	# 这绕开了 FrankenPHP 未设置 PATH_INFO、而 ThinkPHP 非 CLI 又不读
-	# REQUEST_URI 导致路由失配的问题。
-	try_files {path} /index.php?s={path}&{query}
+	# API 请求交给 ThinkPHP（/index.php?s=path 兼容 FrankenPHP 未设 PATH_INFO）
+	@api path /api/v1/*
+	handle @api {
+		rewrite * /index.php?s={path}&{query}
+		php_server
+	}
 
-	php_server
+	# 其余前端路由：真实文件直接返回，否则回退 SPA index.html（支持深层路由刷新）
+	handle {
+		try_files {path} /index.html
+		file_server
+	}
 }
