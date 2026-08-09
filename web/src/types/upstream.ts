@@ -123,6 +123,7 @@ export interface AiModelProvider {
   output_price_per_token: number | null;
   max_tokens: number | null;
   status: string;
+  effective_multiplier: number;
 }
 
 /** 平台模型 */
@@ -149,6 +150,7 @@ export interface AiModelItem {
   metadata: Record<string, unknown>;
   status: string;
   success_rate: number | null;
+  request_count_24h: number;
   created_at: string;
   updated_at: string;
   providers: AiModelProvider[];

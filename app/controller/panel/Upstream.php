@@ -148,7 +148,7 @@ class Upstream extends BaseController
             $providerRows = Db::connect('pgsql')->query(
                 "select umm.id as mapping_id, umm.model_id, umm.upstream_key_id, umm.upstream_model_name,"
                 . " umm.input_price_per_token, umm.output_price_per_token, umm.max_tokens, umm.status,"
-                . " uk.name as upstream_key_name, p.name as provider_name, p.display_name as provider_display_name"
+                . " uk.name as upstream_key_name, p.id as provider_id, p.name as provider_name, p.display_name as provider_display_name"
                 . " from upstream_model_mappings umm"
                 . " join upstream_keys uk on uk.id = umm.upstream_key_id"
                 . " join providers p on p.id = uk.provider_id"
@@ -158,9 +158,39 @@ class Upstream extends BaseController
             );
         }
 
+        // 查用户侧倍率规则，算每 provider / provider+model 的 effective 倍率
+        $ruleRows = Db::connect('pgsql')->query(
+            "select provider_id, model_id, multiplier, priority from price_multiplier_rules where side = 'user' and status = 'active'"
+        );
+        $byPM = []; // provider|model => [multiplier, priority]
+        $byP = [];  // provider => [multiplier, priority]
+        foreach ($ruleRows as $r) {
+            $pid = $r['provider_id'] ?? '';
+            if ($pid === '') {
+                continue;
+            }
+            if ($r['model_id'] !== null) {
+                $k = $pid . '|' . $r['model_id'];
+                if (!isset($byPM[$k]) || $r['priority'] > $byPM[$k][1]) {
+                    $byPM[$k] = [(float) $r['multiplier'], (int) $r['priority']];
+                }
+            } else {
+                if (!isset($byP[$pid]) || $r['priority'] > $byP[$pid][1]) {
+                    $byP[$pid] = [(float) $r['multiplier'], (int) $r['priority']];
+                }
+            }
+        }
+
         $byModel = [];
         foreach ($providerRows as $providerRow) {
+            $pid = $providerRow['provider_id'];
+            $eff = $byP[$pid][0] ?? 1.0;
+            $pmKey = $pid . '|' . $providerRow['model_id'];
+            if (isset($byPM[$pmKey])) {
+                $eff = $byPM[$pmKey][0];
+            }
             $byModel[$providerRow['model_id']][] = [
+                'effective_multiplier'  => $eff,
                 'mapping_id'             => $providerRow['mapping_id'],
                 'provider_name'          => $providerRow['provider_name'],
                 'provider_display_name'  => $providerRow['provider_display_name'],
@@ -177,6 +207,7 @@ class Upstream extends BaseController
         // 近 24h 各模型的请求级成功率（最终成功，含重试后成功；走 model_name+created_at 索引）
         // 精确匹配 model_name=name 或 name@provider，避免前缀冲突（deepseek-v4-flash vs -0731）
         $rateByName = [];
+        $countByName = [];
         $modelNames = array_values(array_filter(array_unique(array_column($data, 'name'))));
         if (!empty($modelNames)) {
             $ors = [];
@@ -197,6 +228,7 @@ class Upstream extends BaseController
             );
             foreach ($statRows as $r) {
                 $total = (int) $r['total'];
+                $countByName[$r['base_name']] = $total;
                 $rateByName[$r['base_name']] = $total > 0 ? round((int) $r['success'] * 100 / $total, 1) : null;
             }
         }
@@ -205,6 +237,7 @@ class Upstream extends BaseController
             $model['capabilities'] = self::parsePgArray($model['capabilities'] ?? null);
             $model['providers'] = $byModel[$model['id']] ?? [];
             $model['success_rate'] = $rateByName[$model['name']] ?? null;
+            $model['request_count_24h'] = $countByName[$model['name']] ?? 0;
         }
         unset($model);
 

@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { ChevronRight, Copy, RefreshCw, Search } from 'lucide-react';
+import { ChevronRight, Copy, LayoutGrid, RefreshCw, Search, Table as TableIcon } from 'lucide-react';
 import { getModelKeyHealthApi, getPanelModelsApi, getPanelModelNamesApi } from '@/api/panel';
 import { usePagedQuery } from '@/hooks/usePagedQuery';
 import { useAsync } from '@/hooks/useAsync';
@@ -10,6 +10,9 @@ import { ModelIcon, ModelSeriesSelect, findModelIcon } from '@/components/ModelI
 import { toast } from 'sonner';
 import { Sparkline } from '@/components/Sparkline';
 import { ModelSuccessDialog } from '@/components/ModelSuccessDialog';
+import { ProviderMappingsDialog } from '@/components/ProviderMappingsDialog';
+import { MiniSuccessBuckets } from '@/components/MiniSuccessBuckets';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
 import { CapabilityBadge } from '@/components/CapabilityBadge';
 import { Button } from '@/components/ui/button';
@@ -130,6 +133,7 @@ function ModelCard({ model }: { model: AiModelItem }) {
                 </div>
               </div>
             </div>
+            <div className="flex flex-col items-end gap-1">
             {(() => {
               const r = model.success_rate;
               const { dot, label } = r == null
@@ -146,6 +150,16 @@ function ModelCard({ model }: { model: AiModelItem }) {
                 </Badge>
               );
             })()}
+            {(() => {
+              const maxEff = Math.max(1, ...(model.providers ?? []).map((p) => p.effective_multiplier ?? 1));
+              if (maxEff <= 1) return null;
+              return (
+                <button type="button" onClick={() => setProviderDialogOpen(true)} title="查看供应商扣费倍率">
+                  <Badge className="gap-1 border-amber-300 bg-amber-100 text-[10px] text-amber-700 hover:bg-amber-200">×{maxEff} 扣费</Badge>
+                </button>
+              );
+            })()}
+            </div>
           </div>
           {model.description && (
             <p className="mt-1 line-clamp-2 text-xs text-muted-foreground">{model.description}</p>
@@ -198,6 +212,7 @@ function ModelCard({ model }: { model: AiModelItem }) {
                       <div className="flex items-center justify-between">
                         <div className="flex items-center gap-2">
                           <span className="font-medium">{group.providerName}</span>
+                          {(() => { const eff = group.keys[0]?.effective_multiplier ?? 1; return eff !== 1 ? <Badge className="border-amber-400 bg-amber-100 text-[10px] text-amber-700">×{eff} 扣费</Badge> : null; })()}
                           <button
                             type="button"
                             onClick={() => {
@@ -327,6 +342,8 @@ function Models() {
     });
 
   const { data: names } = useAsync(getPanelModelNamesApi, []);
+  const [viewMode, setViewMode] = useState<'card' | 'table'>(() => (localStorage.getItem('panelModelsView') === 'table' ? 'table' : 'card'));
+  const [providersModel, setProvidersModel] = useState<AiModelItem | null>(null);
   const availableSeries = useMemo(() => {
     const set = new Set<string>();
     for (const n of names ?? []) {
@@ -374,9 +391,15 @@ function Models() {
           <h1 className="text-2xl font-bold">模型目录</h1>
           <p className="mt-1 text-sm text-muted-foreground">平台当前可用模型 · 共 {formatNumber(total)} 个</p>
         </div>
-        <Button variant="outline" size="sm" onClick={reload} disabled={loading}>
-          <RefreshCw className={`mr-1.5 h-4 w-4 ${loading ? 'animate-spin' : ''}`} />刷新
-        </Button>
+        <div className="flex items-center gap-2">
+          <div className="flex items-center gap-0.5 rounded-md border p-0.5">
+            <Button size="sm" variant={viewMode === 'card' ? 'default' : 'ghost'} className="h-7 w-7 p-0" title="卡片视图" onClick={() => { setViewMode('card'); localStorage.setItem('panelModelsView', 'card'); }}><LayoutGrid className="h-4 w-4" /></Button>
+            <Button size="sm" variant={viewMode === 'table' ? 'default' : 'ghost'} className="h-7 w-7 p-0" title="表格视图" onClick={() => { setViewMode('table'); localStorage.setItem('panelModelsView', 'table'); }}><TableIcon className="h-4 w-4" /></Button>
+          </div>
+          <Button variant="outline" size="sm" onClick={reload} disabled={loading}>
+            <RefreshCw className={`mr-1.5 h-4 w-4 ${loading ? 'animate-spin' : ''}`} />刷新
+          </Button>
+        </div>
       </div>
 
       <Card>
@@ -418,6 +441,79 @@ function Models() {
         </div>
       ) : list.length === 0 ? (
         <EmptyState title="暂无模型" description="尝试调整搜索或计费模式筛选" />
+      ) : viewMode === 'table' ? (
+        <Card><CardContent className="p-0">
+          <Table>
+            <TableHeader><TableRow>
+              <TableHead className="w-[220px]">模型</TableHead>
+              <TableHead className="w-[150px]">供应商</TableHead>
+              <TableHead className="w-[100px]">映射/供应商</TableHead>
+              <TableHead className="w-[150px]">输入/输出</TableHead>
+              <TableHead className="w-[150px]">上下文/输出</TableHead>
+              <TableHead className="w-[60px]">倍率</TableHead>
+              <TableHead className="w-[110px] text-right">成功率 24h</TableHead>
+              <TableHead className="w-[110px] text-right">趋势</TableHead>
+            </TableRow></TableHeader>
+            <TableBody>
+              {sorted.map((m) => {
+                const ps = m.providers ?? [];
+                const provNames = Array.from(new Set(ps.map((p) => p.provider_display_name || p.provider_name)));
+                const inPrices = ps.map((p) => p.input_price_per_token).filter((v): v is number => v != null);
+                const outPrices = ps.map((p) => p.output_price_per_token).filter((v): v is number => v != null);
+                const inPrice = inPrices.length ? Math.min(...inPrices) : null;
+                const outPrice = outPrices.length ? Math.min(...outPrices) : null;
+                const maxOut = Math.max(0, ...ps.map((p) => p.max_tokens ?? 0));
+                const maxEff = Math.max(1, ...ps.map((p) => p.effective_multiplier ?? 1));
+                const r = m.success_rate;
+                return (
+                  <TableRow key={m.id} className="cursor-pointer" onClick={() => setProvidersModel(m)}>
+                    <TableCell>
+                      <div className="flex items-center gap-2">
+                        <ModelIcon id={m.name} displayName={m.display_name ?? undefined} size={24} />
+                        <div className="min-w-0">
+                          <div className="truncate font-medium">{m.display_name || m.name}</div>
+                          <div className="flex items-center gap-1">
+                            <span className="truncate font-mono text-[10px] text-muted-foreground">{m.name}</span>
+                            <button
+                              type="button"
+                              onClick={(e) => { e.stopPropagation(); navigator.clipboard.writeText(m.name); toast.success(`已复制模型 ID：${m.name}`); }}
+                              className="shrink-0 text-muted-foreground/50 transition-colors hover:text-foreground"
+                              title="复制模型 ID"
+                            >
+                              <Copy className="h-3 w-3" />
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    </TableCell>
+                    <TableCell>
+                      <div className="truncate text-xs">
+                        {provNames.length === 0 ? <span className="text-muted-foreground">—</span>
+                          : provNames.length <= 3 ? provNames.join('、 ')
+                          : <>{provNames[0]} 等 <span className="text-muted-foreground">{provNames.length} 个供应商</span></>}
+                      </div>
+                    </TableCell>
+                    <TableCell className="text-xs text-muted-foreground">映射 <span className="text-foreground">{ps.length}</span> · 供应商 <span className="text-foreground">{provNames.length}</span></TableCell>
+                    <TableCell className="text-xs text-muted-foreground">
+                      输入 <span className="text-foreground">{inPrice != null ? `¥${(inPrice * 1_000_000).toFixed(2)}/M` : '—'}</span>
+                      <div>输出 <span className="text-foreground">{outPrice != null ? `¥${(outPrice * 1_000_000).toFixed(2)}/M` : '—'}</span></div>
+                    </TableCell>
+                    <TableCell className="text-xs text-muted-foreground">
+                      上下文 <span className="text-foreground">{m.context_window_tokens ? formatCompact(m.context_window_tokens) : '—'}</span>
+                      <div>最大输出 <span className="text-foreground">{maxOut ? formatCompact(maxOut) : '—'}</span></div>
+                    </TableCell>
+                    <TableCell>{maxEff > 1 ? <span className="font-medium text-amber-600">×{maxEff}</span> : <span className="text-muted-foreground">—</span>}</TableCell>
+                    <TableCell className="text-right">
+                      <div className={r == null ? 'text-muted-foreground' : r >= 90 ? 'text-emerald-600' : r >= 60 ? 'text-amber-600' : 'text-red-600'}>{r == null ? '无数据' : `${r}%`}</div>
+                      <div className="text-[10px] text-muted-foreground">{formatNumber(m.request_count_24h ?? 0)} 次</div>
+                    </TableCell>
+                    <TableCell className="text-right"><MiniSuccessBuckets modelId={m.id} /></TableCell>
+                  </TableRow>
+                );
+              })}
+            </TableBody>
+          </Table>
+        </CardContent></Card>
       ) : (
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
           {sorted.map((model) => <ModelCard key={model.id} model={model} />)}
@@ -431,6 +527,9 @@ function Models() {
         loading={loading}
         onPageChange={setPage}
       />
+      {providersModel && (
+        <ProviderMappingsDialog model={providersModel} open={true} onOpenChange={(o) => !o && setProvidersModel(null)} />
+      )}
     </div>
   );
 }

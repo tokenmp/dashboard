@@ -306,6 +306,7 @@ function ModelCard({ m, onEdit, onManageMappings }: { m: AiModelItem; onEdit: ()
                       <div className="flex items-center justify-between">
                         <div className="flex items-center gap-2">
                           <span className="font-medium">{group.providerName}</span>
+                          {(() => { const eff = group.keys[0]?.effective_multiplier ?? 1; return eff !== 1 ? <Badge className="border-amber-400 bg-amber-100 text-[10px] text-amber-700">×{eff} 扣费</Badge> : null; })()}
                           <button
                             type="button"
                             onClick={() => {
