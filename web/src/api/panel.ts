@@ -184,6 +184,19 @@ export async function getModelKeyHealthApi(modelId: string): Promise<ModelKeyHea
   return res.data.data;
 }
 
+export interface SuccessBucket {
+  bucket: string;
+  total: number;
+  success: number;
+  rate: number | null;
+}
+export async function getModelSuccessBucketsApi(modelId: string, range: '24h' | '1h' | '15m'): Promise<SuccessBucket[]> {
+  const res = await client.get<ApiResponse<SuccessBucket[]>>(`/panel/upstream/models/${modelId}/success-buckets`, {
+    params: { range },
+  });
+  return res.data.data;
+}
+
 // ── 我的用量 ──
 export async function getPanelUsageLedgerApi(
   params: UsageQuery,

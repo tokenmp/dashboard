@@ -13,6 +13,7 @@ use app\service\ModelKeyHealthService;
 use app\support\Pagination;
 use think\exception\HttpException;
 use think\facade\Db;
+use think\facade\Cache;
 
 /**
  * 用户面：我持有的上游 Key 与模型目录（panel）
@@ -173,13 +174,116 @@ class Upstream extends BaseController
             ];
         }
 
+        // 近 24h 各模型的请求级成功率（最终成功，含重试后成功；走 model_name+created_at 索引）
+        // 精确匹配 model_name=name 或 name@provider，避免前缀冲突（deepseek-v4-flash vs -0731）
+        $rateByName = [];
+        $modelNames = array_values(array_filter(array_unique(array_column($data, 'name'))));
+        if (!empty($modelNames)) {
+            $ors = [];
+            $matchParams = [];
+            foreach ($modelNames as $n) {
+                $ors[] = '(model_name = ? OR model_name LIKE ?)';
+                $matchParams[] = $n;
+                $matchParams[] = $n . '@%';
+            }
+            $since = gmdate('Y-m-d\\TH:i:s\\Z', time() - 86400);
+            $statRows = Db::connect('pgsql')->query(
+                "select split_part(model_name, '@', 1) as base_name, count(*) as total,"
+                . " count(*) filter (where success) as success"
+                . " from request_logs"
+                . " where created_at >= ? and (" . implode(' OR ', $ors) . ")"
+                . " group by split_part(model_name, '@', 1)",
+                array_merge([$since], $matchParams)
+            );
+            foreach ($statRows as $r) {
+                $total = (int) $r['total'];
+                $rateByName[$r['base_name']] = $total > 0 ? round((int) $r['success'] * 100 / $total, 1) : null;
+            }
+        }
+
         foreach ($data as &$model) {
             $model['capabilities'] = self::parsePgArray($model['capabilities'] ?? null);
             $model['providers'] = $byModel[$model['id']] ?? [];
+            $model['success_rate'] = $rateByName[$model['name']] ?? null;
         }
         unset($model);
 
         return success(Pagination::wrap($data, $total, $page, $size));
+    }
+
+    /** GET /api/v1/panel/upstream/models/:id/success-buckets?range=24h|1h|15m */
+    public function successBuckets($id)
+    {
+        $range = trim((string) $this->request->get('range', '24h'));
+        $ranges = ['24h' => 86400, '1h' => 3600, '15m' => 900];
+        $rangeSec = $ranges[$range] ?? 86400;
+        $buckets = 12;
+        $intervalSec = max(1, intdiv($rangeSec, $buckets));
+
+        $model = AiModel::where('id', $id)->where('status', 'active')->find();
+        if (!$model) {
+            throw new HttpException(404, '模型不存在');
+        }
+
+        // 桶边界（epoch 对齐）：bucketStarts[0]=最早，[buckets-1]=当前进行中
+        $now = time();
+        $current = (int) (floor($now / $intervalSec) * $intervalSec);
+        $bucketStarts = [];
+        for ($i = $buckets - 1; $i >= 0; $i--) {
+            $bucketStarts[] = $current - $i * $intervalSec;
+        }
+
+        // 历史 11 桶（已结束、数据固定）按桶缓存；当前桶（进行中）每次实时查
+        $result = [];
+        $missing = [];
+        for ($i = 0; $i < $buckets - 1; $i++) {
+            $cached = Cache::get('msb:' . $id . ':' . $range . ':' . $bucketStarts[$i]);
+            if ($cached !== null) {
+                $result[$i] = $cached;
+            } else {
+                $missing[] = $i;
+            }
+        }
+
+        // 查缺失的历史桶 + 当前桶（范围从最早缺失桶或当前桶起）
+        $earliest = !empty($missing) ? $bucketStarts[$missing[0]] : $bucketStarts[$buckets - 1];
+        $since = gmdate('Y-m-d\\TH:i:s\\Z', $earliest);
+        $rows = Db::connect('pgsql')->query(
+            "select (date_bin(?::interval, created_at, timestamp 'epoch') AT TIME ZONE 'UTC') as bucket,"
+            . " count(*) as total, count(*) filter (where success) as success"
+            . " from request_logs"
+            . " where created_at >= ? and (model_name = ? OR model_name LIKE ?)"
+            . " group by bucket order by bucket",
+            [$intervalSec . ' seconds', $since, $model->name, $model->name . '@%']
+        );
+        $byBucket = [];
+        foreach ($rows as $r) {
+            $byBucket[$r['bucket']] = [(int) $r['total'], (int) $r['success']];
+        }
+
+        for ($i = 0; $i < $buckets; $i++) {
+            if (isset($result[$i])) {
+                continue;
+            }
+            $bs = $bucketStarts[$i];
+            $bk = gmdate('Y-m-d H:i:s', $bs);
+            $st = $byBucket[$bk] ?? [0, 0];
+            $item = [
+                'bucket' => gmdate('c', $bs),
+                'total' => $st[0],
+                'success' => $st[1],
+                'rate' => $st[0] > 0 ? round($st[1] * 100 / $st[0], 1) : null,
+            ];
+            $result[$i] = $item;
+            if ($i < $buckets - 1) {
+                // 历史桶数据已固定，长缓存（跨多个桶周期仍有效）
+                Cache::set('msb:' . $id . ':' . $range . ':' . $bs, $item, max(3600, $intervalSec * 4));
+            }
+            // 当前桶（$i = $buckets-1）不缓存，保持实时
+        }
+
+        ksort($result);
+        return success(array_values($result));
     }
 
     /** GET /api/v1/panel/upstream/model-names —— 有可用供应商映射的模型名（供前端推断系列） */

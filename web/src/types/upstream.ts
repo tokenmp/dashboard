@@ -148,6 +148,7 @@ export interface AiModelItem {
   billing_mode: string;
   metadata: Record<string, unknown>;
   status: string;
+  success_rate: number | null;
   created_at: string;
   updated_at: string;
   providers: AiModelProvider[];

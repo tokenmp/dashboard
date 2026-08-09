@@ -1,6 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
 import { ChevronRight, Copy, RefreshCw, Search } from 'lucide-react';
-import { toast } from 'sonner';
 import { getModelKeyHealthApi, getPanelModelsApi, getPanelModelNamesApi } from '@/api/panel';
 import { usePagedQuery } from '@/hooks/usePagedQuery';
 import { useAsync } from '@/hooks/useAsync';
@@ -8,7 +7,9 @@ import { useUrlQueryState } from '@/hooks/useUrlQueryState';
 import { DebouncedInput } from '@/components/DebouncedInput';
 import { EmptyState } from '@/components/EmptyState';
 import { ModelIcon, ModelSeriesSelect, findModelIcon } from '@/components/ModelIcon';
+import { toast } from 'sonner';
 import { Sparkline } from '@/components/Sparkline';
+import { ModelSuccessDialog } from '@/components/ModelSuccessDialog';
 import { Badge } from '@/components/ui/badge';
 import { CapabilityBadge } from '@/components/CapabilityBadge';
 import { Button } from '@/components/ui/button';
@@ -28,7 +29,6 @@ import {
 } from '@/components/ui/select';
 import { Skeleton } from '@/components/ui/skeleton';
 import { formatCompact, formatNumber } from '@/utils/format';
-import { billingLabel, billingVariant } from '@/utils/billing';
 import type { AiModelItem, UpstreamQuery } from '@/types/upstream';
 
 function formatPrice(price: number | null): string {
@@ -65,6 +65,7 @@ function ModelBillingSelect({ value, onChange }: { value: string; onChange: (val
 
 function ModelCard({ model }: { model: AiModelItem }) {
   const [providerDialogOpen, setProviderDialogOpen] = useState(false);
+  const [successOpen, setSuccessOpen] = useState(false);
   const [healthData, setHealthData] = useState<Record<string, number[]>>({});
   const [healthLoading, setHealthLoading] = useState(false);
   const providers = useMemo(() => model.providers ?? [], [model.providers]);
@@ -113,15 +114,38 @@ function ModelCard({ model }: { model: AiModelItem }) {
               <ModelIcon id={model.name} displayName={model.display_name ?? undefined} size={36} />
               <div className="min-w-0">
                 <div className="truncate font-medium">{model.display_name || model.name}</div>
-                <div className="truncate font-mono text-xs text-muted-foreground">{model.name}</div>
+                <div className="flex items-center gap-1">
+                  <span className="truncate font-mono text-xs text-muted-foreground">{model.name}</span>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      navigator.clipboard.writeText(model.name);
+                      toast.success(`已复制模型 ID：${model.name}`);
+                    }}
+                    className="shrink-0 text-muted-foreground/50 transition-colors hover:text-foreground"
+                    title="复制模型 ID"
+                  >
+                    <Copy className="h-3 w-3" />
+                  </button>
+                </div>
               </div>
             </div>
-            <Badge
-              variant={billingVariant(model.billing_mode)}
-              className="shrink-0 text-[10px]"
-            >
-              {billingLabel(model.billing_mode)}
-            </Badge>
+            {(() => {
+              const r = model.success_rate;
+              const { dot, label } = r == null
+                ? { dot: 'text-muted-foreground', label: '无数据' }
+                : r >= 90
+                ? { dot: 'text-emerald-500', label: `${r}%` }
+                : r >= 60
+                ? { dot: 'text-amber-500', label: `${r}%` }
+                : { dot: 'text-red-500', label: `${r}%` };
+              return (
+                <Badge variant="outline" className="shrink-0 cursor-pointer gap-1 text-[10px] hover:bg-accent" title="点击查看时段详情" onClick={() => setSuccessOpen(true)}>
+                  <span className={dot}>●</span>
+                  {label}
+                </Badge>
+              );
+            })()}
           </div>
           {model.description && (
             <p className="mt-1 line-clamp-2 text-xs text-muted-foreground">{model.description}</p>
@@ -237,6 +261,7 @@ function ModelCard({ model }: { model: AiModelItem }) {
           </div>
         </DialogContent>
       </Dialog>
+      <ModelSuccessDialog model={model} open={successOpen} onOpenChange={setSuccessOpen} />
     </>
   );
 }
