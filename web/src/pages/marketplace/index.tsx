@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, useMemo } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { RefreshCw, Search } from 'lucide-react';
 import { usePagedQuery } from '@/hooks/usePagedQuery';
@@ -12,9 +12,11 @@ import { DebouncedInput } from '@/components/DebouncedInput';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { type ColumnDef } from '@tanstack/react-table';
+import { DataTable } from '@/components/ui/data-table';
+import { DataTableColumnHeader } from '@/components/ui/data-table-column-header';
 import { formatCompact, formatDate, formatDateTime, formatNumber } from '@/utils/format';
-import type { MarketplaceQuery } from '@/types/marketplace';
+import type { MarketplaceListingItem, MarketplaceQuery, MarketplaceSettlementItem, MarketplaceLedgerItem } from '@/types/marketplace';
 
 function Marketplace() {
   const [sp, setSp] = useSearchParams();
@@ -115,6 +117,16 @@ function ListingsTab() {
   const { list, total, page, size, loading, error, params, reload, setPage, setFilters } =
     usePagedQuery(getListingsApiLazy, { initial: { size: 20, sort: '-created_at', ...urlInit } as MarketplaceQuery });
   useEffect(() => { write(params); }, [params]);
+
+  const columns = useMemo<ColumnDef<MarketplaceListingItem>[]>(() => [
+    { id: 'seller', header: ({ column }) => <DataTableColumnHeader column={column} title="卖家" />, cell: ({ row }) => <span className="text-sm">{row.original.sellerUser?.email ?? '—'}</span> },
+    { id: 'status', meta: { className: 'w-[110px]' }, header: () => <span className="text-xs font-medium text-muted-foreground">审核状态</span>, cell: ({ row }) => <StatusBadge status={row.original.status} /> },
+    { id: 'fee', meta: { className: 'w-[100px] text-right' }, header: () => <span className="text-xs font-medium text-muted-foreground">平台抽成</span>, cell: ({ row }) => <span className="block text-right tabular-nums">{(row.original.platform_fee_rate * 100).toFixed(2)}%</span> },
+    { id: 'input', meta: { className: 'w-[120px] text-right' }, header: () => <span className="text-xs font-medium text-muted-foreground">输入价</span>, cell: ({ row }) => <span className="block text-right tabular-nums text-xs">{row.original.input_sale_price_per_token}</span> },
+    { id: 'output', meta: { className: 'w-[120px] text-right' }, header: () => <span className="text-xs font-medium text-muted-foreground">输出价</span>, cell: ({ row }) => <span className="block text-right tabular-nums text-xs">{row.original.output_sale_price_per_token}</span> },
+    { id: 'published', meta: { className: 'w-[140px]' }, header: () => <span className="text-xs font-medium text-muted-foreground">上线时间</span>, cell: ({ row }) => <span className="font-mono text-xs text-muted-foreground">{row.original.published_at ? formatDate(row.original.published_at) : '—'}</span> },
+  ], []);
+
   return (
     <div className="space-y-3">
       <SearchBar onReload={reload} loading={loading}>
@@ -122,27 +134,7 @@ function ListingsTab() {
         <StatusSelect value={params.status ?? ''} onChange={(v) => setFilters({ status: v })} options={LISTING_STATUSES} />
       </SearchBar>
       {error && <Card className="border-destructive"><CardContent className="py-3 text-sm text-destructive">{error}</CardContent></Card>}
-      <Card><CardContent className="p-0">
-        {loading && list.length === 0 ? <TableSkeleton /> : list.length === 0 ? <EmptyState className="mx-4 my-6" title="暂无挂单" /> : (
-          <Table>
-            <TableHeader><TableRow>
-              <TableHead>卖家</TableHead><TableHead className="w-[110px]">审核状态</TableHead>
-              <TableHead className="w-[100px] text-right">平台抽成</TableHead><TableHead className="w-[120px] text-right">输入价</TableHead>
-              <TableHead className="w-[120px] text-right">输出价</TableHead><TableHead className="w-[140px]">上线时间</TableHead>
-            </TableRow></TableHeader>
-            <TableBody>{list.map((l) => (
-              <TableRow key={l.id}>
-                <TableCell className="text-sm">{l.sellerUser?.email ?? '—'}</TableCell>
-                <TableCell><StatusBadge status={l.status} /></TableCell>
-                <TableCell className="text-right tabular-nums">{(l.platform_fee_rate * 100).toFixed(2)}%</TableCell>
-                <TableCell className="text-right tabular-nums text-xs">{l.input_sale_price_per_token}</TableCell>
-                <TableCell className="text-right tabular-nums text-xs">{l.output_sale_price_per_token}</TableCell>
-                <TableCell className="font-mono text-xs text-muted-foreground">{l.published_at ? formatDate(l.published_at) : '—'}</TableCell>
-              </TableRow>
-            ))}</TableBody>
-          </Table>
-        )}
-      </CardContent></Card>
+      {loading && list.length === 0 ? <TableSkeleton /> : <DataTable columns={columns} data={list} emptyComponent={<EmptyState className="mx-4 my-6" title="暂无挂单" />} />}
       <Pager page={page} size={size} total={total} loading={loading} setPage={setPage} />
     </div>
   );
@@ -161,6 +153,18 @@ function SettlementsTab() {
   const { list, total, page, size, loading, error, params, reload, setPage, setFilters } =
     usePagedQuery(getSettlementsApiLazy, { initial: { size: 20, sort: '-created_at', ...urlInit } as MarketplaceQuery });
   useEffect(() => { write(params); }, [params]);
+
+  const columns = useMemo<ColumnDef<MarketplaceSettlementItem>[]>(() => [
+    { id: 'consumer', header: ({ column }) => <DataTableColumnHeader column={column} title="买家" />, cell: ({ row }) => <span className="text-xs">{row.original.consumerUser?.email ?? '—'}</span> },
+    { id: 'supplier', header: ({ column }) => <DataTableColumnHeader column={column} title="卖家" />, cell: ({ row }) => <span className="text-xs">{row.original.supplierUser?.email ?? '—'}</span> },
+    { id: 'consumer_amount', meta: { className: 'w-[110px] text-right' }, header: () => <span className="text-xs font-medium text-muted-foreground">买家付</span>, cell: ({ row }) => <span className="block text-right tabular-nums text-xs">{formatCompact(row.original.consumer_amount)}</span> },
+    { id: 'supplier_reward', meta: { className: 'w-[110px] text-right' }, header: () => <span className="text-xs font-medium text-muted-foreground">卖家得</span>, cell: ({ row }) => <span className="block text-right tabular-nums text-xs text-primary">{formatCompact(row.original.supplier_reward)}</span> },
+    { id: 'platform_fee', meta: { className: 'w-[110px] text-right' }, header: () => <span className="text-xs font-medium text-muted-foreground">平台抽成</span>, cell: ({ row }) => <span className="block text-right tabular-nums text-xs">{formatCompact(row.original.platform_fee)}</span> },
+    { id: 'usage_source', meta: { className: 'w-[90px]' }, header: () => <span className="text-xs font-medium text-muted-foreground">来源</span>, cell: ({ row }) => <Badge variant="outline" className="text-[10px]">{row.original.usage_source}</Badge> },
+    { id: 'status', meta: { className: 'w-[90px]' }, header: () => <span className="text-xs font-medium text-muted-foreground">状态</span>, cell: ({ row }) => <StatusBadge status={row.original.status} /> },
+    { id: 'created_at', meta: { className: 'w-[140px]' }, header: () => <span className="text-xs font-medium text-muted-foreground">时间</span>, cell: ({ row }) => <span className="font-mono text-xs text-muted-foreground">{formatDateTime(row.original.created_at)}</span> },
+  ], []);
+
   return (
     <div className="space-y-3">
       <SearchBar onReload={reload} loading={loading}>
@@ -168,30 +172,7 @@ function SettlementsTab() {
         <StatusSelect value={params.status ?? ''} onChange={(v) => setFilters({ status: v })} options={SETTLEMENT_STATUSES} />
       </SearchBar>
       {error && <Card className="border-destructive"><CardContent className="py-3 text-sm text-destructive">{error}</CardContent></Card>}
-      <Card><CardContent className="p-0">
-        {loading && list.length === 0 ? <TableSkeleton /> : list.length === 0 ? <EmptyState className="mx-4 my-6" title="暂无结算单" /> : (
-          <Table>
-            <TableHeader><TableRow>
-              <TableHead>买家</TableHead><TableHead>卖家</TableHead>
-              <TableHead className="w-[110px] text-right">买家付</TableHead><TableHead className="w-[110px] text-right">卖家得</TableHead>
-              <TableHead className="w-[110px] text-right">平台抽成</TableHead><TableHead className="w-[90px]">来源</TableHead>
-              <TableHead className="w-[90px]">状态</TableHead><TableHead className="w-[140px]">时间</TableHead>
-            </TableRow></TableHeader>
-            <TableBody>{list.map((s) => (
-              <TableRow key={s.id}>
-                <TableCell className="text-xs">{s.consumerUser?.email ?? '—'}</TableCell>
-                <TableCell className="text-xs">{s.supplierUser?.email ?? '—'}</TableCell>
-                <TableCell className="text-right tabular-nums text-xs">{formatCompact(s.consumer_amount)}</TableCell>
-                <TableCell className="text-right tabular-nums text-xs text-primary">{formatCompact(s.supplier_reward)}</TableCell>
-                <TableCell className="text-right tabular-nums text-xs">{formatCompact(s.platform_fee)}</TableCell>
-                <TableCell><Badge variant="outline" className="text-[10px]">{s.usage_source}</Badge></TableCell>
-                <TableCell><StatusBadge status={s.status} /></TableCell>
-                <TableCell className="font-mono text-xs text-muted-foreground">{formatDateTime(s.created_at)}</TableCell>
-              </TableRow>
-            ))}</TableBody>
-          </Table>
-        )}
-      </CardContent></Card>
+      {loading && list.length === 0 ? <TableSkeleton /> : <DataTable columns={columns} data={list} emptyComponent={<EmptyState className="mx-4 my-6" title="暂无结算单" />} />}
       <Pager page={page} size={size} total={total} loading={loading} setPage={setPage} />
     </div>
   );
@@ -210,6 +191,15 @@ function LedgerTab() {
   const { list, total, page, size, loading, error, params, reload, setPage, setFilters } =
     usePagedQuery(getLedgerApiLazy, { initial: { size: 20, sort: '-created_at', ...urlInit } as MarketplaceQuery });
   useEffect(() => { write(params); }, [params]);
+
+  const columns = useMemo<ColumnDef<MarketplaceLedgerItem>[]>(() => [
+    { id: 'entry_type', meta: { className: 'w-[160px]' }, header: () => <span className="text-xs font-medium text-muted-foreground">业务类型</span>, cell: ({ row }) => <Badge variant="secondary" className="text-[10px]">{row.original.entry_type}</Badge> },
+    { accessorKey: 'amount', meta: { className: 'w-[110px] text-right' }, header: ({ column }) => <DataTableColumnHeader column={column} title="金额" />, cell: ({ row }) => { const l = row.original; return <span className={`block text-right tabular-nums ${l.amount < 0 ? 'text-destructive' : 'text-primary'}`}>{formatCompact(l.amount)}</span>; } },
+    { id: 'status', meta: { className: 'w-[90px]' }, header: () => <span className="text-xs font-medium text-muted-foreground">状态</span>, cell: ({ row }) => <StatusBadge status={row.original.status} /> },
+    { id: 'available_at', meta: { className: 'w-[150px]' }, header: () => <span className="text-xs font-medium text-muted-foreground">解冻时间</span>, cell: ({ row }) => <span className="font-mono text-xs text-muted-foreground">{row.original.available_at ? formatDateTime(row.original.available_at) : '—'}</span> },
+    { accessorKey: 'created_at', meta: { className: 'w-[150px]' }, header: ({ column }) => <DataTableColumnHeader column={column} title="时间" />, cell: ({ row }) => <span className="font-mono text-xs text-muted-foreground">{formatDateTime(row.original.created_at)}</span> },
+  ], []);
+
   return (
     <div className="space-y-3">
       <SearchBar onReload={reload} loading={loading}>
@@ -217,26 +207,7 @@ function LedgerTab() {
         <StatusSelect value={params.status ?? ''} onChange={(v) => setFilters({ status: v })} options={LEDGER_STATUSES} />
       </SearchBar>
       {error && <Card className="border-destructive"><CardContent className="py-3 text-sm text-destructive">{error}</CardContent></Card>}
-      <Card><CardContent className="p-0">
-        {loading && list.length === 0 ? <TableSkeleton /> : list.length === 0 ? <EmptyState className="mx-4 my-6" title="暂无账本流水" /> : (
-          <Table>
-            <TableHeader><TableRow>
-              <TableHead className="w-[160px]">业务类型</TableHead><TableHead className="w-[110px] text-right">金额</TableHead>
-              <TableHead className="w-[90px]">状态</TableHead><TableHead className="w-[150px]">解冻时间</TableHead>
-              <TableHead className="w-[150px]">时间</TableHead>
-            </TableRow></TableHeader>
-            <TableBody>{list.map((l) => (
-              <TableRow key={l.id}>
-                <TableCell><Badge variant="secondary" className="text-[10px]">{l.entry_type}</Badge></TableCell>
-                <TableCell className={`text-right tabular-nums ${l.amount < 0 ? 'text-destructive' : 'text-primary'}`}>{formatCompact(l.amount)}</TableCell>
-                <TableCell><StatusBadge status={l.status} /></TableCell>
-                <TableCell className="font-mono text-xs text-muted-foreground">{l.available_at ? formatDateTime(l.available_at) : '—'}</TableCell>
-                <TableCell className="font-mono text-xs text-muted-foreground">{formatDateTime(l.created_at)}</TableCell>
-              </TableRow>
-            ))}</TableBody>
-          </Table>
-        )}
-      </CardContent></Card>
+      {loading && list.length === 0 ? <TableSkeleton /> : <DataTable columns={columns} data={list} emptyComponent={<EmptyState className="mx-4 my-6" title="暂无账本流水" />} />}
       <Pager page={page} size={size} total={total} loading={loading} setPage={setPage} />
     </div>
   );

@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { RefreshCw, Gift, Ticket } from 'lucide-react';
 import { getPanelRedemptionsApi, redeemCodeApi, type RedeemResult } from '@/api/panel';
 import { useAsync } from '@/hooks/useAsync';
@@ -9,7 +9,9 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Skeleton } from '@/components/ui/skeleton';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { type ColumnDef } from '@tanstack/react-table';
+import { DataTable } from '@/components/ui/data-table';
+import { DataTableColumnHeader } from '@/components/ui/data-table-column-header';
 import { formatDateTime, formatNumber } from '@/utils/format';
 import type { RedeemCodeRedemptionItem } from '@/types/redeem';
 
@@ -17,6 +19,27 @@ function Redemptions() {
   // 自取数据：我名下的全部兑换凭证（无分页）
   const { data, loading, error, reload } = useAsync(getPanelRedemptionsApi);
   const list = data ?? [];
+
+  const columns = useMemo<ColumnDef<RedeemCodeRedemptionItem>[]>(() => [
+    { accessorKey: 'token_amount', meta: { className: 'w-[120px] text-right' }, header: ({ column }) => <DataTableColumnHeader column={column} title="Token 快照" />, cell: ({ row }) => <span className="block text-right tabular-nums">{formatNumber(row.original.token_amount)}</span> },
+    {
+      id: 'plans',
+      header: () => <span className="text-xs font-medium text-muted-foreground">套餐快照</span>,
+      cell: ({ row }) => {
+        const item = row.original;
+        return (
+          <div className="flex flex-wrap gap-1">
+            {item.codingPlan ? <PlanBadge type="coding" name={item.codingPlan.name} /> : item.coding_plan_id ? <PlanBadge type="coding" /> : null}
+            {item.tokenPlan ? <PlanBadge type="token" name={item.tokenPlan.name} /> : item.token_plan_id ? <PlanBadge type="token" /> : null}
+            {item.imagePlan ? <PlanBadge type="image" name={item.imagePlan.name} /> : item.image_plan_id ? <PlanBadge type="image" /> : null}
+            {!item.coding_plan_id && !item.token_plan_id && !item.image_plan_id && <span className="flex items-center gap-1 text-sm text-muted-foreground"><Gift className="h-3 w-3" />仅 Token 充值</span>}
+          </div>
+        );
+      },
+    },
+    { accessorKey: 'code', meta: { className: 'w-[160px]' }, header: ({ column }) => <DataTableColumnHeader column={column} title="兑换码" />, cell: ({ row }) => <span className="font-mono text-xs text-muted-foreground">{row.original.code ?? '—'}</span> },
+    { accessorKey: 'created_at', meta: { className: 'w-[160px]' }, header: ({ column }) => <DataTableColumnHeader column={column} title="兑换时间" />, cell: ({ row }) => <span className="font-mono text-xs text-muted-foreground">{formatDateTime(row.original.created_at)}</span> },
+  ], []);
 
   return (
     <div className="space-y-4">
@@ -40,26 +63,8 @@ function Redemptions() {
 
       {loading ? (
         <div className="space-y-2">{Array.from({ length: 4 }).map((_, i) => <Skeleton key={i} className="h-12 w-full" />)}</div>
-      ) : list.length === 0 ? (
-        <EmptyState title="暂无兑换记录" description="你还没有兑换过任何兑换码" />
       ) : (
-        <Card>
-          <CardContent className="p-0">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead className="w-[120px] text-right">Token 快照</TableHead>
-                  <TableHead>套餐快照</TableHead>
-                  <TableHead className="w-[160px]">兑换码</TableHead>
-                  <TableHead className="w-[160px]">兑换时间</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {list.map((r) => <RedemptionRow key={r.id} item={r} />)}
-              </TableBody>
-            </Table>
-          </CardContent>
-        </Card>
+        <DataTable columns={columns} data={list} emptyComponent={<EmptyState title="暂无兑换记录" description="你还没有兑换过任何兑换码" />} />
       )}
     </div>
   );
@@ -116,38 +121,6 @@ function RedeemCard({ onRedeemed }: { onRedeemed: () => void }) {
         )}
       </CardContent>
     </Card>
-  );
-}
-
-function RedemptionRow({ item }: { item: RedeemCodeRedemptionItem }) {
-  return (
-    <TableRow>
-      <TableCell className="text-right tabular-nums">{formatNumber(item.token_amount)}</TableCell>
-      <TableCell>
-        <div className="flex flex-wrap gap-1">
-          {item.codingPlan ? (
-            <PlanBadge type="coding" name={item.codingPlan.name} />
-          ) : item.coding_plan_id ? (
-            <PlanBadge type="coding" />
-          ) : null}
-          {item.tokenPlan ? (
-            <PlanBadge type="token" name={item.tokenPlan.name} />
-          ) : item.token_plan_id ? (
-            <PlanBadge type="token" />
-          ) : null}
-          {item.imagePlan ? (
-            <PlanBadge type="image" name={item.imagePlan.name} />
-          ) : item.image_plan_id ? (
-            <PlanBadge type="image" />
-          ) : null}
-          {!item.coding_plan_id && !item.token_plan_id && !item.image_plan_id && (
-            <span className="flex items-center gap-1 text-sm text-muted-foreground"><Gift className="h-3 w-3" />仅 Token 充值</span>
-          )}
-        </div>
-      </TableCell>
-      <TableCell className="font-mono text-xs text-muted-foreground">{item.code ?? '—'}</TableCell>
-      <TableCell className="font-mono text-xs text-muted-foreground">{formatDateTime(item.created_at)}</TableCell>
-    </TableRow>
   );
 }
 

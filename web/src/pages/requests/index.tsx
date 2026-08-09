@@ -1,4 +1,4 @@
-import { Fragment, useEffect, useState } from 'react';
+import { Fragment, useEffect, useMemo, useState } from 'react';
 import { RefreshCw, Search, ChevronRight, ChevronDown, Clock, Cpu, Activity, AlertTriangle, Network, Brain, Zap, Wallet, CheckCircle2, Info } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { getDashboardRequestsApi, getDashboardRequestDetailApi } from '@/api/dashboard';
@@ -7,7 +7,7 @@ import { useUrlQueryState } from '@/hooks/useUrlQueryState';
 import { useAsync } from '@/hooks/useAsync';
 import { useRole } from '@/hooks/useRole';
 import { StatusBadge } from '@/components/StatusBadge';
-import { REQUEST_LOG_COLUMNS, ColumnToggle, useColumnVisibility } from '@/components/RequestLogColumns';
+import { REQUEST_LOG_COLUMNS, ColumnToggle, useColumnVisibility, buildRequestColumns } from '@/components/RequestLogColumns';
 import { UserSearchSelect } from '@/components/UserSearchSelect';
 import { EmptyState } from '@/components/EmptyState';
 import { Badge } from '@/components/ui/badge';
@@ -28,14 +28,9 @@ import {
   SheetHeader,
   SheetTitle,
 } from '@/components/ui/sheet';
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from '@/components/ui/table';
+import { type ColumnDef } from '@tanstack/react-table';
+import { DataTable } from '@/components/ui/data-table';
+import { DataTableColumnHeader } from '@/components/ui/data-table-column-header';
 import {
   Tooltip,
   TooltipContent,
@@ -44,7 +39,7 @@ import {
 } from '@/components/ui/tooltip';
 import { formatCompact, formatDateTime, formatNumber } from '@/utils/format';
 import { attemptErrorLabel, withAttemptPasses } from '@/utils/attempts';
-import type { RequestLogQuery } from '@/types/request-log';
+import type { RequestAttemptItem, RequestLogItem, RequestLogQuery } from '@/types/request-log';
 
 const PROTOCOLS = ['openai', 'anthropic', 'openai_chat', 'openai_responses', 'anthropic_messages', 'image_generation', 'tokenmp_gateway', 'custom'];
 
@@ -69,6 +64,21 @@ function Requests() {
   const allCols = REQUEST_LOG_COLUMNS;
   const [visibleKeys, setVisibleKeys] = useColumnVisibility('dashboard-req-cols', allCols.map((c) => c.key), allCols.filter((c) => c.required).map((c) => c.key));
   const visibleCols = allCols.filter((c) => visibleKeys.includes(c.key));
+
+  // REQUEST_LOG_COLUMNS 的 cell 返回的是完整 <TableCell>，这里适配成 DataTable 所需的「内容 + meta.className」。
+  const columns = useMemo<ColumnDef<RequestLogItem>[]>(() => [
+    ...buildRequestColumns(visibleCols),
+    {
+      id: '_tail',
+      meta: { className: 'w-[60px]' },
+      header: () => (
+        <div className="flex justify-end">
+          <ColumnToggle columns={allCols} visibleKeys={visibleKeys} onChange={setVisibleKeys} />
+        </div>
+      ),
+      cell: () => <ChevronRight className="h-4 w-4 text-muted-foreground" />,
+    } as ColumnDef<RequestLogItem>,
+  ], [visibleCols, visibleKeys, allCols, setVisibleKeys]);
 
 
   return (
@@ -97,46 +107,11 @@ function Requests() {
       )}
 
       {/* 列表 */}
-      <Card>
-        <CardContent className="p-0">
-          {loading && list.length === 0 ? (
-            <div className="space-y-2 p-4">
-              {Array.from({ length: 8 }).map((_, i) => (
-                <Skeleton key={i} className="h-10 w-full" />
-              ))}
-            </div>
-          ) : list.length === 0 ? (
-            <EmptyState className="mx-4 my-6" title="暂无请求日志" description="尝试调整筛选条件或刷新" />
-          ) : (
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  {visibleCols.map((c) => (
-                    <TableHead key={c.key} className={c.headClass}>{c.label}</TableHead>
-                  ))}
-                  <TableHead className="w-[60px] text-right">
-                    <ColumnToggle columns={allCols} visibleKeys={visibleKeys} onChange={setVisibleKeys} />
-                  </TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {list.map((r) => (
-                  <TableRow
-                    key={r.id}
-                    className="cursor-pointer h-12"
-                    onClick={() => setDetailId(r.id)}
-                  >
-                    {visibleCols.map((c) => <Fragment key={c.key}>{c.cell(r)}</Fragment>)}
-                    <TableCell>
-                      <ChevronRight className="h-4 w-4 text-muted-foreground" />
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          )}
-        </CardContent>
-      </Card>
+      {loading && list.length === 0 ? (
+        <Card><CardContent className="space-y-2 p-4">{Array.from({ length: 8 }).map((_, i) => (<Skeleton key={i} className="h-10 w-full" />))}</CardContent></Card>
+      ) : (
+        <DataTable columns={columns} data={list} onRowClick={(r) => setDetailId(r.id)} emptyComponent={<EmptyState title="暂无请求日志" description="尝试调整筛选条件或刷新" />} />
+      )}
 
       {/* 分页 */}
       {total > 0 && (
@@ -384,41 +359,24 @@ function DetailBasic({ log }: { log: import('@/types/request-log').RequestLogDet
 }
 
 
-function AttemptsSection({ attempts }: { attempts: import('@/types/request-log').RequestAttemptItem[] }) {
+type LabeledAttempt = RequestAttemptItem & { pass: number };
+
+/** 详情抽屉·上游尝试表格列。 */
+const attemptColumns: ColumnDef<LabeledAttempt>[] = [
+  { id: 'idx', meta: { className: 'w-[70px]' }, header: () => <span className="text-xs font-medium text-muted-foreground">#</span>, cell: ({ row }) => { const a = row.original; return <span className="font-mono text-sm">#{a.pass}-{a.attempt_index}</span>; } },
+  { accessorKey: 'provider_name', header: ({ column }) => <DataTableColumnHeader column={column} title="供应商" />, cell: ({ row }) => <span className="text-sm">{row.original.provider_name ?? '—'}</span> },
+  { id: 'key', header: () => <span className="text-xs font-medium text-muted-foreground">密钥</span>, cell: ({ row }) => <span className="font-mono text-sm text-muted-foreground">{row.original.upstream_key_id ? `#${row.original.upstream_key_id.slice(-10)}` : '—'}</span> },
+  { accessorKey: 'latency_ms', meta: { className: 'text-right' }, header: ({ column }) => <DataTableColumnHeader column={column} title="耗时" />, cell: ({ row }) => <span className="block text-right tabular-nums text-sm">{row.original.latency_ms !== null ? `${formatNumber(row.original.latency_ms)}ms` : '—'}</span> },
+  { id: 'status', header: () => <span className="text-xs font-medium text-muted-foreground">状态</span>, cell: ({ row }) => { const a = row.original; return (<div className="flex items-center gap-1.5 text-sm" title={a.error_code ? (a.error_message ?? '') : undefined}><span className={a.error_code ? 'h-1.5 w-1.5 rounded-full bg-red-500' : 'h-1.5 w-1.5 rounded-full bg-emerald-500'} /><span className="text-muted-foreground">{a.error_code ? attemptErrorLabel(a.error_code) : '成功'}</span></div>); } },
+];
+
+function AttemptsSection({ attempts }: { attempts: RequestAttemptItem[] }) {
   if (attempts.length === 0) return null;
   const labeled = withAttemptPasses(attempts);
   return (
     <div className="rounded-lg border p-3">
       <div className="mb-2 text-sm text-muted-foreground">上游尝试（{labeled.length}）</div>
-      <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead className="w-[70px]">#</TableHead>
-              <TableHead>供应商</TableHead>
-              <TableHead>密钥</TableHead>
-              <TableHead className="text-right">耗时</TableHead>
-              <TableHead>状态</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {labeled.map((a) => (
-              <TableRow key={a.id}>
-                <TableCell className="font-mono text-sm">#{a.pass}-{a.attempt_index}</TableCell>
-                <TableCell className="text-sm">{a.provider_name ?? '—'}</TableCell>
-                <TableCell className="text-sm text-muted-foreground">
-                  <span className="font-mono">{a.upstream_key_id ? `#${a.upstream_key_id.slice(-10)}` : '—'}</span>
-                </TableCell>
-                <TableCell className="text-right tabular-nums text-sm">{a.latency_ms !== null ? `${formatNumber(a.latency_ms)}ms` : '—'}</TableCell>
-                <TableCell>
-                  <div className="flex items-center gap-1.5 text-sm" title={a.error_code ? (a.error_message ?? '') : undefined}>
-                    <span className={a.error_code ? 'h-1.5 w-1.5 rounded-full bg-red-500' : 'h-1.5 w-1.5 rounded-full bg-emerald-500'} />
-                    <span className="text-muted-foreground">{a.error_code ? attemptErrorLabel(a.error_code) : '成功'}</span>
-                  </div>
-                </TableCell>
-              </TableRow>
-            ))}
-          </TableBody>
-        </Table>
+      <DataTable columns={attemptColumns} data={labeled} />
     </div>
   );
 }

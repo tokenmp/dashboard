@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { RefreshCw, Search, ChevronRight, KeyRound, Bot, Package, Plus, MoreVertical, Pencil, Power, Copy, Check } from 'lucide-react';
 import {
   getDashboardUsersApi,
@@ -34,9 +34,9 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
-import {
-  Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
-} from '@/components/ui/table';
+import { type ColumnDef } from '@tanstack/react-table';
+import { DataTable } from '@/components/ui/data-table';
+import { DataTableColumnHeader } from '@/components/ui/data-table-column-header';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -112,6 +112,41 @@ function Users() {
     }).catch(() => {});
   };
 
+  const columns = useMemo<ColumnDef<UserBasic>[]>(() => [
+    { accessorKey: 'email', meta: { className: 'w-[180px]' }, header: ({ column }) => <DataTableColumnHeader column={column} title="邮箱" />, cell: ({ row }) => <span className="font-medium">{row.original.email}</span> },
+    { accessorKey: 'role', meta: { className: 'w-[90px]' }, header: ({ column }) => <DataTableColumnHeader column={column} title="角色" />, cell: ({ row }) => <Badge variant={row.original.role === 'admin' ? 'default' : 'secondary'} className="text-[10px]">{row.original.role}</Badge> },
+    { id: 'status', meta: { className: 'w-[90px]' }, header: () => <span className="text-xs font-medium text-muted-foreground">状态</span>, cell: ({ row }) => <StatusBadge status={row.original.status} /> },
+    { accessorKey: 'preferred_billing', meta: { className: 'w-[110px]' }, header: ({ column }) => <DataTableColumnHeader column={column} title="首选计费" />, cell: ({ row }) => <span className="text-xs">{row.original.preferred_billing}</span> },
+    { accessorKey: 'created_at', meta: { className: 'w-[160px]' }, header: ({ column }) => <DataTableColumnHeader column={column} title="注册时间" />, cell: ({ row }) => <span className="font-mono text-xs text-muted-foreground">{formatDateTime(row.original.created_at)}</span> },
+    {
+      id: 'action',
+      meta: { className: 'w-[60px]' },
+      header: () => null,
+      cell: ({ row }) => {
+        const u = row.original;
+        return (
+          <div onClick={(e) => e.stopPropagation()}>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="ghost" size="icon" className="h-7 w-7"><MoreVertical className="h-4 w-4" /></Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                <DropdownMenuItem onClick={() => setDetailId(u.id)}><ChevronRight className="h-4 w-4" />查看详情</DropdownMenuItem>
+                <DropdownMenuItem onClick={() => setEditing(u)}><Pencil className="h-4 w-4" />编辑</DropdownMenuItem>
+                <DropdownMenuItem onClick={() => onToggle(u)}>
+                  <Power className="h-4 w-4" />{u.status === 'active' ? '禁用' : '启用'}
+                </DropdownMenuItem>
+                <DropdownMenuItem className="text-destructive focus:text-destructive" onClick={() => setResetting(u)}>
+                  <KeyRound className="h-4 w-4" />重置密码
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </div>
+        );
+      },
+    },
+  ], []);
+
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between gap-4">
@@ -165,56 +200,11 @@ function Users() {
 
       {error && <Card className="border-destructive"><CardContent className="py-3 text-sm text-destructive">{error}</CardContent></Card>}
 
-      <Card>
-        <CardContent className="p-0">
-          {loading && list.length === 0 ? (
-            <div className="space-y-2 p-4">{Array.from({ length: 8 }).map((_, i) => <Skeleton key={i} className="h-10 w-full" />)}</div>
-          ) : list.length === 0 ? (
-            <EmptyState className="mx-4 my-6" title="暂无用户" />
-          ) : (
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead className="w-[180px]">邮箱</TableHead>
-                  <TableHead className="w-[90px]">角色</TableHead>
-                  <TableHead className="w-[90px]">状态</TableHead>
-                  <TableHead className="w-[110px]">首选计费</TableHead>
-                  <TableHead className="w-[160px]">注册时间</TableHead>
-                  <TableHead className="w-[60px]"></TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {list.map((u) => (
-                  <TableRow key={u.id} className="cursor-pointer" onClick={() => setDetailId(u.id)}>
-                    <TableCell className="font-medium">{u.email}</TableCell>
-                    <TableCell><Badge variant={u.role === 'admin' ? 'default' : 'secondary'} className="text-[10px]">{u.role}</Badge></TableCell>
-                    <TableCell><StatusBadge status={u.status} /></TableCell>
-                    <TableCell className="text-xs">{u.preferred_billing}</TableCell>
-                    <TableCell className="font-mono text-xs text-muted-foreground">{formatDateTime(u.created_at)}</TableCell>
-                    <TableCell onClick={(e) => e.stopPropagation()}>
-                      <DropdownMenu>
-                        <DropdownMenuTrigger asChild>
-                          <Button variant="ghost" size="icon" className="h-7 w-7"><MoreVertical className="h-4 w-4" /></Button>
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent align="end">
-                          <DropdownMenuItem onClick={() => setDetailId(u.id)}><ChevronRight className="h-4 w-4" />查看详情</DropdownMenuItem>
-                          <DropdownMenuItem onClick={() => setEditing(u)}><Pencil className="h-4 w-4" />编辑</DropdownMenuItem>
-                          <DropdownMenuItem onClick={() => onToggle(u)}>
-                            <Power className="h-4 w-4" />{u.status === 'active' ? '禁用' : '启用'}
-                          </DropdownMenuItem>
-                          <DropdownMenuItem className="text-destructive focus:text-destructive" onClick={() => setResetting(u)}>
-                            <KeyRound className="h-4 w-4" />重置密码
-                          </DropdownMenuItem>
-                        </DropdownMenuContent>
-                      </DropdownMenu>
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          )}
-        </CardContent>
-      </Card>
+      {loading && list.length === 0 ? (
+        <Card><CardContent className="space-y-2 p-4">{Array.from({ length: 8 }).map((_, i) => <Skeleton key={i} className="h-10 w-full" />)}</CardContent></Card>
+      ) : (
+        <DataTable columns={columns} data={list} onRowClick={(u) => setDetailId(u.id)} emptyComponent={<EmptyState title="暂无用户" />} />
+      )}
 
       {total > 0 && (
         <div className="flex items-center justify-between text-sm text-muted-foreground">

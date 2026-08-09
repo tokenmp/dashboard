@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, useMemo } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { RefreshCw, Search } from 'lucide-react';
 import { usePagedQuery } from '@/hooks/usePagedQuery';
@@ -16,11 +16,11 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from '@/components/ui/select';
-import {
-  Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
-} from '@/components/ui/table';
+import { type ColumnDef } from '@tanstack/react-table';
+import { DataTable } from '@/components/ui/data-table';
+import { DataTableColumnHeader } from '@/components/ui/data-table-column-header';
 import { formatCompact, formatDateTime, formatNumber } from '@/utils/format';
-import type { UsageQuery } from '@/types/usage';
+import type { UsageLedgerItem, PriceRuleItem, TopUser, UsageQuery } from '@/types/usage';
 
 const LEDGER_TYPES = ['reserve', 'charge', 'refund', 'recharge', 'adjustment', 'plan_grant', 'plan_upgrade', 'plan_renew', 'plan_replace'];
 const BILLING_PLANS = ['coding', 'token', 'image', 'free'];
@@ -81,6 +81,16 @@ function LedgerTab() {
   const { list, total, page, size, loading, error, params, reload, setPage, setFilters } =
     usePagedQuery(getUsageLedgerApiLazy, { initial: { size: 20, sort: '-created_at', ...urlInit } as UsageQuery });
   useEffect(() => { write(params); }, [params]);
+
+  const columns = useMemo<ColumnDef<UsageLedgerItem>[]>(() => [
+    { accessorKey: 'created_at', meta: { className: 'w-[160px]' }, header: ({ column }) => <DataTableColumnHeader column={column} title="时间" />, cell: ({ row }) => <span className="font-mono text-xs text-muted-foreground">{formatDateTime(row.original.created_at)}</span> },
+    { id: 'ledger_type', meta: { className: 'w-[110px]' }, header: () => <span className="text-xs font-medium text-muted-foreground">类型</span>, cell: ({ row }) => <Badge variant="secondary" className="text-[10px]">{row.original.ledger_type}</Badge> },
+    { id: 'billing_plan', meta: { className: 'w-[90px]' }, header: () => <span className="text-xs font-medium text-muted-foreground">计费</span>, cell: ({ row }) => <span className="text-xs">{row.original.billing_plan}</span> },
+    { accessorKey: 'token_delta', meta: { className: 'w-[120px] text-right' }, header: ({ column }) => <DataTableColumnHeader column={column} title="Token Δ" />, cell: ({ row }) => { const l = row.original; return <span className={`block text-right tabular-nums ${Number(l.token_delta) < 0 ? 'text-destructive' : 'text-primary'}`}>{Number(l.token_delta) !== 0 ? formatCompact(Number(l.token_delta)) : '—'}</span>; } },
+    { accessorKey: 'request_delta', meta: { className: 'w-[110px] text-right' }, header: ({ column }) => <DataTableColumnHeader column={column} title="请求 Δ" />, cell: ({ row }) => { const l = row.original; return <span className={`block text-right tabular-nums ${l.request_delta < 0 ? 'text-destructive' : 'text-primary'}`}>{l.request_delta !== 0 ? formatNumber(l.request_delta) : '—'}</span>; } },
+    { id: 'reason', header: () => <span className="text-xs font-medium text-muted-foreground">原因</span>, cell: ({ row }) => <span className="block max-w-[260px] truncate text-xs text-muted-foreground">{row.original.reason ?? '—'}</span> },
+  ], []);
+
   return (
     <div className="space-y-3">
       <Card><CardContent className="flex flex-wrap items-end gap-3 p-4">
@@ -114,27 +124,8 @@ function LedgerTab() {
         <Button variant="outline" size="sm" onClick={reload} disabled={loading}><RefreshCw className={`mr-1.5 h-4 w-4 ${loading ? 'animate-spin' : ''}`} />刷新</Button>
       </CardContent></Card>
       {error && <Card className="border-destructive"><CardContent className="py-3 text-sm text-destructive">{error}</CardContent></Card>}
-      <Card><CardContent className="p-0">
-        {loading && list.length === 0 ? <div className="space-y-2 p-4">{Array.from({ length: 8 }).map((_, i) => <Skeleton key={i} className="h-10 w-full" />)}</div>
-          : list.length === 0 ? <EmptyState className="mx-4 my-6" title="暂无流水" />
-          : <Table>
-              <TableHeader><TableRow>
-                <TableHead className="w-[160px]">时间</TableHead><TableHead className="w-[110px]">类型</TableHead>
-                <TableHead className="w-[90px]">计费</TableHead><TableHead className="w-[120px] text-right">Token Δ</TableHead>
-                <TableHead className="w-[110px] text-right">请求 Δ</TableHead><TableHead>原因</TableHead>
-              </TableRow></TableHeader>
-              <TableBody>{list.map((l) => (
-                <TableRow key={l.id}>
-                  <TableCell className="font-mono text-xs text-muted-foreground">{formatDateTime(l.created_at)}</TableCell>
-                  <TableCell><Badge variant="secondary" className="text-[10px]">{l.ledger_type}</Badge></TableCell>
-                  <TableCell className="text-xs">{l.billing_plan}</TableCell>
-                  <TableCell className={`text-right tabular-nums ${Number(l.token_delta) < 0 ? 'text-destructive' : 'text-primary'}`}>{Number(l.token_delta) !== 0 ? formatCompact(Number(l.token_delta)) : '—'}</TableCell>
-                  <TableCell className={`text-right tabular-nums ${l.request_delta < 0 ? 'text-destructive' : 'text-primary'}`}>{l.request_delta !== 0 ? formatNumber(l.request_delta) : '—'}</TableCell>
-                  <TableCell className="max-w-[260px] truncate text-xs text-muted-foreground">{l.reason ?? '—'}</TableCell>
-                </TableRow>
-              ))}</TableBody>
-            </Table>}
-      </CardContent></Card>
+      {loading && list.length === 0 ? <div className="space-y-2 p-4">{Array.from({ length: 8 }).map((_, i) => <Skeleton key={i} className="h-10 w-full" />)}</div>
+        : <DataTable columns={columns} data={list} emptyComponent={<EmptyState className="mx-4 my-6" title="暂无流水" />} />}
       <Pager page={page} size={size} total={total} loading={loading} setPage={setPage} />
     </div>
   );
@@ -177,6 +168,12 @@ function QuotaCard({ q }: { q: import('@/types/usage').QuotaItem }) {
 }
 
 function AdminQuotaView({ data }: { data: import('@/types/usage').AdminQuota }) {
+  const topUserColumns = useMemo<ColumnDef<TopUser>[]>(() => [
+    { accessorKey: 'email', header: ({ column }) => <DataTableColumnHeader column={column} title="邮箱" />, cell: ({ row }) => <span className="font-medium">{row.original.email}</span> },
+    { id: 'role', meta: { className: 'w-[90px]' }, header: () => <span className="text-xs font-medium text-muted-foreground">角色</span>, cell: ({ row }) => <Badge variant={row.original.role === 'admin' ? 'default' : 'secondary'} className="text-[10px]">{row.original.role}</Badge> },
+    { id: 'tokenBalance', meta: { className: 'w-[130px] text-right' }, header: () => <span className="text-xs font-medium text-muted-foreground">Token 余额</span>, cell: ({ row }) => <span className="block text-right tabular-nums">{formatCompact(row.original.tokenBalance)}</span> },
+    { id: 'requestBalance', meta: { className: 'w-[130px] text-right' }, header: () => <span className="text-xs font-medium text-muted-foreground">请求余额</span>, cell: ({ row }) => <span className="block text-right tabular-nums">{formatNumber(row.original.requestBalance)}</span> },
+  ], []);
   return (
     <>
       <Card>
@@ -190,21 +187,7 @@ function AdminQuotaView({ data }: { data: import('@/types/usage').AdminQuota }) 
       <Card>
         <CardHeader className="pb-2"><CardTitle className="text-sm">消耗 Top 用户</CardTitle></CardHeader>
         <CardContent className="p-0">
-          <Table>
-            <TableHeader><TableRow>
-              <TableHead>邮箱</TableHead><TableHead className="w-[90px]">角色</TableHead>
-              <TableHead className="w-[130px] text-right">Token 余额</TableHead>
-              <TableHead className="w-[130px] text-right">请求余额</TableHead>
-            </TableRow></TableHeader>
-            <TableBody>{data.topUsers.map((u) => (
-              <TableRow key={u.id}>
-                <TableCell className="font-medium">{u.email}</TableCell>
-                <TableCell><Badge variant={u.role === 'admin' ? 'default' : 'secondary'} className="text-[10px]">{u.role}</Badge></TableCell>
-                <TableCell className="text-right tabular-nums">{formatCompact(u.tokenBalance)}</TableCell>
-                <TableCell className="text-right tabular-nums">{formatNumber(u.requestBalance)}</TableCell>
-              </TableRow>
-            ))}</TableBody>
-          </Table>
+          <DataTable columns={topUserColumns} data={data.topUsers} rowKey={(u) => u.id} />
         </CardContent>
       </Card>
     </>
@@ -239,6 +222,16 @@ function RulesTab() {
   const { list, total, page, size, loading, error, params, reload, setPage, setFilters } =
     usePagedQuery(getPriceRulesApiLazy, { initial: { size: 20, sort: '-priority', ...urlInit } as UsageQuery });
   useEffect(() => { write(params); }, [params]);
+  const columns = useMemo<ColumnDef<PriceRuleItem>[]>(() => [
+    { accessorKey: 'priority', meta: { className: 'w-[60px]' }, header: ({ column }) => <DataTableColumnHeader column={column} title="优先级" />, cell: ({ row }) => <span className="tabular-nums">{row.original.priority}</span> },
+    { id: 'protocol', header: () => <span className="text-xs font-medium text-muted-foreground">协议</span>, cell: ({ row }) => <span className="text-xs">{row.original.protocol ?? '—'}</span> },
+    { id: 'multiplier', meta: { className: 'w-[90px]' }, header: () => <span className="text-xs font-medium text-muted-foreground">倍率</span>, cell: ({ row }) => <span className="tabular-nums font-medium">×{row.original.multiplier}</span> },
+    { id: 'compose_mode', meta: { className: 'w-[90px]' }, header: () => <span className="text-xs font-medium text-muted-foreground">叠加</span>, cell: ({ row }) => <Badge variant="secondary" className="text-[10px]">{row.original.compose_mode}</Badge> },
+    { id: 'period', meta: { className: 'w-[110px]' }, header: () => <span className="text-xs font-medium text-muted-foreground">生效时段</span>, cell: ({ row }) => <span className="text-xs text-muted-foreground">{row.original.start_time}~{row.original.end_time}</span> },
+    { id: 'days', meta: { className: 'w-[110px]' }, header: () => <span className="text-xs font-medium text-muted-foreground">生效星期</span>, cell: ({ row }) => <span className="text-xs">{row.original.days_of_week.length === 0 ? '每天' : row.original.days_of_week.join(',')}</span> },
+    { id: 'exclusive_group', meta: { className: 'w-[100px]' }, header: () => <span className="text-xs font-medium text-muted-foreground">互斥组</span>, cell: ({ row }) => <span className="text-xs">{row.original.exclusive_group ?? '—'}</span> },
+    { id: 'status', meta: { className: 'w-[90px]' }, header: () => <span className="text-xs font-medium text-muted-foreground">状态</span>, cell: ({ row }) => <StatusBadge status={row.original.status} /> },
+  ], []);
   if (!isAdmin) {
     return <Card><CardContent className="py-6 text-sm text-muted-foreground">计费倍率规则仅管理员可见。</CardContent></Card>;
   }
@@ -276,30 +269,8 @@ function RulesTab() {
         <Button variant="outline" size="sm" onClick={reload} disabled={loading}><RefreshCw className={`mr-1.5 h-4 w-4 ${loading ? 'animate-spin' : ''}`} />刷新</Button>
       </CardContent></Card>
       {error && <Card className="border-destructive"><CardContent className="py-3 text-sm text-destructive">{error}</CardContent></Card>}
-      <Card><CardContent className="p-0">
-        {loading && list.length === 0 ? <div className="space-y-2 p-4">{Array.from({ length: 8 }).map((_, i) => <Skeleton key={i} className="h-10 w-full" />)}</div>
-          : list.length === 0 ? <EmptyState className="mx-4 my-6" title="暂无计费规则" />
-          : <Table>
-              <TableHeader><TableRow>
-                <TableHead className="w-[60px]">优先级</TableHead><TableHead>协议</TableHead>
-                <TableHead className="w-[90px]">倍率</TableHead><TableHead className="w-[90px]">叠加</TableHead>
-                <TableHead className="w-[110px]">生效时段</TableHead><TableHead className="w-[110px]">生效星期</TableHead>
-                <TableHead className="w-[100px]">互斥组</TableHead><TableHead className="w-[90px]">状态</TableHead>
-              </TableRow></TableHeader>
-              <TableBody>{list.map((r) => (
-                <TableRow key={r.id}>
-                  <TableCell className="tabular-nums">{r.priority}</TableCell>
-                  <TableCell className="text-xs">{r.protocol ?? '—'}</TableCell>
-                  <TableCell className="tabular-nums font-medium">×{r.multiplier}</TableCell>
-                  <TableCell><Badge variant="secondary" className="text-[10px]">{r.compose_mode}</Badge></TableCell>
-                  <TableCell className="text-xs text-muted-foreground">{r.start_time}~{r.end_time}</TableCell>
-                  <TableCell className="text-xs">{r.days_of_week.length === 0 ? '每天' : r.days_of_week.join(',')}</TableCell>
-                  <TableCell className="text-xs">{r.exclusive_group ?? '—'}</TableCell>
-                  <TableCell><StatusBadge status={r.status} /></TableCell>
-                </TableRow>
-              ))}</TableBody>
-            </Table>}
-      </CardContent></Card>
+      {loading && list.length === 0 ? <div className="space-y-2 p-4">{Array.from({ length: 8 }).map((_, i) => <Skeleton key={i} className="h-10 w-full" />)}</div>
+        : <DataTable columns={columns} data={list} emptyComponent={<EmptyState className="mx-4 my-6" title="暂无计费规则" />} />}
       <Pager page={page} size={size} total={total} loading={loading} setPage={setPage} />
     </div>
   );

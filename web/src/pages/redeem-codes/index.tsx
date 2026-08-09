@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { RefreshCw, Search, ChevronRight, Plus } from 'lucide-react';
 import { getDashboardRedeemCodesApi, getDashboardCodeRedemptionsApi } from '@/api/dashboard';
 import { usePagedQuery } from '@/hooks/usePagedQuery';
@@ -13,9 +13,11 @@ import { DebouncedInput } from '@/components/DebouncedInput';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { type ColumnDef } from '@tanstack/react-table';
+import { DataTable } from '@/components/ui/data-table';
+import { DataTableColumnHeader } from '@/components/ui/data-table-column-header';
 import { formatDate, formatDateTime, formatNumber } from '@/utils/format';
-import type { RedeemCodeQuery } from '@/types/redeem';
+import type { RedeemCodeItem, RedeemCodeQuery, RedeemCodeRedemptionItem } from '@/types/redeem';
 import CreateRedeemCodeDialog from './CreateRedeemCodeDialog';
 
 function RedeemCodes() {
@@ -30,6 +32,16 @@ function RedeemCodes() {
   const { list, total, page, size, loading, error, params, reload, setPage, setFilters } =
     usePagedQuery(getDashboardRedeemCodesApi, { initial: { size: 20, sort: '-created_at', ...urlInit } as RedeemCodeQuery });
   useEffect(() => { write(params); }, [params]);
+
+  const columns = useMemo<ColumnDef<RedeemCodeItem>[]>(() => [
+    { accessorKey: 'name', header: ({ column }) => <DataTableColumnHeader column={column} title="名称" />, cell: ({ row }) => <span className="font-medium">{row.original.name}</span> },
+    { id: 'code', meta: { className: 'w-[180px]' }, header: () => <span className="text-xs font-medium text-muted-foreground">兑换码</span>, cell: ({ row }) => { const c = row.original; return <span className="font-mono text-xs text-muted-foreground">{c.code_plaintext ?? `${c.code_prefix ?? ''}…${c.code_suffix ?? ''}`}</span>; } },
+    { id: 'progress', meta: { className: 'w-[110px]' }, header: () => <span className="text-xs font-medium text-muted-foreground">进度</span>, cell: ({ row }) => { const c = row.original; return (<><div className="tabular-nums text-xs">{c.redeemed_count}/{c.max_redemptions}</div><div className="mt-0.5 h-1.5 w-20 overflow-hidden rounded-full bg-muted"><div className="h-full bg-primary" style={{ width: `${c.max_redemptions > 0 ? Math.min(100, (c.redeemed_count / c.max_redemptions) * 100) : 0}%` }} /></div></>); } },
+    { accessorKey: 'token_amount', meta: { className: 'w-[110px]' }, header: ({ column }) => <DataTableColumnHeader column={column} title="Token" />, cell: ({ row }) => <span className="tabular-nums">{formatNumber(row.original.token_amount)}</span> },
+    { id: 'status', meta: { className: 'w-[90px]' }, header: () => <span className="text-xs font-medium text-muted-foreground">状态</span>, cell: ({ row }) => <StatusBadge status={row.original.status} /> },
+    { id: 'validity', meta: { className: 'w-[150px]' }, header: () => <span className="text-xs font-medium text-muted-foreground">有效期</span>, cell: ({ row }) => { const c = row.original; return <span className="text-xs text-muted-foreground">{(c.starts_at ? formatDate(c.starts_at) : '')}~{(c.expires_at ? formatDate(c.expires_at) : '永久')}</span>; } },
+    { id: 'action', meta: { className: 'w-[60px]' }, header: () => null, cell: () => <ChevronRight className="h-4 w-4 text-muted-foreground" /> },
+  ], []);
 
   return (
     <div className="space-y-4">
@@ -68,36 +80,8 @@ function RedeemCodes() {
 
       {error && <Card className="border-destructive"><CardContent className="py-3 text-sm text-destructive">{error}</CardContent></Card>}
 
-      <Card><CardContent className="p-0">
-        {loading && list.length === 0 ? <div className="space-y-2 p-4">{Array.from({ length: 8 }).map((_, i) => <Skeleton key={i} className="h-10 w-full" />)}</div>
-          : list.length === 0 ? <EmptyState className="mx-4 my-6" title="暂无兑换码" />
-          : <Table>
-              <TableHeader><TableRow>
-                <TableHead>名称</TableHead><TableHead className="w-[180px]">兑换码</TableHead>
-                <TableHead className="w-[110px]">进度</TableHead><TableHead className="w-[110px]">Token</TableHead>
-                <TableHead className="w-[90px]">状态</TableHead><TableHead className="w-[150px]">有效期</TableHead>
-                <TableHead className="w-[60px]"></TableHead>
-              </TableRow></TableHeader>
-              <TableBody>{list.map((c) => (
-                <TableRow key={c.id} className="cursor-pointer" onClick={() => setDetailId(c.id)}>
-                  <TableCell className="font-medium">{c.name}</TableCell>
-                  <TableCell className="font-mono text-xs text-muted-foreground">{c.code_plaintext ?? `${c.code_prefix ?? ''}…${c.code_suffix ?? ''}`}</TableCell>
-                  <TableCell>
-                    <div className="tabular-nums text-xs">{c.redeemed_count}/{c.max_redemptions}</div>
-                    <div className="mt-0.5 h-1.5 w-20 overflow-hidden rounded-full bg-muted">
-                      <div className="h-full bg-primary" style={{ width: `${c.max_redemptions > 0 ? Math.min(100, (c.redeemed_count / c.max_redemptions) * 100) : 0}%` }} />
-                    </div>
-                  </TableCell>
-                  <TableCell className="tabular-nums">{formatNumber(c.token_amount)}</TableCell>
-                  <TableCell><StatusBadge status={c.status} /></TableCell>
-                  <TableCell className="text-xs text-muted-foreground">
-                    {(c.starts_at ? formatDate(c.starts_at) : '')}~{(c.expires_at ? formatDate(c.expires_at) : '永久')}
-                  </TableCell>
-                  <TableCell><ChevronRight className="h-4 w-4 text-muted-foreground" /></TableCell>
-                </TableRow>
-              ))}</TableBody>
-            </Table>}
-      </CardContent></Card>
+      {loading && list.length === 0 ? <Card><CardContent className="space-y-2 p-4">{Array.from({ length: 8 }).map((_, i) => <Skeleton key={i} className="h-10 w-full" />)}</CardContent></Card>
+        : <DataTable columns={columns} data={list} onRowClick={(c) => setDetailId(c.id)} emptyComponent={<EmptyState title="暂无兑换码" />} />}
 
       {total > 0 && (
         <div className="flex items-center justify-between text-sm text-muted-foreground">
@@ -120,6 +104,13 @@ function RedemptionsDrawer({ codeId, onClose }: { codeId: string | null; onClose
     () => (codeId ? getDashboardCodeRedemptionsApi(codeId, { size: 20, sort: '-created_at' }) : Promise.resolve(null)),
     [codeId],
   );
+  const recordColumns = useMemo<ColumnDef<RedeemCodeRedemptionItem>[]>(() => [
+    { id: 'user', header: ({ column }) => <DataTableColumnHeader column={column} title="用户" />, cell: ({ row }) => <span className="text-sm">{row.original.user?.email ?? '—'}</span> },
+    { accessorKey: 'token_amount', meta: { className: 'w-[100px] text-right' }, header: ({ column }) => <DataTableColumnHeader column={column} title="Token" />, cell: ({ row }) => <span className="block text-right tabular-nums">{formatNumber(row.original.token_amount)}</span> },
+    { id: 'plans', meta: { className: 'w-[120px]' }, header: () => <span className="text-xs font-medium text-muted-foreground">套餐快照</span>, cell: ({ row }) => { const r = row.original; return (<div className="flex flex-wrap gap-1">{r.coding_plan_id && <Badge variant="outline" className="text-[10px]">coding</Badge>}{r.token_plan_id && <Badge variant="outline" className="text-[10px]">token</Badge>}{r.image_plan_id && <Badge variant="outline" className="text-[10px]">image</Badge>}</div>); } },
+    { id: 'code', meta: { className: 'w-[160px]' }, header: () => <span className="text-xs font-medium text-muted-foreground">码值</span>, cell: ({ row }) => <span className="font-mono text-xs text-muted-foreground">{row.original.code ?? '—'}</span> },
+    { accessorKey: 'created_at', meta: { className: 'w-[140px]' }, header: ({ column }) => <DataTableColumnHeader column={column} title="兑换时间" />, cell: ({ row }) => <span className="font-mono text-xs text-muted-foreground">{formatDateTime(row.original.created_at)}</span> },
+  ], []);
   return (
     <Sheet open={codeId !== null} onOpenChange={(open) => !open && onClose()}>
       <SheetContent side="right" className="w-full overflow-y-auto sm:max-w-2xl">
@@ -143,29 +134,7 @@ function RedemptionsDrawer({ codeId, onClose }: { codeId: string | null; onClose
               </div>
             </CardContent></Card>
             <Button variant="outline" size="sm" onClick={reload}>刷新</Button>
-            {data.pagination.list.length === 0 ? <EmptyState title="暂无兑换记录" /> : (
-              <Table>
-                <TableHeader><TableRow>
-                  <TableHead>用户</TableHead><TableHead className="w-[100px] text-right">Token</TableHead>
-                  <TableHead className="w-[120px]">套餐快照</TableHead><TableHead className="w-[160px]">码值</TableHead><TableHead className="w-[140px]">兑换时间</TableHead>
-                </TableRow></TableHeader>
-                <TableBody>{data.pagination.list.map((r) => (
-                  <TableRow key={r.id}>
-                    <TableCell className="text-sm">{r.user?.email ?? '—'}</TableCell>
-                    <TableCell className="text-right tabular-nums">{formatNumber(r.token_amount)}</TableCell>
-                    <TableCell>
-                      <div className="flex flex-wrap gap-1">
-                        {r.coding_plan_id && <Badge variant="outline" className="text-[10px]">coding</Badge>}
-                        {r.token_plan_id && <Badge variant="outline" className="text-[10px]">token</Badge>}
-                        {r.image_plan_id && <Badge variant="outline" className="text-[10px]">image</Badge>}
-                      </div>
-                    </TableCell>
-                    <TableCell className="font-mono text-xs text-muted-foreground">{r.code ?? '—'}</TableCell>
-                    <TableCell className="font-mono text-xs text-muted-foreground">{formatDateTime(r.created_at)}</TableCell>
-                  </TableRow>
-                ))}</TableBody>
-              </Table>
-            )}
+            {data.pagination.list.length === 0 ? <EmptyState title="暂无兑换记录" /> : <DataTable columns={recordColumns} data={data.pagination.list} />}
           </div>
         ) : null}
       </SheetContent>

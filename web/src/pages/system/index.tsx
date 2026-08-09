@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { RefreshCw, Search, GitBranch, Plus, Pencil, Trash2 } from 'lucide-react';
 import { usePagedQuery } from '@/hooks/usePagedQuery';
@@ -20,7 +20,9 @@ import { DebouncedInput } from '@/components/DebouncedInput';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { type ColumnDef } from '@tanstack/react-table';
+import { DataTable } from '@/components/ui/data-table';
+import { DataTableColumnHeader } from '@/components/ui/data-table-column-header';
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import {
   AlertDialog,
@@ -41,7 +43,7 @@ import {
   updateDashboardNoticeApi,
   deleteDashboardNoticeApi,
 } from '@/api/dashboard';
-import type { AnnouncementItem, AnnouncementPayload, SystemQuery } from '@/types/system';
+import type { AnnouncementItem, AnnouncementPayload, SchemaMigrationItem, SystemConfigItem, SystemQuery } from '@/types/system';
 
 function System() {
   const [sp, setSp] = useSearchParams();
@@ -336,6 +338,41 @@ function NoticeDialog({ open, item, onClose, onSaved }: {
 
 function ConfigTab() {
   const { data, loading, error, reload } = useAsync(getDashboardConfigApi);
+  const columns = useMemo<ColumnDef<SystemConfigItem>[]>(() => [
+    {
+      accessorKey: 'key',
+      meta: { className: 'w-[260px]' },
+      header: ({ column }) => <DataTableColumnHeader column={column} title="Key" />,
+      cell: ({ row }) => <span className="font-mono text-xs">{row.original.key}</span>,
+    },
+    {
+      id: 'value',
+      header: () => <span className="text-xs font-medium text-muted-foreground">Value</span>,
+      cell: ({ row }) => {
+        const c = row.original;
+        return (
+          <span className="font-mono text-xs">
+            {c.sensitive ? <span className="text-muted-foreground">******</span>
+              : typeof c.value === 'boolean' ? String(c.value)
+              : typeof c.value === 'object' ? JSON.stringify(c.value)
+              : String(c.value ?? '—')}
+          </span>
+        );
+      },
+    },
+    {
+      id: 'sensitive',
+      meta: { className: 'w-[90px]' },
+      header: () => <span className="text-xs font-medium text-muted-foreground">敏感</span>,
+      cell: ({ row }) => row.original.sensitive ? <Badge variant="destructive" className="text-[10px]">敏感</Badge> : <span className="text-muted-foreground">—</span>,
+    },
+    {
+      accessorKey: 'updated_at',
+      meta: { className: 'w-[160px]' },
+      header: ({ column }) => <DataTableColumnHeader column={column} title="更新时间" />,
+      cell: ({ row }) => <span className="font-mono text-xs text-muted-foreground">{formatDateTime(row.original.updated_at)}</span>,
+    },
+  ], []);
   return (
     <div className="space-y-3">
       <div className="flex justify-end">
@@ -343,27 +380,7 @@ function ConfigTab() {
       </div>
       {error && <Card className="border-destructive"><CardContent className="py-3 text-sm text-destructive">{error}</CardContent></Card>}
       {loading ? <Skeleton className="h-48 w-full" /> : data && data.length > 0 ? (
-        <Card><CardContent className="p-0">
-          <Table>
-            <TableHeader><TableRow>
-              <TableHead className="w-[260px]">Key</TableHead><TableHead>Value</TableHead>
-              <TableHead className="w-[90px]">敏感</TableHead><TableHead className="w-[160px]">更新时间</TableHead>
-            </TableRow></TableHeader>
-            <TableBody>{data.map((c) => (
-              <TableRow key={c.key}>
-                <TableCell className="font-mono text-xs">{c.key}</TableCell>
-                <TableCell className="font-mono text-xs">
-                  {c.sensitive ? <span className="text-muted-foreground">******</span>
-                    : typeof c.value === 'boolean' ? String(c.value)
-                    : typeof c.value === 'object' ? JSON.stringify(c.value)
-                    : String(c.value ?? '—')}
-                </TableCell>
-                <TableCell>{c.sensitive ? <Badge variant="destructive" className="text-[10px]">敏感</Badge> : <span className="text-muted-foreground">—</span>}</TableCell>
-                <TableCell className="font-mono text-xs text-muted-foreground">{formatDateTime(c.updated_at)}</TableCell>
-              </TableRow>
-            ))}</TableBody>
-          </Table>
-        </CardContent></Card>
+        <DataTable columns={columns} data={data} />
       ) : <EmptyState title="暂无配置" />}
     </div>
   );
@@ -372,28 +389,29 @@ function ConfigTab() {
 function MigrationsTab() {
   const { list, total, page, size, loading, error, reload, setPage } =
     usePagedQuery(getMigrationsApiLazy, { initial: { size: 20 } as SystemQuery });
+  const columns = useMemo<ColumnDef<SchemaMigrationItem>[]>(() => [
+    {
+      accessorKey: 'filename',
+      header: ({ column }) => <DataTableColumnHeader column={column} title="迁移文件" />,
+      cell: ({ row }) => <span className="inline-flex items-center gap-1.5 font-mono text-xs"><GitBranch className="h-3 w-3 text-muted-foreground" />{row.original.filename}</span>,
+    },
+    {
+      accessorKey: 'applied_at',
+      meta: { className: 'w-[180px]' },
+      header: ({ column }) => <DataTableColumnHeader column={column} title="应用时间" />,
+      cell: ({ row }) => <span className="font-mono text-xs text-muted-foreground">{formatDateTime(row.original.applied_at)}</span>,
+    },
+  ], []);
   return (
     <div className="space-y-3">
       <div className="flex justify-end">
         <Button variant="outline" size="sm" onClick={reload} disabled={loading}><RefreshCw className={`mr-1.5 h-4 w-4 ${loading ? 'animate-spin' : ''}`} />刷新</Button>
       </div>
       {error && <Card className="border-destructive"><CardContent className="py-3 text-sm text-destructive">{error}</CardContent></Card>}
-      <Card><CardContent className="p-0">
-        {loading && list.length === 0 ? <div className="space-y-2 p-4">{Array.from({ length: 6 }).map((_, i) => <Skeleton key={i} className="h-10 w-full" />)}</div>
-          : list.length === 0 ? <EmptyState className="mx-4 my-6" title="暂无迁移记录" /> : (
-          <Table>
-            <TableHeader><TableRow>
-              <TableHead>迁移文件</TableHead><TableHead className="w-[180px]">应用时间</TableHead>
-            </TableRow></TableHeader>
-            <TableBody>{list.map((m) => (
-              <TableRow key={m.filename}>
-                <TableCell className="font-mono text-xs"><span className="inline-flex items-center gap-1.5"><GitBranch className="h-3 w-3 text-muted-foreground" />{m.filename}</span></TableCell>
-                <TableCell className="font-mono text-xs text-muted-foreground">{formatDateTime(m.applied_at)}</TableCell>
-              </TableRow>
-            ))}</TableBody>
-          </Table>
-        )}
-      </CardContent></Card>
+      {loading && list.length === 0 ? <div className="space-y-2 p-4">{Array.from({ length: 6 }).map((_, i) => <Skeleton key={i} className="h-10 w-full" />)}</div>
+        : list.length === 0 ? <EmptyState className="mx-4 my-6" title="暂无迁移记录" /> : (
+        <DataTable columns={columns} data={list} />
+      )}
       <Pager page={page} size={size} total={total} loading={loading} setPage={setPage} />
     </div>
   );

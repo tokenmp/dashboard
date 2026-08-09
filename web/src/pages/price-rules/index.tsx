@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { Plus, Pencil, Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { usePagedQuery } from '@/hooks/usePagedQuery';
@@ -13,11 +13,12 @@ import {
   getDashboardModelsApi,
 } from '@/api/dashboard';
 import type { PriceRuleItem } from '@/types/usage';
-import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { type ColumnDef } from '@tanstack/react-table';
+import { DataTable } from '@/components/ui/data-table';
+import { DataTableColumnHeader } from '@/components/ui/data-table-column-header';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { ConfirmDialog } from '@/components/ConfirmDialog';
@@ -90,6 +91,68 @@ export default function PriceRules() {
   const providerName = (id: string | null) => providers?.find((p) => p.id === id)?.display_name || providers?.find((p) => p.id === id)?.name || '—';
   const modelName = (id: string | null) => models?.find((m) => m.id === id)?.display_name || models?.find((m) => m.id === id)?.name || (id ? id.slice(-8) : '全部模型');
 
+  const columns = useMemo<ColumnDef<PriceRuleItem>[]>(() => [
+    {
+      accessorKey: 'side',
+      header: ({ column }) => <DataTableColumnHeader column={column} title="类型" />,
+      cell: ({ row }) => <Badge variant={row.original.side === 'upstream' ? 'secondary' : 'outline'} className="text-[10px]">{row.original.side === 'upstream' ? '上游成本' : '用户扣费'}</Badge>,
+    },
+    {
+      id: 'provider',
+      header: () => <span className="text-xs font-medium text-muted-foreground">供应商</span>,
+      cell: ({ row }) => <span className="text-sm">{providerName(row.original.provider_id)}</span>,
+    },
+    {
+      id: 'model',
+      header: () => <span className="text-xs font-medium text-muted-foreground">模型</span>,
+      cell: ({ row }) => <span className="text-sm">{row.original.model_id ? modelName(row.original.model_id) : <span className="text-muted-foreground">全部</span>}</span>,
+    },
+    {
+      accessorKey: 'multiplier',
+      meta: { className: 'text-right' },
+      header: ({ column }) => <DataTableColumnHeader column={column} title="倍率" />,
+      cell: ({ row }) => <span className="block text-right font-mono text-sm">×{row.original.multiplier}</span>,
+    },
+    {
+      accessorKey: 'priority',
+      meta: { className: 'text-right' },
+      header: ({ column }) => <DataTableColumnHeader column={column} title="优先级" />,
+      cell: ({ row }) => <span className="block text-right text-sm text-muted-foreground">{row.original.priority}</span>,
+    },
+    {
+      id: 'status',
+      header: () => <span className="text-xs font-medium text-muted-foreground">状态</span>,
+      cell: ({ row }) => {
+        const r = row.original;
+        return (
+          <Button variant="ghost" size="sm" className="h-7 text-xs"
+            onClick={async () => { await updateDashboardPriceRuleStatusApi(r.id, r.status === 'active' ? 'disabled' : 'active'); reload(); }}>
+            {r.status === 'active' ? <span className="text-emerald-600">启用</span> : <span className="text-muted-foreground">禁用</span>}
+          </Button>
+        );
+      },
+    },
+    {
+      id: 'action',
+      meta: { className: 'text-right' },
+      header: () => null,
+      cell: ({ row }) => {
+        const r = row.original;
+        return (
+          <div className="flex justify-end gap-1">
+            <Button variant="ghost" size="icon" className="h-7 w-7" title="编辑"
+              onClick={() => setEdit({ id: r.id, side: r.side, provider_id: r.provider_id ?? '', model_id: r.model_id ?? '', multiplier: String(r.multiplier), priority: String(r.priority) })}>
+              <Pencil className="h-4 w-4" />
+            </Button>
+            <Button variant="ghost" size="icon" className="h-7 w-7 hover:text-destructive" title="删除" onClick={() => setPendingDelete(r)}>
+              <Trash2 className="h-4 w-4" />
+            </Button>
+          </div>
+        );
+      },
+    },
+  ], [providers, models]);
+
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
@@ -111,45 +174,8 @@ export default function PriceRules() {
         </Select>
       </div>
 
-      <Card><CardContent className="p-0">
-        {loading && list.length === 0 ? null
-          : list.length === 0 ? <EmptyState className="mx-4 my-6" title="暂无规则" description="点击右上角新建" />
-          : <Table>
-            <TableHeader><TableRow>
-              <TableHead>类型</TableHead><TableHead>供应商</TableHead><TableHead>模型</TableHead>
-              <TableHead className="text-right">倍率</TableHead><TableHead className="text-right">优先级</TableHead>
-              <TableHead>状态</TableHead><TableHead></TableHead>
-            </TableRow></TableHeader>
-            <TableBody>
-              {list.map((r) => (
-                <TableRow key={r.id}>
-                  <TableCell><Badge variant={r.side === 'upstream' ? 'secondary' : 'outline'} className="text-[10px]">{r.side === 'upstream' ? '上游成本' : '用户扣费'}</Badge></TableCell>
-                  <TableCell className="text-sm">{providerName(r.provider_id)}</TableCell>
-                  <TableCell className="text-sm">{r.model_id ? modelName(r.model_id) : <span className="text-muted-foreground">全部</span>}</TableCell>
-                  <TableCell className="text-right font-mono text-sm">×{r.multiplier}</TableCell>
-                  <TableCell className="text-right text-sm text-muted-foreground">{r.priority}</TableCell>
-                  <TableCell>
-                    <Button variant="ghost" size="sm" className="h-7 text-xs"
-                      onClick={async () => { await updateDashboardPriceRuleStatusApi(r.id, r.status === 'active' ? 'disabled' : 'active'); reload(); }}>
-                      {r.status === 'active' ? <span className="text-emerald-600">启用</span> : <span className="text-muted-foreground">禁用</span>}
-                    </Button>
-                  </TableCell>
-                  <TableCell className="text-right">
-                    <div className="flex justify-end gap-1">
-                      <Button variant="ghost" size="icon" className="h-7 w-7" title="编辑"
-                        onClick={() => setEdit({ id: r.id, side: r.side, provider_id: r.provider_id ?? '', model_id: r.model_id ?? '', multiplier: String(r.multiplier), priority: String(r.priority) })}>
-                        <Pencil className="h-4 w-4" />
-                      </Button>
-                      <Button variant="ghost" size="icon" className="h-7 w-7 hover:text-destructive" title="删除" onClick={() => setPendingDelete(r)}>
-                        <Trash2 className="h-4 w-4" />
-                      </Button>
-                    </div>
-                  </TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>}
-      </CardContent></Card>
+      {loading && list.length === 0 ? null
+        : <DataTable columns={columns} data={list} emptyComponent={<EmptyState className="mx-4 my-6" title="暂无规则" description="点击右上角新建" />} />}
 
       {total > size && (
         <div className="flex justify-center gap-2">

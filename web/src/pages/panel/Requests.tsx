@@ -1,4 +1,4 @@
-import { Fragment, useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { RefreshCw, Search, ChevronRight, Clock, Cpu, Activity, AlertTriangle, Network, Brain, Zap, Wallet, CheckCircle2, Info } from 'lucide-react';
 import { getPanelRequestsApi, getPanelRequestDetailApi, getPanelKeysApi } from '@/api/panel';
 import { usePagedQuery } from '@/hooks/usePagedQuery';
@@ -24,14 +24,8 @@ import {
   SheetHeader,
   SheetTitle,
 } from '@/components/ui/sheet';
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from '@/components/ui/table';
+import { type ColumnDef } from '@tanstack/react-table';
+import { DataTable } from '@/components/ui/data-table';
 import {
   Tooltip,
   TooltipContent,
@@ -39,11 +33,12 @@ import {
   TooltipTrigger,
 } from '@/components/ui/tooltip';
 import { formatCompact, formatDateTime, formatNumber } from '@/utils/format';
-import { REQUEST_LOG_COLUMNS, ColumnToggle, useColumnVisibility } from '@/components/RequestLogColumns';
+import { REQUEST_LOG_COLUMNS, ColumnToggle, useColumnVisibility, buildRequestColumns } from '@/components/RequestLogColumns';
 import { attemptErrorLabel, withAttemptPasses } from '@/utils/attempts';
 import type {
   RequestLogQuery,
   RequestLogDetail,
+  RequestLogItem,
   RequestAttemptItem,
 } from '@/types/request-log';
 import type { UserApiKeyItem } from '@/types/user';
@@ -52,6 +47,29 @@ const PROTOCOLS = ['openai', 'anthropic', 'openai_chat', 'openai_responses', 'an
 
 /** 日期输入校验：空值或标准 YYYY-MM-DD（年份恰好 4 位），拒绝 6 位年份等异常输入 */
 const isDate = (v: string) => v === '' || /^\d{4}-\d{2}-\d{2}$/.test(v);
+
+type AttemptRow = RequestAttemptItem & { pass: number };
+
+/** 上游尝试明细表的列定义。 */
+const ATTEMPT_COLUMNS: ColumnDef<AttemptRow>[] = [
+  { id: 'pass', meta: { className: 'w-[70px]' }, header: () => <span className="text-xs font-medium text-muted-foreground">#</span>, cell: ({ row }) => <span className="font-mono text-sm">#{row.original.pass}-{row.original.attempt_index}</span> },
+  { id: 'provider', header: () => <span className="text-xs font-medium text-muted-foreground">供应商</span>, cell: ({ row }) => <span className="text-sm">{row.original.provider_name ?? '—'}</span> },
+  { id: 'key', header: () => <span className="text-xs font-medium text-muted-foreground">密钥</span>, cell: ({ row }) => <span className="font-mono text-sm text-muted-foreground">{row.original.upstream_key_id ? `#${row.original.upstream_key_id.slice(-10)}` : '—'}</span> },
+  { id: 'latency', meta: { className: 'text-right' }, header: () => <span className="text-xs font-medium text-muted-foreground">耗时</span>, cell: ({ row }) => <span className="block text-right tabular-nums text-sm">{row.original.latency_ms !== null ? `${formatNumber(row.original.latency_ms)}ms` : '—'}</span> },
+  {
+    id: 'status',
+    header: () => <span className="text-xs font-medium text-muted-foreground">状态</span>,
+    cell: ({ row }) => {
+      const a = row.original;
+      return (
+        <div className="flex items-center gap-1.5 text-sm" title={a.error_code ? (a.error_message ?? '') : undefined}>
+          <span className={a.error_code ? 'h-1.5 w-1.5 rounded-full bg-red-500' : 'h-1.5 w-1.5 rounded-full bg-emerald-500'} />
+          <span className="text-muted-foreground">{a.error_code ? attemptErrorLabel(a.error_code) : '成功'}</span>
+        </div>
+      );
+    },
+  },
+];
 
 /**
  * 用户面·我的请求记录：分页列表 + 详情抽屉。
@@ -76,9 +94,21 @@ function Requests() {
     });
   useEffect(() => { write(params); }, [params]);
 
-  const allCols = REQUEST_LOG_COLUMNS.filter((c) => c.key !== 'user');
+  const allCols = useMemo(() => REQUEST_LOG_COLUMNS.filter((c) => c.key !== 'user'), []);
   const [visibleKeys, setVisibleKeys] = useColumnVisibility('panel-req-cols', allCols.map((c) => c.key), allCols.filter((c) => c.required).map((c) => c.key));
-  const visibleCols = allCols.filter((c) => visibleKeys.includes(c.key));
+  const columns = useMemo<ColumnDef<RequestLogItem>[]>(() => [
+    ...buildRequestColumns(allCols.filter((c) => visibleKeys.includes(c.key))),
+    {
+      id: '_toggle',
+      meta: { className: 'w-[60px]' },
+      header: () => (
+        <div className="flex justify-end">
+          <ColumnToggle columns={allCols} visibleKeys={visibleKeys} onChange={setVisibleKeys} />
+        </div>
+      ),
+      cell: () => <ChevronRight className="h-4 w-4 text-muted-foreground" />,
+    },
+  ], [allCols, visibleKeys, setVisibleKeys]);
 
   const { data: keysData } = useAsync(getPanelKeysApi, []);
   const keys = keysData ?? [];
@@ -122,35 +152,13 @@ function Requests() {
                 <Skeleton key={i} className="h-10 w-full" />
               ))}
             </div>
-          ) : list.length === 0 ? (
-            <EmptyState className="mx-4 my-6" title="暂无请求日志" description="尝试调整筛选条件或刷新" />
           ) : (
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  {visibleCols.map((c) => (
-                    <TableHead key={c.key} className={c.headClass}>{c.label}</TableHead>
-                  ))}
-                  <TableHead className="w-[60px] text-right">
-                    <ColumnToggle columns={allCols} visibleKeys={visibleKeys} onChange={setVisibleKeys} />
-                  </TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {list.map((r) => (
-                  <TableRow
-                    key={r.id}
-                    className="cursor-pointer h-12"
-                    onClick={() => setDetailId(r.id)}
-                  >
-                    {visibleCols.map((c) => <Fragment key={c.key}>{c.cell(r)}</Fragment>)}
-                    <TableCell>
-                      <ChevronRight className="h-4 w-4 text-muted-foreground" />
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
+            <DataTable
+              columns={columns}
+              data={list}
+              onRowClick={(r) => setDetailId(r.id)}
+              emptyComponent={<EmptyState className="mx-4 my-6" title="暂无请求日志" description="尝试调整筛选条件或刷新" />}
+            />
           )}
         </CardContent>
       </Card>
@@ -424,35 +432,7 @@ function AttemptsSection({ attempts }: { attempts: RequestAttemptItem[] }) {
   return (
     <div className="rounded-lg border p-3">
       <div className="mb-2 text-sm text-muted-foreground">上游尝试（{labeled.length}）</div>
-      <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead className="w-[70px]">#</TableHead>
-              <TableHead>供应商</TableHead>
-              <TableHead>密钥</TableHead>
-              <TableHead className="text-right">耗时</TableHead>
-              <TableHead>状态</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {labeled.map((a) => (
-              <TableRow key={a.id}>
-                <TableCell className="font-mono text-sm">#{a.pass}-{a.attempt_index}</TableCell>
-                <TableCell className="text-sm">{a.provider_name ?? '—'}</TableCell>
-                <TableCell className="text-sm text-muted-foreground">
-                  <span className="font-mono">{a.upstream_key_id ? `#${a.upstream_key_id.slice(-10)}` : '—'}</span>
-                </TableCell>
-                <TableCell className="text-right tabular-nums text-sm">{a.latency_ms !== null ? `${formatNumber(a.latency_ms)}ms` : '—'}</TableCell>
-                <TableCell>
-                  <div className="flex items-center gap-1.5 text-sm" title={a.error_code ? (a.error_message ?? '') : undefined}>
-                    <span className={a.error_code ? 'h-1.5 w-1.5 rounded-full bg-red-500' : 'h-1.5 w-1.5 rounded-full bg-emerald-500'} />
-                    <span className="text-muted-foreground">{a.error_code ? attemptErrorLabel(a.error_code) : '成功'}</span>
-                  </div>
-                </TableCell>
-              </TableRow>
-            ))}
-          </TableBody>
-        </Table>
+      <DataTable columns={ATTEMPT_COLUMNS} data={labeled} />
     </div>
   );
 }

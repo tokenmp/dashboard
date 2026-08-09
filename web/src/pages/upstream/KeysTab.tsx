@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { toast } from 'sonner';
 import { RefreshCw, Search, Plus, Zap, Trash2 } from 'lucide-react';
 import { getDashboardUpstreamKeysApi, getDashboardUpstreamKeyDetailApi, probeUpstreamKeyApi, updateUpstreamKeyStatusApi, deleteUpstreamKeyApi } from '@/api/dashboard';
@@ -16,9 +16,11 @@ import { DebouncedInput } from '@/components/DebouncedInput';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { formatCompact, formatDate, formatDateTime, formatNumber } from '@/utils/format';
-import type { UpstreamQuery } from '@/types/upstream';
+import { type ColumnDef } from '@tanstack/react-table';
+import { DataTable } from '@/components/ui/data-table';
+import { DataTableColumnHeader } from '@/components/ui/data-table-column-header';
+import type { UpstreamKeyItem, UpstreamModelMappingItem, UpstreamQuery } from '@/types/upstream';
 
 const MARKET_STATUSES = ['online', 'offline', 'paused', 'degraded', 'exhausted', 'suspended'];
 
@@ -55,6 +57,78 @@ export function KeysTab({ providerId }: { providerId?: string }) {
   };
   const { list, total, page, size, loading, error, params, reload, setPage, setFilters } =
     usePagedQuery(getDashboardUpstreamKeysApi, { initial: { size: 20, sort: '-created_at', status: 'active', ...(providerId ? { providerId } : {}) } as UpstreamQuery });
+
+  const columns = useMemo<ColumnDef<UpstreamKeyItem>[]>(() => {
+    const cols: ColumnDef<UpstreamKeyItem>[] = [
+      {
+        accessorKey: 'name',
+        header: ({ column }) => <DataTableColumnHeader column={column} title="名称" />,
+        cell: ({ row }) => {
+          const k = row.original;
+          return (
+            <div>
+              <div className="font-medium">{k.name}</div>
+              <div className="font-mono text-xs text-muted-foreground">{k.key_prefix ?? ''}…{k.key_suffix ?? ''}</div>
+            </div>
+          );
+        },
+      },
+    ];
+    if (!providerId) {
+      cols.push({
+        id: 'provider',
+        accessorFn: (k) => k.provider?.display_name || k.provider?.name || '',
+        meta: { className: 'w-[110px]' },
+        header: ({ column }) => <DataTableColumnHeader column={column} title="供应商" />,
+        cell: ({ row }) => <span className="text-xs">{row.original.provider?.display_name || row.original.provider?.name || '—'}</span>,
+      });
+    }
+    cols.push(
+      { id: 'source_type', meta: { className: 'w-[90px]' }, header: () => <span className="text-xs font-medium text-muted-foreground">来源</span>, cell: ({ row }) => <Badge variant={row.original.source_type === 'user' ? 'secondary' : 'outline'} className="text-[10px]">{row.original.source_type}</Badge> },
+      { id: 'market_status', meta: { className: 'w-[100px]' }, header: () => <span className="text-xs font-medium text-muted-foreground">市场状态</span>, cell: ({ row }) => <StatusBadge status={row.original.market_status} /> },
+      { id: 'review_status', meta: { className: 'w-[80px]' }, header: () => <span className="text-xs font-medium text-muted-foreground">审核</span>, cell: ({ row }) => <StatusBadge status={row.original.review_status} /> },
+      {
+        id: 'quota',
+        meta: { className: 'w-[100px] text-right' },
+        header: () => <span className="text-xs font-medium text-muted-foreground">用量</span>,
+        cell: ({ row }) => <UsageBar used={Number(row.original.quota_used) || 0} total={row.original.quota_total} />,
+      },
+      {
+        id: 'total_attempts',
+        accessorFn: (k) => Number(k.total_attempts) || 0,
+        meta: { className: 'w-[90px] text-right' },
+        header: ({ column }) => <DataTableColumnHeader column={column} title="总调用" />,
+        cell: ({ row }) => {
+          const k = row.original;
+          return (
+            <div className="text-right text-xs tabular-nums">
+              <div className="font-medium text-foreground">{formatNumber(Number(k.total_attempts) || 0)}</div>
+              <div className="text-[10px] text-emerald-600">成功 {formatNumber(Number(k.total_success_attempts) || 0)}</div>
+            </div>
+          );
+        },
+      },
+      {
+        id: 'action',
+        meta: { className: 'w-[100px] text-right' },
+        header: () => null,
+        cell: ({ row }) => {
+          const k = row.original;
+          return (
+            <div className="flex items-center justify-end gap-1">
+              <Button variant="ghost" size="icon" className="h-7 w-7" title="测试" disabled={probingId === k.id} onClick={(e) => { e.stopPropagation(); probeRow(k.id, k.name); }}>
+                <Zap className="h-4 w-4" />
+              </Button>
+              <Button variant="ghost" size="icon" className="h-7 w-7 hover:text-destructive" title="删除" onClick={(e) => { e.stopPropagation(); deleteRow(k.id, k.name); }}>
+                <Trash2 className="h-4 w-4" />
+              </Button>
+            </div>
+          );
+        },
+      },
+    );
+    return cols;
+  }, [providerId, probingId, probeRow, deleteRow]);
 
   return (
     <div className="space-y-3">
@@ -108,47 +182,16 @@ export function KeysTab({ providerId }: { providerId?: string }) {
 
       {error && <Card className="border-destructive"><CardContent className="py-3 text-sm text-destructive">{error}</CardContent></Card>}
 
-      <Card><CardContent className="p-0">
-        {loading && list.length === 0 ? <div className="space-y-2 p-4">{Array.from({ length: 8 }).map((_, i) => <Skeleton key={i} className="h-10 w-full" />)}</div>
-          : list.length === 0 ? <EmptyState className="mx-4 my-6" title="暂无上游 Key" description={isAdmin ? undefined : '你还没有自有的上游 Key'} />
-          : <Table>
-              <TableHeader><TableRow>
-                <TableHead>名称</TableHead>{!providerId && <TableHead className="w-[110px]">供应商</TableHead>}
-                <TableHead className="w-[90px]">来源</TableHead><TableHead className="w-[100px]">市场状态</TableHead>
-                <TableHead className="w-[80px]">审核</TableHead><TableHead className="w-[100px] text-right">用量</TableHead><TableHead className="w-[90px] text-right">总调用</TableHead>
-                <TableHead className="w-[100px]"></TableHead>
-              </TableRow></TableHeader>
-              <TableBody>{list.map((k) => (
-                <TableRow key={k.id} className="cursor-pointer" onClick={() => setDetailId(k.id)}>
-                  <TableCell>
-                    <div className="font-medium">{k.name}</div>
-                    <div className="font-mono text-xs text-muted-foreground">{k.key_prefix ?? ''}…{k.key_suffix ?? ''}</div>
-                  </TableCell>
-                  {!providerId && <TableCell className="text-xs">{k.provider?.display_name || k.provider?.name || '—'}</TableCell>}
-                  <TableCell><Badge variant={k.source_type === 'user' ? 'secondary' : 'outline'} className="text-[10px]">{k.source_type}</Badge></TableCell>
-                  <TableCell><StatusBadge status={k.market_status} /></TableCell>
-                  <TableCell><StatusBadge status={k.review_status} /></TableCell>
-                  <TableCell className="text-right">
-                    <UsageBar used={Number(k.quota_used) || 0} total={k.quota_total} />
-                  </TableCell>
-                  <TableCell className="text-right text-xs tabular-nums">
-                    <div className="font-medium text-foreground">{formatNumber(Number(k.total_attempts) || 0)}</div>
-                    <div className="text-[10px] text-emerald-600">成功 {formatNumber(Number(k.total_success_attempts) || 0)}</div>
-                  </TableCell>
-                  <TableCell className="text-right">
-                    <div className="flex items-center justify-end gap-1">
-                      <Button variant="ghost" size="icon" className="h-7 w-7" title="测试" disabled={probingId === k.id} onClick={(e) => { e.stopPropagation(); probeRow(k.id, k.name); }}>
-                        <Zap className="h-4 w-4" />
-                      </Button>
-                      <Button variant="ghost" size="icon" className="h-7 w-7 hover:text-destructive" title="删除" onClick={(e) => { e.stopPropagation(); deleteRow(k.id, k.name); }}>
-                        <Trash2 className="h-4 w-4" />
-                      </Button>
-                    </div>
-                  </TableCell>
-                </TableRow>
-              ))}</TableBody>
-            </Table>}
-      </CardContent></Card>
+      {loading && list.length === 0 ? (
+        <Card><CardContent className="p-0"><div className="space-y-2 p-4">{Array.from({ length: 8 }).map((_, i) => <Skeleton key={i} className="h-10 w-full" />)}</div></CardContent></Card>
+      ) : (
+        <DataTable
+          columns={columns}
+          data={list}
+          onRowClick={(k) => setDetailId(k.id)}
+          emptyComponent={<EmptyState className="mx-4 my-6" title="暂无上游 Key" description={isAdmin ? undefined : '你还没有自有的上游 Key'} />}
+        />
+      )}
 
       {total > 0 && (
         <div className="flex items-center justify-between text-sm text-muted-foreground">
@@ -228,6 +271,26 @@ function KeyDetailDrawer({ id, onClose, onProbed }: { id: string | null; onClose
     if (next === 'disabled') { setPendingDisable(true); return; }
     doToggle('active');
   };
+  const mappingColumns = useMemo<ColumnDef<UpstreamModelMappingItem>[]>(() => [
+    {
+      id: 'model',
+      header: () => <span className="text-xs font-medium text-muted-foreground">模型</span>,
+      cell: ({ row }) => {
+        const m = row.original;
+        return (
+          <div>
+            <div className="font-medium">{m.model?.name ?? '—'}</div>
+            <div className="text-xs text-muted-foreground">{m.upstream_model_name ?? ''}</div>
+          </div>
+        );
+      },
+    },
+    { id: 'endpoint', meta: { className: 'w-[120px]' }, header: () => <span className="text-xs font-medium text-muted-foreground">端点</span>, cell: ({ row }) => <span className="text-xs">{row.original.providerEndpoint ? `${row.original.providerEndpoint.protocol}` : '—'}</span> },
+    { id: 'context', meta: { className: 'w-[90px] text-right' }, header: () => <span className="text-xs font-medium text-muted-foreground">上下文</span>, cell: ({ row }) => <span className="block text-right tabular-nums text-xs">{row.original.model?.context_window_tokens ? formatCompact(row.original.model.context_window_tokens) : '—'}</span> },
+    { id: 'max_tokens', meta: { className: 'w-[90px] text-right' }, header: () => <span className="text-xs font-medium text-muted-foreground">最大输出</span>, cell: ({ row }) => <span className="block text-right tabular-nums text-xs">{row.original.max_tokens ? formatCompact(row.original.max_tokens) : '—'}</span> },
+    { id: 'input_price', meta: { className: 'w-[100px] text-right' }, header: () => <span className="text-xs font-medium text-muted-foreground">输入价</span>, cell: ({ row }) => <span className="block text-right tabular-nums text-xs">{row.original.input_price_per_token ?? '—'}</span> },
+    { id: 'output_price', meta: { className: 'w-[100px] text-right' }, header: () => <span className="text-xs font-medium text-muted-foreground">输出价</span>, cell: ({ row }) => <span className="block text-right tabular-nums text-xs">{row.original.output_price_per_token ?? '—'}</span> },
+  ], []);
   return (
     <Sheet open={id !== null} onOpenChange={(open) => !open && onClose()}>
       <SheetContent side="right" className="w-full overflow-y-auto sm:max-w-2xl">
@@ -277,27 +340,7 @@ function KeyDetailDrawer({ id, onClose, onProbed }: { id: string | null; onClose
               <Card>
                 <CardHeader className="pb-2"><CardTitle className="text-sm">模型映射（{data.mappings.length}）</CardTitle></CardHeader>
                 <CardContent className="p-0">
-                  <Table>
-                    <TableHeader><TableRow>
-                      <TableHead>模型</TableHead><TableHead className="w-[120px]">端点</TableHead>
-                      <TableHead className="w-[90px] text-right">上下文</TableHead>
-                      <TableHead className="w-[90px] text-right">最大输出</TableHead>
-                      <TableHead className="w-[100px] text-right">输入价</TableHead><TableHead className="w-[100px] text-right">输出价</TableHead>
-                    </TableRow></TableHeader>
-                    <TableBody>{data.mappings.map((m) => (
-                      <TableRow key={m.id}>
-                        <TableCell>
-                          <div className="font-medium">{m.model?.name ?? '—'}</div>
-                          <div className="text-xs text-muted-foreground">{m.upstream_model_name ?? ''}</div>
-                        </TableCell>
-                        <TableCell className="text-xs">{m.providerEndpoint ? `${m.providerEndpoint.protocol}` : '—'}</TableCell>
-                        <TableCell className="text-right tabular-nums text-xs">{m.model?.context_window_tokens ? formatCompact(m.model.context_window_tokens) : '—'}</TableCell>
-                        <TableCell className="text-right tabular-nums text-xs">{m.max_tokens ? formatCompact(m.max_tokens) : '—'}</TableCell>
-                        <TableCell className="text-right tabular-nums text-xs">{m.input_price_per_token ?? '—'}</TableCell>
-                        <TableCell className="text-right tabular-nums text-xs">{m.output_price_per_token ?? '—'}</TableCell>
-                      </TableRow>
-                    ))}</TableBody>
-                  </Table>
+                  <DataTable columns={mappingColumns} data={data.mappings} />
                 </CardContent>
               </Card>
             )}

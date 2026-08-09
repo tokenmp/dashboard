@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { ChevronRight, Copy, HelpCircle, LayoutGrid, RefreshCw, Search, Table as TableIcon } from 'lucide-react';
-import { useReactTable, getCoreRowModel, getSortedRowModel, flexRender, type ColumnDef, type SortingState } from '@tanstack/react-table';
+import { type ColumnDef } from '@tanstack/react-table';
 import { getModelKeyHealthApi, getPanelModelsApi, getPanelModelNamesApi } from '@/api/panel';
 import { usePagedQuery } from '@/hooks/usePagedQuery';
 import { useAsync } from '@/hooks/useAsync';
@@ -14,7 +14,8 @@ import { ModelSuccessDialog } from '@/components/ModelSuccessDialog';
 import { ProviderMappingsDialog } from '@/components/ProviderMappingsDialog';
 import { MiniSuccessBuckets } from '@/components/MiniSuccessBuckets';
 import { DataTableColumnHeader } from '@/components/ui/data-table-column-header';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { DataTable } from '@/components/ui/data-table';
+import { Table, TableBody, TableCell, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
 import { CapabilityBadge } from '@/components/CapabilityBadge';
 import { Button } from '@/components/ui/button';
@@ -384,7 +385,6 @@ function Models() {
     return withMeta.map((x) => x.m);
   }, [list]);
 
-  const [sorting, setSorting] = useState<SortingState>([]);
   const columns = useMemo<ColumnDef<AiModelItem>[]>(() => [
     {
       id: 'model',
@@ -513,7 +513,6 @@ function Models() {
       cell: ({ row }) => <MiniSuccessBuckets modelId={row.original.id} />,
     },
   ], []);
-  const table = useReactTable({ data: sorted, columns, state: { sorting }, onSortingChange: setSorting, getCoreRowModel: getCoreRowModel(), getSortedRowModel: getSortedRowModel() });
 
   useEffect(() => { write(params); }, [params]);
 
@@ -611,32 +610,7 @@ function Models() {
       ) : list.length === 0 ? (
         <EmptyState title="暂无模型" description="尝试调整搜索或计费模式筛选" />
       ) : viewMode === 'table' ? (
-        <Card><CardContent className="p-0">
-          <Table>
-            <TableHeader>
-              {table.getHeaderGroups().map((hg) => (
-                <TableRow key={hg.id}>
-                  {hg.headers.map((h) => (
-                    <TableHead key={h.id} className={(h.column.columnDef.meta as { className?: string } | undefined)?.className ?? ''}>
-                      {h.isPlaceholder ? null : flexRender(h.column.columnDef.header, h.getContext())}
-                    </TableHead>
-                  ))}
-                </TableRow>
-              ))}
-            </TableHeader>
-            <TableBody>
-              {table.getRowModel().rows.map((row) => (
-                <TableRow key={row.id} className="cursor-pointer" onClick={() => setProvidersModel(row.original)}>
-                  {row.getVisibleCells().map((cell) => (
-                    <TableCell key={cell.id} className={(cell.column.columnDef.meta as { className?: string } | undefined)?.className ?? ''}>
-                      {flexRender(cell.column.columnDef.cell, cell.getContext())}
-                    </TableCell>
-                  ))}
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        </CardContent></Card>
+        <DataTable columns={columns} data={sorted} onRowClick={(m) => setProvidersModel(m)} />
       ) : (
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
           {sorted.map((model) => <ModelCard key={model.id} model={model} />)}

@@ -1,8 +1,8 @@
 import { useEffect, useState, type ReactNode } from 'react';
+import { type ColumnDef } from '@tanstack/react-table';
 import { Columns3 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { TableCell } from '@/components/ui/table';
 import { MultiSelect } from '@/components/ui/multi-select';
 import { ModelIcon } from '@/components/ModelIcon';
 import { formatCompact, formatDateTime, formatNumber } from '@/utils/format';
@@ -12,6 +12,9 @@ export interface RequestLogColumn {
   key: string;
   label: string;
   headClass?: string;
+  /** 单元格 className（原 TableCell 的 className） */
+  cellClass?: string;
+  /** 单元格内容（不含 TableCell 包裹，由 DataTable 渲染） */
   cell: (r: RequestLogItem) => ReactNode;
   /** 必须列：始终可见且不可在列选择中取消 */
   required?: boolean;
@@ -23,126 +26,89 @@ export const REQUEST_LOG_COLUMNS: RequestLogColumn[] = [
     key: 'id',
     label: 'ID',
     headClass: 'w-[140px]',
+    cellClass: 'font-mono text-sm text-muted-foreground',
     required: true,
-    cell: (r) => (
-      <TableCell className="font-mono text-sm text-muted-foreground">
-        {r.request_id ? r.request_id.slice(-10) : '—'}
-      </TableCell>
-    ),
+    cell: (r) => r.request_id ? r.request_id.slice(-10) : '—',
   },
   {
     key: 'user',
     label: '用户',
-    cell: (r) => (
-      <TableCell className="text-sm text-muted-foreground">
-        <span className="max-w-[160px] truncate" title={r.user_email ?? ''}>{r.user_email ?? '—'}</span>
-      </TableCell>
-    ),
+    cellClass: 'text-sm text-muted-foreground',
+    cell: (r) => <span className="block max-w-[160px] truncate" title={r.user_email ?? ''}>{r.user_email ?? '—'}</span>,
   },
   {
     key: 'apiKey',
     label: '密钥',
-    cell: (r) => (
-      <TableCell className="text-sm text-muted-foreground">
-        <span className="max-w-[140px] truncate" title={r.api_key_name ?? ''}>{r.api_key_name ?? '—'}</span>
-      </TableCell>
-    ),
+    cellClass: 'text-sm text-muted-foreground',
+    cell: (r) => <span className="block max-w-[140px] truncate" title={r.api_key_name ?? ''}>{r.api_key_name ?? '—'}</span>,
   },
   {
     key: 'protocol',
     label: '协议',
     headClass: 'w-[110px]',
-    cell: (r) => (
-      <TableCell>
-        <span className="text-sm">{r.protocol ?? '—'}</span>
-      </TableCell>
-    ),
+    cell: (r) => <span className="text-sm">{r.protocol ?? '—'}</span>,
   },
   {
     key: 'model',
     label: '模型',
     required: true,
+    cellClass: 'font-medium',
     cell: (r) => (
-      <TableCell className="font-medium">
-        <div className="flex items-center gap-1.5">
-          <ModelIcon id={r.model_name ?? ''} displayName={r.model_name ?? undefined} size={20} />
-          <span className="max-w-[220px] truncate">{r.model_name || '—'}</span>
-        </div>
-      </TableCell>
+      <div className="flex items-center gap-1.5">
+        <ModelIcon id={r.model_name ?? ''} displayName={r.model_name ?? undefined} size={20} />
+        <span className="max-w-[220px] truncate">{r.model_name || '—'}</span>
+      </div>
     ),
   },
   {
     key: 'type',
     label: '类型',
     headClass: 'w-[70px]',
-    cell: (r) => (
-      <TableCell>
-        {r.stream
-          ? <Badge variant="secondary" className="px-1.5 py-0 text-sm font-normal text-muted-foreground">流式</Badge>
-          : <span className="text-sm text-muted-foreground">—</span>}
-      </TableCell>
-    ),
+    cell: (r) => r.stream
+      ? <Badge variant="secondary" className="px-1.5 py-0 text-sm font-normal text-muted-foreground">流式</Badge>
+      : <span className="text-sm text-muted-foreground">—</span>,
   },
   {
     key: 'thinking',
     label: '思考',
     headClass: 'w-[80px]',
-    cell: (r) => (
-      <TableCell className="text-sm">
-        {r.thinking_mode ? (
-          <span className="inline-flex items-center gap-1">
-            <span>{r.thinking_effort ?? '—'}</span>
-            {r.thinking_effort_degraded && (
-              <Badge variant="outline" className="px-1 py-0 text-sm text-amber-600">降级</Badge>
-            )}
-          </span>
-        ) : (
-          <span className="text-muted-foreground">—</span>
-        )}
-      </TableCell>
-    ),
+    cellClass: 'text-sm',
+    cell: (r) => r.thinking_mode ? (
+      <span className="inline-flex items-center gap-1">
+        <span>{r.thinking_effort ?? '—'}</span>
+        {r.thinking_effort_degraded && <Badge variant="outline" className="px-1 py-0 text-sm text-amber-600">降级</Badge>}
+      </span>
+    ) : <span className="text-muted-foreground">—</span>,
   },
   {
     key: 'tokens',
     label: 'Token',
     headClass: 'w-[110px] text-right',
-    cell: (r) => (
-      <TableCell className="text-right tabular-nums">
-        {r.total_tokens !== null ? formatCompact(r.total_tokens) : '—'}
-      </TableCell>
-    ),
+    cellClass: 'text-right tabular-nums',
+    cell: (r) => r.total_tokens !== null ? formatCompact(r.total_tokens) : '—',
   },
   {
     key: 'speed',
     label: '推理速度',
     headClass: 'w-[90px] text-right',
-    cell: (r) => (
-      <TableCell className="text-right tabular-nums text-sm text-muted-foreground">
-        {r.ttft_ms !== null && r.latency_ms !== null && r.latency_ms > r.ttft_ms && r.output_tokens
-          ? formatNumber(Math.round((r.output_tokens / (r.latency_ms - r.ttft_ms)) * 1000))
-          : '—'}
-      </TableCell>
-    ),
+    cellClass: 'text-right tabular-nums text-sm text-muted-foreground',
+    cell: (r) => r.ttft_ms !== null && r.latency_ms !== null && r.latency_ms > r.ttft_ms && r.output_tokens
+      ? formatNumber(Math.round((r.output_tokens / (r.latency_ms - r.ttft_ms)) * 1000))
+      : '—',
   },
   {
     key: 'ttft',
     label: '首字输出',
     headClass: 'w-[90px] text-right',
-    cell: (r) => (
-      <TableCell className="text-right tabular-nums text-sm text-muted-foreground">
-        {r.ttft_ms !== null ? `${formatNumber(r.ttft_ms)}ms` : '—'}
-      </TableCell>
-    ),
+    cellClass: 'text-right tabular-nums text-sm text-muted-foreground',
+    cell: (r) => r.ttft_ms !== null ? `${formatNumber(r.ttft_ms)}ms` : '—',
   },
   {
     key: 'latency',
     label: '耗时',
     headClass: 'w-[90px] text-right',
-    cell: (r) => (
-      <TableCell className="text-right tabular-nums text-sm text-muted-foreground">
-        {r.latency_ms !== null ? `${formatNumber(r.latency_ms)}ms` : '—'}
-      </TableCell>
-    ),
+    cellClass: 'text-right tabular-nums text-sm text-muted-foreground',
+    cell: (r) => r.latency_ms !== null ? `${formatNumber(r.latency_ms)}ms` : '—',
   },
   {
     key: 'status',
@@ -150,12 +116,10 @@ export const REQUEST_LOG_COLUMNS: RequestLogColumn[] = [
     headClass: 'w-[90px]',
     required: true,
     cell: (r) => (
-      <TableCell>
-        <div className="flex items-center gap-1.5 text-sm" title={r.error_code ?? undefined}>
-          <span className={r.success === null ? 'h-1.5 w-1.5 rounded-full bg-muted-foreground/40' : r.success ? 'h-1.5 w-1.5 rounded-full bg-emerald-500' : 'h-1.5 w-1.5 rounded-full bg-red-500'} />
-          <span className="tabular-nums text-muted-foreground">{r.final_status_code ?? '—'}</span>
-        </div>
-      </TableCell>
+      <div className="flex items-center gap-1.5 text-sm" title={r.error_code ?? undefined}>
+        <span className={r.success === null ? 'h-1.5 w-1.5 rounded-full bg-muted-foreground/40' : r.success ? 'h-1.5 w-1.5 rounded-full bg-emerald-500' : 'h-1.5 w-1.5 rounded-full bg-red-500'} />
+        <span className="tabular-nums text-muted-foreground">{r.final_status_code ?? '—'}</span>
+      </div>
     ),
   },
   {
@@ -163,13 +127,20 @@ export const REQUEST_LOG_COLUMNS: RequestLogColumn[] = [
     label: '时间',
     headClass: 'w-[160px]',
     required: true,
-    cell: (r) => (
-      <TableCell className="font-mono text-sm text-muted-foreground">
-        {formatDateTime(r.created_at)}
-      </TableCell>
-    ),
+    cellClass: 'font-mono text-sm text-muted-foreground',
+    cell: (r) => formatDateTime(r.created_at),
   },
 ];
+
+/** 把 RequestLogColumn[] 转成 DataTable 的 ColumnDef[]（cell 内容 + meta.className 合并 headClass/cellClass）。 */
+export function buildRequestColumns(cols: RequestLogColumn[]): ColumnDef<RequestLogItem>[] {
+  return cols.map((c) => ({
+    id: c.key,
+    meta: { className: [c.headClass, c.cellClass].filter(Boolean).join(' ') },
+    header: () => <span className="text-xs font-medium text-muted-foreground">{c.label}</span>,
+    cell: ({ row }) => c.cell(row.original),
+  }));
+}
 
 /** 列可见性状态，持久化到 localStorage。默认全部可见。 */
 export function useColumnVisibility(storageKey: string, allKeys: string[], requiredKeys: string[] = []) {

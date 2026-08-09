@@ -14,9 +14,8 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { DebouncedInput } from '@/components/DebouncedInput';
 import { Skeleton } from '@/components/ui/skeleton';
-import {
-  Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
-} from '@/components/ui/table';
+import { type ColumnDef } from '@tanstack/react-table';
+import { DataTable } from '@/components/ui/data-table';
 import { formatCompact, formatNumber } from '@/utils/format';
 import { billingLabel, billingVariant } from '@/utils/billing';
 import { ProviderCreateDialog } from './ProviderCreateDialog';
@@ -24,7 +23,7 @@ import { ProviderEndpointsDialog } from './ProviderEndpointsDialog';
 import { KeysTab } from './KeysTab';
 import { ModelEditDialog } from './ModelEditDialog';
 import { ConfirmDialog } from '@/components/ConfirmDialog';
-import type { AiModelItem, UpstreamQuery } from '@/types/upstream';
+import type { AiModelItem, ProviderItem, RouteGroupItem, UpstreamQuery } from '@/types/upstream';
 
 const UPSTREAM_META: Record<string, { title: string; desc: string }> = {
   providers: { title: '供应商', desc: '供应商与端点' },
@@ -32,6 +31,35 @@ const UPSTREAM_META: Record<string, { title: string; desc: string }> = {
   routes: { title: '路由组', desc: '路由组与成员映射' },
   models: { title: '平台模型', desc: '平台模型目录与计费' },
 };
+
+/** 路由组列表的列定义。 */
+const ROUTE_COLUMNS: ColumnDef<RouteGroupItem>[] = [
+  {
+    id: 'name',
+    header: () => <span className="text-xs font-medium text-muted-foreground">名称</span>,
+    cell: ({ row }) => <span className="font-medium">{row.original.display_name || row.original.name}</span>,
+  },
+  {
+    id: 'isSystem',
+    meta: { className: 'w-[90px]' },
+    header: () => <span className="text-xs font-medium text-muted-foreground">系统组</span>,
+    cell: ({ row }) => row.original.is_system
+      ? <Badge variant="default" className="text-[10px]">系统</Badge>
+      : <span className="text-muted-foreground">—</span>,
+  },
+  {
+    id: 'status',
+    meta: { className: 'w-[90px]' },
+    header: () => <span className="text-xs font-medium text-muted-foreground">状态</span>,
+    cell: ({ row }) => <StatusBadge status={row.original.status} />,
+  },
+  {
+    id: 'memberCount',
+    meta: { className: 'w-[100px] text-right' },
+    header: () => <span className="text-xs font-medium text-muted-foreground">成员映射</span>,
+    cell: ({ row }) => <span className="block text-right tabular-nums">{row.original.member_count}</span>,
+  },
+];
 
 function Upstream({ section }: { section: string }) {
   const meta = UPSTREAM_META[section] ?? UPSTREAM_META.providers;
@@ -76,6 +104,39 @@ function ProvidersTab() {
   useEffect(() => { write(params); }, [params]);
   const [createOpen, setCreateOpen] = useState(false);
   const [endpointsProvider, setEndpointsProvider] = useState<{ id: string; name?: string } | null>(null);
+  const providerColumns = useMemo<ColumnDef<ProviderItem>[]>(() => [
+    {
+      id: 'name',
+      header: () => <span className="text-xs font-medium text-muted-foreground">名称</span>,
+      cell: ({ row }) => <span className="font-medium">{row.original.display_name || row.original.name}</span>,
+    },
+    {
+      id: 'status',
+      meta: { className: 'w-[90px]' },
+      header: () => <span className="text-xs font-medium text-muted-foreground">状态</span>,
+      cell: ({ row }) => <StatusBadge status={row.original.status} />,
+    },
+    {
+      id: 'baseUrl',
+      header: () => <span className="text-xs font-medium text-muted-foreground">base_url</span>,
+      cell: ({ row }) => <span className="block max-w-[300px] truncate font-mono text-xs text-muted-foreground">{row.original.base_url}</span>,
+    },
+    {
+      id: 'endpoints',
+      meta: { className: 'w-[80px] text-right' },
+      header: () => <span className="text-xs font-medium text-muted-foreground">端点</span>,
+      cell: ({ row }) => (
+        <button
+          type="button"
+          className="inline-flex items-center gap-1 rounded text-muted-foreground hover:text-foreground"
+          onClick={() => setEndpointsProvider({ id: row.original.id, name: row.original.display_name || row.original.name })}
+        >
+          <Plug className="h-3.5 w-3.5" />
+          <span className="tabular-nums text-xs">{row.original.endpoint_count}</span>
+        </button>
+      ),
+    },
+  ], []);
   return (
     <div className="space-y-3">
       <Card>
@@ -94,26 +155,7 @@ function ProvidersTab() {
       {error && <Card className="border-destructive"><CardContent className="py-3 text-sm text-destructive">{error}</CardContent></Card>}
       <Card><CardContent className="p-0">
         {loading && list.length === 0 ? <div className="space-y-2 p-4">{Array.from({ length: 8 }).map((_, i) => <Skeleton key={i} className="h-10 w-full" />)}</div>
-          : list.length === 0 ? <EmptyState className="mx-4 my-6" title="暂无供应商" />
-          : <Table>
-              <TableHeader><TableRow>
-                <TableHead>名称</TableHead><TableHead className="w-[90px]">状态</TableHead>
-                <TableHead>base_url</TableHead><TableHead className="w-[80px] text-right">端点</TableHead>
-              </TableRow></TableHeader>
-              <TableBody>{list.map((p) => (
-                <TableRow key={p.id}>
-                  <TableCell className="font-medium">{p.display_name || p.name}</TableCell>
-                  <TableCell><StatusBadge status={p.status} /></TableCell>
-                  <TableCell className="max-w-[300px] truncate font-mono text-xs text-muted-foreground">{p.base_url}</TableCell>
-                  <TableCell className="text-right">
-                    <button type="button" className="inline-flex items-center gap-1 rounded text-muted-foreground hover:text-foreground" onClick={() => setEndpointsProvider({ id: p.id, name: p.display_name || p.name })}>
-                      <Plug className="h-3.5 w-3.5" />
-                      <span className="tabular-nums text-xs">{p.endpoint_count}</span>
-                    </button>
-                  </TableCell>
-                </TableRow>
-              ))}</TableBody>
-            </Table>}
+          : <DataTable columns={providerColumns} data={list} emptyComponent={<EmptyState className="mx-4 my-6" title="暂无供应商" />} />}
       </CardContent></Card>
       <Pager page={page} size={size} total={total} loading={loading} setPage={setPage} />
       <ProviderCreateDialog open={createOpen} onOpenChange={setCreateOpen} onCreated={reload} />
@@ -150,21 +192,7 @@ function RoutesTab() {
       {error && <Card className="border-destructive"><CardContent className="py-3 text-sm text-destructive">{error}</CardContent></Card>}
       <Card><CardContent className="p-0">
         {loading && list.length === 0 ? <div className="space-y-2 p-4">{Array.from({ length: 8 }).map((_, i) => <Skeleton key={i} className="h-10 w-full" />)}</div>
-          : list.length === 0 ? <EmptyState className="mx-4 my-6" title="暂无路由组" />
-          : <Table>
-              <TableHeader><TableRow>
-                <TableHead>名称</TableHead><TableHead className="w-[90px]">系统组</TableHead>
-                <TableHead className="w-[90px]">状态</TableHead><TableHead className="w-[100px] text-right">成员映射</TableHead>
-              </TableRow></TableHeader>
-              <TableBody>{list.map((g) => (
-                <TableRow key={g.id}>
-                  <TableCell className="font-medium">{g.display_name || g.name}</TableCell>
-                  <TableCell>{g.is_system ? <Badge variant="default" className="text-[10px]">系统</Badge> : <span className="text-muted-foreground">—</span>}</TableCell>
-                  <TableCell><StatusBadge status={g.status} /></TableCell>
-                  <TableCell className="text-right tabular-nums">{g.member_count}</TableCell>
-                </TableRow>
-              ))}</TableBody>
-            </Table>}
+          : <DataTable columns={ROUTE_COLUMNS} data={list} emptyComponent={<EmptyState className="mx-4 my-6" title="暂无路由组" />} />}
       </CardContent></Card>
       <Pager page={page} size={size} total={total} loading={loading} setPage={setPage} />
     </div>

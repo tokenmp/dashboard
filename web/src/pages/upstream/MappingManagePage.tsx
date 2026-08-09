@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useNavigate, useParams, useLocation } from 'react-router-dom';
 import { Plus, Trash2, ArrowLeft, Search, Pencil } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
@@ -14,10 +14,10 @@ import { SearchableSelect } from '@/components/ui/searchable-select';
 import { MultiSelect } from '@/components/ui/multi-select';
 import { EmptyState } from '@/components/EmptyState';
 import { DebouncedInput } from '@/components/DebouncedInput';
-import {
-  Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
-} from '@/components/ui/table';
 import { formatCompact } from '@/utils/format';
+import { type ColumnDef } from '@tanstack/react-table';
+import { DataTable } from '@/components/ui/data-table';
+import { DataTableColumnHeader } from '@/components/ui/data-table-column-header';
 import {
   getModelMappingsApi, createModelMappingApi, updateModelMappingApi, deleteModelMappingApi,
   getModelKeyOptionsApi, getRouteGroupsApi, type MappingPayload,
@@ -51,6 +51,75 @@ export function MappingManagePage() {
     window.addEventListener('mapping-refresh', h);
     return () => window.removeEventListener('mapping-refresh', h);
   }, [reload]);
+
+  const columns = useMemo<ColumnDef<ModelMappingItem>[]>(() => [
+    {
+      id: 'provider',
+      accessorFn: (mm) => mm.provider_display_name || mm.provider_name,
+      header: ({ column }) => <DataTableColumnHeader column={column} title="供应商" />,
+      cell: ({ row }) => <span className="text-xs">{row.original.provider_display_name || row.original.provider_name}</span>,
+    },
+    {
+      id: 'upstream_key',
+      header: () => <span className="text-xs font-medium text-muted-foreground">上游 Key</span>,
+      cell: ({ row }) => <div className="max-w-[140px] truncate text-xs" title={row.original.upstream_key_name}>{row.original.upstream_key_name}</div>,
+    },
+    {
+      id: 'upstream_model_name',
+      header: () => <span className="text-xs font-medium text-muted-foreground">上游模型名</span>,
+      cell: ({ row }) => <span className="font-mono text-xs">{row.original.upstream_model_name || '—'}</span>,
+    },
+    {
+      id: 'route_groups',
+      header: () => <span className="text-xs font-medium text-muted-foreground">路由组</span>,
+      cell: ({ row }) => (
+        <div className="flex flex-wrap gap-1">
+          {(row.original.route_group_ids ?? []).map((gid) => {
+            const g = routeGroups.find((x) => x.id === gid);
+            return <Badge key={gid} variant="secondary" className="text-[10px]">{g?.display_name || g?.name || gid.slice(0, 8)}</Badge>;
+          })}
+        </div>
+      ),
+    },
+    {
+      accessorKey: 'max_tokens',
+      meta: { className: 'text-right' },
+      header: ({ column }) => <DataTableColumnHeader column={column} title="最大输出" />,
+      cell: ({ row }) => <span className="block text-right text-xs tabular-nums">{row.original.max_tokens ? formatCompact(row.original.max_tokens) : '—'}</span>,
+    },
+    {
+      id: 'price',
+      meta: { className: 'text-right' },
+      header: () => <span className="text-xs font-medium text-muted-foreground">输入价/输出价</span>,
+      cell: ({ row }) => <span className="block text-right text-xs tabular-nums">{fmtPrice(row.original.input_price_per_token)} / {fmtPrice(row.original.output_price_per_token)}</span>,
+    },
+    {
+      id: 'status',
+      meta: { className: 'w-[90px]' },
+      header: () => <span className="text-xs font-medium text-muted-foreground">状态</span>,
+      cell: ({ row }) => (
+        <span className="inline-flex items-center gap-1 text-xs">
+          <span className={row.original.status === 'active' ? 'text-emerald-600' : 'text-red-500'}>●</span>
+          {row.original.status}
+        </span>
+      ),
+    },
+    {
+      id: 'action',
+      meta: { className: 'w-[90px]' },
+      header: () => null,
+      cell: ({ row }) => (
+        <div className="flex items-center justify-end gap-1">
+          <Button variant="ghost" size="icon" className="h-7 w-7" title="编辑" onClick={() => setEditing(row.original)}>
+            <Pencil className="h-3.5 w-3.5" />
+          </Button>
+          <Button variant="ghost" size="icon" className="h-7 w-7 hover:text-destructive" title="删除" onClick={() => setPendingDelete(row.original)}>
+            <Trash2 className="h-3.5 w-3.5" />
+          </Button>
+        </div>
+      ),
+    },
+  ], [routeGroups, setEditing, setPendingDelete]);
 
   return (
     <div className="space-y-4">
@@ -86,65 +155,11 @@ export function MappingManagePage() {
         <Button size="sm" onClick={() => setEditing('new')}><Plus className="mr-1.5 h-4 w-4" />添加映射</Button>
       </CardContent></Card>
 
-      <Card><CardContent className="p-0">
-        {loading ? (
-          <div className="space-y-2 p-4">{Array.from({ length: 3 }).map((_, i) => <Skeleton key={i} className="h-10 w-full" />)}</div>
-        ) : mappings.length === 0 ? (
-          <EmptyState className="mx-4 my-6" title="暂无映射" />
-        ) : (
-          <Table>
-            <TableHeader><TableRow>
-              <TableHead>供应商</TableHead>
-              <TableHead>上游 Key</TableHead>
-              <TableHead>上游模型名</TableHead>
-              <TableHead>路由组</TableHead>
-              <TableHead className="text-right">最大输出</TableHead>
-              <TableHead className="text-right">输入价/输出价</TableHead>
-              <TableHead className="w-[90px]">状态</TableHead>
-              <TableHead className="w-[90px]"></TableHead>
-            </TableRow></TableHeader>
-            <TableBody>
-              {mappings.map((mm) => (
-                <TableRow key={mm.id}>
-                  <TableCell className="text-xs">{mm.provider_display_name || mm.provider_name}</TableCell>
-                  <TableCell className="text-xs" title={mm.upstream_key_name}>
-                    <div className="max-w-[140px] truncate">{mm.upstream_key_name}</div>
-                  </TableCell>
-                  <TableCell className="font-mono text-xs">{mm.upstream_model_name || '—'}</TableCell>
-                  <TableCell>
-                    <div className="flex flex-wrap gap-1">
-                      {(mm.route_group_ids ?? []).map((gid) => {
-                        const g = routeGroups.find((x) => x.id === gid);
-                        return <Badge key={gid} variant="secondary" className="text-[10px]">{g?.display_name || g?.name || gid.slice(0, 8)}</Badge>;
-                      })}
-                    </div>
-                  </TableCell>
-                  <TableCell className="text-right text-xs">{mm.max_tokens ? formatCompact(mm.max_tokens) : '—'}</TableCell>
-                  <TableCell className="text-right text-xs">
-                    {fmtPrice(mm.input_price_per_token)} / {fmtPrice(mm.output_price_per_token)}
-                  </TableCell>
-                  <TableCell>
-                    <span className="inline-flex items-center gap-1 text-xs">
-                      <span className={mm.status === 'active' ? 'text-emerald-600' : 'text-red-500'}>●</span>
-                      {mm.status}
-                    </span>
-                  </TableCell>
-                  <TableCell>
-                    <div className="flex items-center justify-end gap-1">
-                      <Button variant="ghost" size="icon" className="h-7 w-7" title="编辑" onClick={() => setEditing(mm)}>
-                        <Pencil className="h-3.5 w-3.5" />
-                      </Button>
-                      <Button variant="ghost" size="icon" className="h-7 w-7 hover:text-destructive" title="删除" onClick={() => setPendingDelete(mm)}>
-                        <Trash2 className="h-3.5 w-3.5" />
-                      </Button>
-                    </div>
-                  </TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        )}
-      </CardContent></Card>
+      {loading ? (
+        <Card><CardContent className="p-0"><div className="space-y-2 p-4">{Array.from({ length: 3 }).map((_, i) => <Skeleton key={i} className="h-10 w-full" />)}</div></CardContent></Card>
+      ) : (
+        <DataTable columns={columns} data={mappings} emptyComponent={<EmptyState className="mx-4 my-6" title="暂无映射" />} />
+      )}
 
       <Dialog open={!!editing} onOpenChange={(o) => !o && setEditing(null)}>
         <DialogContent className="sm:max-w-2xl">

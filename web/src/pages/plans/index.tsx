@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { RefreshCw, Search, Plus, MoreVertical, Pencil, Power, Trash2 } from 'lucide-react';
 import {
   getDashboardPlansApi,
@@ -21,9 +21,9 @@ import { Skeleton } from '@/components/ui/skeleton';
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from '@/components/ui/select';
-import {
-  Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
-} from '@/components/ui/table';
+import { type ColumnDef } from '@tanstack/react-table';
+import { DataTable } from '@/components/ui/data-table';
+import { DataTableColumnHeader } from '@/components/ui/data-table-column-header';
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
@@ -74,6 +74,84 @@ function Plans() {
       successMsg: '已删除（关联的用户套餐已停用）', onSuccess: () => { setDeleting(null); reload(); },
     }).catch(() => {});
   };
+
+  const columns = useMemo<ColumnDef<PlanItem>[]>(() => [
+    {
+      accessorKey: 'name',
+      meta: { className: 'w-[200px]' },
+      header: ({ column }) => <DataTableColumnHeader column={column} title="名称" />,
+      cell: ({ row }) => <span className="font-medium">{row.original.name}</span>,
+    },
+    {
+      accessorKey: 'plan_type',
+      meta: { className: 'w-[90px]' },
+      header: ({ column }) => <DataTableColumnHeader column={column} title="类型" />,
+      cell: ({ row }) => <Badge variant="secondary" className="text-[10px]">{row.original.plan_type}</Badge>,
+    },
+    {
+      id: 'category',
+      meta: { className: 'w-[70px]' },
+      header: () => <span className="text-xs font-medium text-muted-foreground">分类</span>,
+      cell: ({ row }) => <span className="text-xs text-muted-foreground">{row.original.category ?? '-'}</span>,
+    },
+    {
+      id: 'limits',
+      meta: { className: 'text-right w-[110px]' },
+      header: () => <span className="text-xs font-medium text-muted-foreground">5h/周/月</span>,
+      cell: ({ row }) => {
+        const p = row.original;
+        return <span className="block text-right font-mono text-xs">{p.plan_type === 'coding' ? `${p.hourly_5h_limit ?? '-'}/${p.weekly_limit ?? '-'}/${p.monthly_limit ?? '-'}` : '-'}</span>;
+      },
+    },
+    {
+      id: 'token',
+      meta: { className: 'text-right w-[110px]' },
+      header: () => <span className="text-xs font-medium text-muted-foreground">Token 额度</span>,
+      cell: ({ row }) => <span className="block text-right font-mono text-xs">{row.original.plan_type === 'token' ? formatNumber(row.original.token_limit ?? 0) : '-'}</span>,
+    },
+    {
+      accessorKey: 'price',
+      meta: { className: 'text-right w-[80px]' },
+      header: ({ column }) => <DataTableColumnHeader column={column} title="价格" />,
+      cell: ({ row }) => <span className="block text-right font-mono text-xs">¥{row.original.price}</span>,
+    },
+    {
+      id: 'duration',
+      meta: { className: 'w-[80px]' },
+      header: () => <span className="text-xs font-medium text-muted-foreground">有效期</span>,
+      cell: ({ row }) => <span className="text-xs">{row.original.default_duration_days ? `${row.original.default_duration_days}天` : '永久'}</span>,
+    },
+    {
+      id: 'status',
+      meta: { className: 'w-[80px]' },
+      header: () => <span className="text-xs font-medium text-muted-foreground">状态</span>,
+      cell: ({ row }) => <StatusBadge status={row.original.status} />,
+    },
+    {
+      id: 'action',
+      meta: { className: 'w-[60px]' },
+      header: () => null,
+      cell: ({ row }) => {
+        const p = row.original;
+        return (
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="ghost" size="icon" className="h-7 w-7"><MoreVertical className="h-4 w-4" /></Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <DropdownMenuItem onClick={() => setEditing(p)}><Pencil className="h-4 w-4" />编辑</DropdownMenuItem>
+              <DropdownMenuItem onClick={() => onToggle(p)}>
+                <Power className="h-4 w-4" />{p.status === 'active' ? '下架' : '上架'}
+              </DropdownMenuItem>
+              <DropdownMenuItem className="text-destructive focus:text-destructive" onClick={() => setDeleting(p)}>
+                <Trash2 className="h-4 w-4" />删除（级联停用）
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        );
+      },
+    },
+  ], []);
 
   return (
     <div className="space-y-4">
@@ -127,67 +205,13 @@ function Plans() {
 
       {error && <Card className="border-destructive"><CardContent className="py-3 text-sm text-destructive">{error}</CardContent></Card>}
 
-      <Card>
-        <CardContent className="p-0">
-          {loading && list.length === 0 ? (
-            <div className="space-y-2 p-4">{Array.from({ length: 8 }).map((_, i) => <Skeleton key={i} className="h-10 w-full" />)}</div>
-          ) : list.length === 0 ? (
-            <EmptyState className="mx-4 my-6" title="暂无套餐" />
-          ) : (
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead className="w-[200px]">名称</TableHead>
-                  <TableHead className="w-[90px]">类型</TableHead>
-                  <TableHead className="w-[70px]">分类</TableHead>
-                  <TableHead className="text-right w-[110px]">5h/周/月</TableHead>
-                  <TableHead className="text-right w-[110px]">Token 额度</TableHead>
-                  <TableHead className="text-right w-[80px]">价格</TableHead>
-                  <TableHead className="w-[80px]">有效期</TableHead>
-                  <TableHead className="w-[80px]">状态</TableHead>
-                  <TableHead className="w-[60px]"></TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {list.map((p) => (
-                  <TableRow key={p.id}>
-                    <TableCell className="font-medium">{p.name}</TableCell>
-                    <TableCell><Badge variant="secondary" className="text-[10px]">{p.plan_type}</Badge></TableCell>
-                    <TableCell className="text-xs text-muted-foreground">{p.category ?? '-'}</TableCell>
-                    <TableCell className="text-right font-mono text-xs">
-                      {p.plan_type === 'coding'
-                        ? `${p.hourly_5h_limit ?? '-'}/${p.weekly_limit ?? '-'}/${p.monthly_limit ?? '-'}`
-                        : '-'}
-                    </TableCell>
-                    <TableCell className="text-right font-mono text-xs">
-                      {p.plan_type === 'token' ? formatNumber(p.token_limit ?? 0) : '-'}
-                    </TableCell>
-                    <TableCell className="text-right font-mono text-xs">¥{p.price}</TableCell>
-                    <TableCell className="text-xs">{p.default_duration_days ? `${p.default_duration_days}天` : '永久'}</TableCell>
-                    <TableCell><StatusBadge status={p.status} /></TableCell>
-                    <TableCell>
-                      <DropdownMenu>
-                        <DropdownMenuTrigger asChild>
-                          <Button variant="ghost" size="icon" className="h-7 w-7"><MoreVertical className="h-4 w-4" /></Button>
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent align="end">
-                          <DropdownMenuItem onClick={() => setEditing(p)}><Pencil className="h-4 w-4" />编辑</DropdownMenuItem>
-                          <DropdownMenuItem onClick={() => onToggle(p)}>
-                            <Power className="h-4 w-4" />{p.status === 'active' ? '下架' : '上架'}
-                          </DropdownMenuItem>
-                          <DropdownMenuItem className="text-destructive focus:text-destructive" onClick={() => setDeleting(p)}>
-                            <Trash2 className="h-4 w-4" />删除（级联停用）
-                          </DropdownMenuItem>
-                        </DropdownMenuContent>
-                      </DropdownMenu>
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          )}
-        </CardContent>
-      </Card>
+      {loading && list.length === 0 ? (
+        <div className="space-y-2 p-4">{Array.from({ length: 8 }).map((_, i) => <Skeleton key={i} className="h-10 w-full" />)}</div>
+      ) : list.length === 0 ? (
+        <EmptyState className="mx-4 my-6" title="暂无套餐" />
+      ) : (
+        <DataTable columns={columns} data={list} />
+      )}
 
       {total > 0 && (
         <div className="flex items-center justify-between text-sm text-muted-foreground">

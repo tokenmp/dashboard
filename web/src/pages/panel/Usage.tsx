@@ -16,9 +16,9 @@ import { ModelIcon } from '@/components/ModelIcon';
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from '@/components/ui/select';
-import {
-  Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
-} from '@/components/ui/table';
+import { type ColumnDef } from '@tanstack/react-table';
+import { DataTable } from '@/components/ui/data-table';
+import { DataTableColumnHeader } from '@/components/ui/data-table-column-header';
 import { formatCompact, formatDateTime, formatNumber } from '@/utils/format';
 import type { UsageQuery, UserQuota, QuotaItem, UsageByModelItem, UsageLedgerItem, UsageTimelineItem } from '@/types/usage';
 
@@ -269,6 +269,15 @@ function LedgerTab() {
   const { list, total, page, size, loading, error, params, reload, setPage, setFilters } =
     usePagedQuery(getPanelUsageLedgerApi, { initial: { size: 20, sort: '-created_at', ...urlInit } as UsageQuery });
   useEffect(() => { write(params); }, [params]);
+
+  const columns = useMemo<ColumnDef<UsageLedgerItem>[]>(() => [
+    { accessorKey: 'created_at', meta: { className: 'w-[160px]' }, header: ({ column }) => <DataTableColumnHeader column={column} title="时间" />, cell: ({ row }) => <span className="font-mono text-xs text-muted-foreground">{formatDateTime(row.original.created_at)}</span> },
+    { id: 'ledger_type', meta: { className: 'w-[110px]' }, header: () => <span className="text-xs font-medium text-muted-foreground">类型</span>, cell: ({ row }) => <Badge variant="secondary" className="text-[10px]">{row.original.ledger_type}</Badge> },
+    { id: 'billing_plan', meta: { className: 'w-[90px]' }, header: () => <span className="text-xs font-medium text-muted-foreground">计费</span>, cell: ({ row }) => <span className="text-xs">{row.original.billing_plan}</span> },
+    { id: 'delta', meta: { className: 'w-[120px] text-right' }, header: () => <span className="text-xs font-medium text-muted-foreground">变动</span>, cell: ({ row }) => { const l = row.original; const d = deltaFor(l); return <span className={`block text-right tabular-nums ${d < 0 ? 'text-destructive' : d > 0 ? 'text-primary' : ''}`}>{d !== 0 ? (l.billing_plan === 'coding' ? formatNumber(d) : formatCompact(d)) : '—'}</span>; } },
+    { id: 'reason', header: () => <span className="text-xs font-medium text-muted-foreground">原因</span>, cell: ({ row }) => <span className="block max-w-[260px] truncate text-xs text-muted-foreground">{row.original.reason ?? '—'}</span> },
+  ], []);
+
   return (
     <div className="space-y-3">
       <Card><CardContent className="flex flex-wrap items-end gap-3 p-4">
@@ -302,26 +311,8 @@ function LedgerTab() {
         <Button variant="outline" size="sm" onClick={reload} disabled={loading}><RefreshCw className={`mr-1.5 h-4 w-4 ${loading ? 'animate-spin' : ''}`} />刷新</Button>
       </CardContent></Card>
       {error && <Card className="border-destructive"><CardContent className="py-3 text-sm text-destructive">{error}</CardContent></Card>}
-      <Card><CardContent className="p-0">
-        {loading && list.length === 0 ? <div className="space-y-2 p-4">{Array.from({ length: 8 }).map((_, i) => <Skeleton key={i} className="h-10 w-full" />)}</div>
-          : list.length === 0 ? <EmptyState className="mx-4 my-6" title="暂无流水" />
-          : <Table>
-              <TableHeader><TableRow>
-                <TableHead className="w-[160px]">时间</TableHead><TableHead className="w-[110px]">类型</TableHead>
-                <TableHead className="w-[90px]">计费</TableHead><TableHead className="w-[120px] text-right">变动</TableHead>
-                <TableHead>原因</TableHead>
-              </TableRow></TableHeader>
-              <TableBody>{list.map((l) => (
-                <TableRow key={l.id}>
-                  <TableCell className="font-mono text-xs text-muted-foreground">{formatDateTime(l.created_at)}</TableCell>
-                  <TableCell><Badge variant="secondary" className="text-[10px]">{l.ledger_type}</Badge></TableCell>
-                  <TableCell className="text-xs">{l.billing_plan}</TableCell>
-                  <TableCell className={`text-right tabular-nums ${deltaFor(l) < 0 ? 'text-destructive' : deltaFor(l) > 0 ? 'text-primary' : ''}`}>{deltaFor(l) !== 0 ? (l.billing_plan === 'coding' ? formatNumber(deltaFor(l)) : formatCompact(deltaFor(l))) : '—'}</TableCell>
-                  <TableCell className="max-w-[260px] truncate text-xs text-muted-foreground">{l.reason ?? '—'}</TableCell>
-                </TableRow>
-              ))}</TableBody>
-            </Table>}
-      </CardContent></Card>
+      {loading && list.length === 0 ? <div className="space-y-2 p-4">{Array.from({ length: 8 }).map((_, i) => <Skeleton key={i} className="h-10 w-full" />)}</div>
+        : <DataTable columns={columns} data={list} emptyComponent={<EmptyState className="mx-4 my-6" title="暂无流水" />} />}
       <Pager page={page} size={size} total={total} loading={loading} setPage={setPage} />
     </div>
   );

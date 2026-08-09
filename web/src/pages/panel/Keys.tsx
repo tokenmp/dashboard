@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { RefreshCw, Plus, MoreVertical, Pencil, Trash2, Copy, Check, Power, ExternalLink, TriangleAlert, ChevronDown } from 'lucide-react';
 import {
   getPanelKeysApi,
@@ -36,14 +36,9 @@ import {
   buildImportDeepLink,
   type CCSwitchApp,
 } from '@/utils/ccswitch';
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from '@/components/ui/table';
+import { type ColumnDef } from '@tanstack/react-table';
+import { DataTable } from '@/components/ui/data-table';
+import { DataTableColumnHeader } from '@/components/ui/data-table-column-header';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import {
   DropdownMenu,
@@ -209,51 +204,44 @@ function KeyTable({
   onToggle: (row: KeyRow) => void;
   onDelete: (row: KeyRow) => void;
 }) {
-  return (
-    <div className="rounded-lg border">
-      <Table>
-        <TableHeader>
-          <TableRow>
-            <TableHead className="w-[22%]">名称</TableHead>
-            {kind === 'bot' && <TableHead className="w-[8%]">权限</TableHead>}
-            <TableHead>密钥</TableHead>
-            <TableHead className="w-[10%]">状态</TableHead>
-            <TableHead className="w-[18%]">最近使用</TableHead>
-            <TableHead className="w-[12%]">创建时间</TableHead>
-            <TableHead className="w-[44px]"></TableHead>
-          </TableRow>
-        </TableHeader>
-        <TableBody>
-          {rows.map((r) => (
-            <TableRow key={r.id}>
-              <TableCell className="font-medium">{r.name || '—'}</TableCell>
-              {kind === 'bot' && <TableCell className="text-xs text-muted-foreground">{r.scope ?? '—'}</TableCell>}
-              <TableCell><span className="font-mono text-xs">{r.prefix}…{r.suffix}</span></TableCell>
-              <TableCell><StatusBadge status={r.status} /></TableCell>
-              <TableCell className="font-mono text-xs text-muted-foreground">{r.lastUsed ? formatDateTime(r.lastUsed) : '未使用'}</TableCell>
-              <TableCell className="font-mono text-xs text-muted-foreground">{formatDate(r.createdAt)}</TableCell>
-              <TableCell>
-                <DropdownMenu>
-                  <DropdownMenuTrigger asChild>
-                    <Button variant="ghost" size="icon" className="h-7 w-7"><MoreVertical className="h-4 w-4" /></Button>
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent align="end">
-                    <DropdownMenuItem onClick={() => onRename(r)}><Pencil className="h-4 w-4" />改名</DropdownMenuItem>
-                    <DropdownMenuItem onClick={() => onToggle(r)}>
-                      <Power className="h-4 w-4" />{r.status === 'active' ? '停用' : '启用'}
-                    </DropdownMenuItem>
-                    <DropdownMenuItem className="text-destructive focus:text-destructive" onClick={() => onDelete(r)}>
-                      <Trash2 className="h-4 w-4" />删除
-                    </DropdownMenuItem>
-                  </DropdownMenuContent>
-                </DropdownMenu>
-              </TableCell>
-            </TableRow>
-          ))}
-        </TableBody>
-      </Table>
-    </div>
-  );
+  const columns = useMemo<ColumnDef<KeyRow>[]>(() => {
+    const cols: ColumnDef<KeyRow>[] = [
+      { accessorKey: 'name', meta: { className: 'w-[22%]' }, header: ({ column }) => <DataTableColumnHeader column={column} title="名称" />, cell: ({ row }) => <span className="font-medium">{row.original.name || '—'}</span> },
+    ];
+    if (kind === 'bot') {
+      cols.push({ id: 'scope', meta: { className: 'w-[8%]' }, header: () => <span className="text-xs font-medium text-muted-foreground">权限</span>, cell: ({ row }) => <span className="text-xs text-muted-foreground">{row.original.scope ?? '—'}</span> });
+    }
+    cols.push(
+      { id: 'key', header: () => <span className="text-xs font-medium text-muted-foreground">密钥</span>, cell: ({ row }) => <span className="font-mono text-xs">{row.original.prefix}…{row.original.suffix}</span> },
+      { id: 'status', meta: { className: 'w-[10%]' }, header: () => <span className="text-xs font-medium text-muted-foreground">状态</span>, cell: ({ row }) => <StatusBadge status={row.original.status} /> },
+      { accessorKey: 'lastUsed', meta: { className: 'w-[18%]' }, header: ({ column }) => <DataTableColumnHeader column={column} title="最近使用" />, cell: ({ row }) => <span className="font-mono text-xs text-muted-foreground">{row.original.lastUsed ? formatDateTime(row.original.lastUsed) : '未使用'}</span> },
+      { accessorKey: 'createdAt', meta: { className: 'w-[12%]' }, header: ({ column }) => <DataTableColumnHeader column={column} title="创建时间" />, cell: ({ row }) => <span className="font-mono text-xs text-muted-foreground">{formatDate(row.original.createdAt)}</span> },
+      {
+        id: 'action',
+        meta: { className: 'w-[44px]' },
+        header: () => null,
+        cell: ({ row }) => (
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="ghost" size="icon" className="h-7 w-7"><MoreVertical className="h-4 w-4" /></Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <DropdownMenuItem onClick={() => onRename(row.original)}><Pencil className="h-4 w-4" />改名</DropdownMenuItem>
+              <DropdownMenuItem onClick={() => onToggle(row.original)}>
+                <Power className="h-4 w-4" />{row.original.status === 'active' ? '停用' : '启用'}
+              </DropdownMenuItem>
+              <DropdownMenuItem className="text-destructive focus:text-destructive" onClick={() => onDelete(row.original)}>
+                <Trash2 className="h-4 w-4" />删除
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        ),
+      },
+    );
+    return cols;
+  }, [kind, onRename, onToggle, onDelete]);
+
+  return <DataTable columns={columns} data={rows} />;
 }
 
 /** 新建密钥弹窗（输入名称） */
