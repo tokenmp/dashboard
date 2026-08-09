@@ -437,7 +437,29 @@ function Models() {
 
       {loading && list.length === 0 ? (
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
-          {Array.from({ length: 6 }).map((_, index) => <Skeleton key={index} className="h-52" />)}
+          {Array.from({ length: 6 }).map((_, index) => (
+            <Card key={index}><CardContent className="p-4">
+              <div className="flex items-start justify-between gap-3">
+                <div className="flex items-center gap-3">
+                  <Skeleton className="h-9 w-9 rounded-lg" />
+                  <div className="space-y-1.5">
+                    <Skeleton className="h-4 w-28" />
+                    <Skeleton className="h-3 w-36" />
+                  </div>
+                </div>
+                <Skeleton className="h-5 w-14 rounded-full" />
+              </div>
+              <div className="mt-3 space-y-1.5">
+                <Skeleton className="h-3 w-full" />
+                <Skeleton className="h-3 w-2/3" />
+              </div>
+              <div className="mt-3 flex gap-1.5">
+                <Skeleton className="h-5 w-16 rounded-full" />
+                <Skeleton className="h-5 w-16 rounded-full" />
+              </div>
+              <Skeleton className="mt-3 h-8 w-full" />
+            </CardContent></Card>
+          ))}
         </div>
       ) : list.length === 0 ? (
         <EmptyState title="暂无模型" description="尝试调整搜索或计费模式筛选" />
