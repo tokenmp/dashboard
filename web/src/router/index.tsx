@@ -14,6 +14,7 @@ import Requests from '@/pages/requests';
 import Users from '@/pages/users';
 import Plans from '@/pages/plans';
 import Upstream from '@/pages/upstream';
+import PriceRules from '@/pages/price-rules';
 import { MappingManagePage } from '@/pages/upstream/MappingManagePage';
 import Usage from '@/pages/usage';
 import RedeemCodes from '@/pages/redeem-codes';
@@ -71,6 +72,7 @@ export const router = createBrowserRouter([
         { path: 'models/:id/mappings', element: <MappingManagePage /> },
         { path: 'keys', element: <Upstream section="keys" /> },
       ] },
+      { path: 'price-rules', element: <PriceRules /> },
       { path: 'usage', element: <Usage /> },
       { path: 'redeem/codes', element: <RedeemCodes /> },
       { path: 'marketplace', element: <Marketplace /> },

@@ -1,6 +1,6 @@
 import { useEffect } from 'react';
 import { NavLink, Outlet, useNavigate } from 'react-router-dom';
-import { LayoutDashboard, ScrollText, Users, Gauge, Ticket, Store, Settings2, BookOpen, ExternalLink, LogOut, Package, ChevronDown, UserCircle, Building2, Waypoints, Brain, KeyRound } from 'lucide-react';
+import { LayoutDashboard, ScrollText, Users, Gauge, Ticket, Store, Settings2, BookOpen, ExternalLink, LogOut, Package, ChevronDown, UserCircle, Building2, Waypoints, Brain, KeyRound, Percent } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator } from '@/components/ui/dropdown-menu';
 import { useAuthStore } from '@/store/auth';
@@ -22,6 +22,12 @@ const NAV_GROUPS: { label: string; items: { to: string; label: string; icon: typ
       { to: '/dashboard/upstream/keys', label: '上游账号', icon: KeyRound },
       { to: '/dashboard/upstream/routes', label: '路由组', icon: Waypoints },
       { to: '/dashboard/upstream/models', label: '平台模型', icon: Brain },
+    ],
+  },
+  {
+    label: '计费',
+    items: [
+      { to: '/dashboard/price-rules', label: '请求倍率', icon: Percent },
     ],
   },
   {

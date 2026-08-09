@@ -83,6 +83,7 @@ export interface PriceRuleItem {
   exclusive_group: string | null;
   effective_from: string | null;
   effective_until: string | null;
+  side: 'upstream' | 'user';
   status: string;
   created_at: string;
   updated_at: string;

@@ -317,6 +317,38 @@ export async function getDashboardPriceRulesApi(
   return res.data.data;
 }
 
+export async function createDashboardPriceRuleApi(payload: {
+  side: 'upstream' | 'user';
+  provider_id: string;
+  model_id?: string | null;
+  multiplier: number;
+  priority?: number;
+}) {
+  const res = await client.post<ApiResponse<PriceRuleItem>>('/dashboard/price/rules', payload);
+  return res.data.data;
+}
+
+export async function updateDashboardPriceRuleApi(id: string, payload: {
+  side: 'upstream' | 'user';
+  provider_id: string;
+  model_id?: string | null;
+  multiplier: number;
+  priority?: number;
+}) {
+  const res = await client.put<ApiResponse<PriceRuleItem>>(`/dashboard/price/rules/${id}`, payload);
+  return res.data.data;
+}
+
+export async function updateDashboardPriceRuleStatusApi(id: string, status: 'active' | 'disabled') {
+  const res = await client.post<ApiResponse<unknown>>(`/dashboard/price/rules/${id}/status`, { status });
+  return res.data.data;
+}
+
+export async function deleteDashboardPriceRuleApi(id: string) {
+  const res = await client.post<ApiResponse<unknown>>(`/dashboard/price/rules/${id}/delete`);
+  return res.data.data;
+}
+
 // ── 全平台市场分账 ──
 export async function getDashboardListingsApi(
   params: MarketplaceQuery,

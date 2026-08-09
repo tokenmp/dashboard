@@ -54,13 +54,13 @@ class PriceMultiplierRule extends Model
         'provider_id' => 'string',
         'upstream_key_id' => 'string',
         'model_id' => 'string',
-        'days_of_week' => 'integer',
         'multiplier' => 'float',
         'priority' => 'integer',
         'created_at' => 'datetime',
         'updated_at' => 'datetime',
         'effective_from' => 'datetime',
         'effective_until' => 'datetime',
+        'side' => 'string',
     ];
 
     // ==================== 关联关系 ====================

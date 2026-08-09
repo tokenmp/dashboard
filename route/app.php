@@ -190,7 +190,13 @@ Route::group('api/v1', function () {
                     Route::get('quota', 'dashboard/Usage/quota');
                 });
                 Route::group('price', function () {
-                    Route::get('rules', 'dashboard/Usage/rules');
+                    Route::get('rules', 'dashboard/PriceRule/list');
+                    Route::post('rules', 'dashboard/PriceRule/create');
+                    Route::group('rules', function () {
+                        Route::put(':id', 'dashboard/PriceRule/update')->pattern(['id' => '[\w\-]+']);
+                        Route::post(':id/status', 'dashboard/PriceRule/updateStatus')->pattern(['id' => '[\w\-]+']);
+                        Route::post(':id/delete', 'dashboard/PriceRule/delete')->pattern(['id' => '[\w\-]+']);
+                    });
                 });
 
                 // 全平台市场分账
