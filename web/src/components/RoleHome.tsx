@@ -14,13 +14,13 @@ import { homePathFor } from '@/utils/redirect';
 function RoleHome() {
   const token = useAuthStore((s) => s.token);
   const fetchUser = useAuthStore((s) => s.fetchUser);
-  const { user, loadingUser } = useRole();
+  const { user, loadingUser, userError } = useRole();
 
   useEffect(() => {
-    if (token && !user && !loadingUser) {
+    if (token && !user && !loadingUser && !userError) {
       fetchUser();
     }
-  }, [token, user, loadingUser, fetchUser]);
+  }, [token, user, loadingUser, userError, fetchUser]);
 
   if (!token) {
     return <Navigate to="/login" replace />;
@@ -28,8 +28,8 @@ function RoleHome() {
 
   if (!user) {
     return (
-      <div className="flex min-h-screen items-center justify-center text-sm text-muted-foreground">
-        加载中…
+      <div className="flex min-h-screen flex-col items-center justify-center gap-2 text-sm text-muted-foreground">
+        {userError ? `${userError}，请稍后重试` : '加载中…'}
       </div>
     );
   }

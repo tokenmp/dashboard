@@ -3,6 +3,7 @@ import { Navigate, useLocation } from 'react-router-dom';
 import { useAuthStore } from '@/store/auth';
 import { useRole } from '@/hooks/useRole';
 import { homePathFor } from '@/utils/redirect';
+import { Button } from '@/components/ui/button';
 
 /**
  * 角色守卫：在 RequireAuth 的登录态校验之上，额外校验当前用户角色。
@@ -15,14 +16,14 @@ import { homePathFor } from '@/utils/redirect';
 export function RequireRole({ role, children }: { role: 'admin' | 'user'; children: React.ReactNode }) {
   const token = useAuthStore((s) => s.token);
   const fetchUser = useAuthStore((s) => s.fetchUser);
-  const { user, role: current, loadingUser } = useRole();
+  const { user, role: current, loadingUser, userError, clearUserError } = useRole();
   const location = useLocation();
 
   useEffect(() => {
-    if (token && !user && !loadingUser) {
+    if (token && !user && !loadingUser && !userError) {
       fetchUser();
     }
-  }, [token, user, loadingUser, fetchUser]);
+  }, [token, user, loadingUser, userError, fetchUser]);
 
   if (!token) {
     const from = encodeURIComponent(location.pathname + location.search);
@@ -30,6 +31,14 @@ export function RequireRole({ role, children }: { role: 'admin' | 'user'; childr
   }
 
   if (!user) {
+    if (userError) {
+      return (
+        <div className="flex min-h-screen flex-col items-center justify-center gap-3 text-sm">
+          <p className="text-muted-foreground">{userError}，请稍后重试</p>
+          <Button size="sm" onClick={() => { clearUserError(); fetchUser(true); }}>重试</Button>
+        </div>
+      );
+    }
     return (
       <div className="flex min-h-screen items-center justify-center text-sm text-muted-foreground">
         加载中…

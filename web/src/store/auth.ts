@@ -9,12 +9,16 @@ interface AuthState {
   user: UserInfo | null;
   /** 加载用户中（避免重复拉取） */
   loadingUser: boolean;
+  /** 拉取用户失败的原因；非空时停止自动重试，需手动重试 */
+  userError: string | null;
   /** 登录：调用后端拿 token，写入 localStorage 与 state */
   login: (username: string, password: string) => Promise<void>;
   /** 登出：清空 token 与用户 */
   logout: () => void;
-  /** 拉取当前用户信息并写入 state；已存在或加载中时跳过 */
+  /** 拉取当前用户信息并写入 state；已存在或加载中或已失败时跳过 */
   fetchUser: (force?: boolean) => Promise<UserInfo | null>;
+  /** 清除用户拉取错误，允许再次自动重试 */
+  clearUserError: () => void;
 }
 
 // 启动时从 localStorage 恢复登录态
@@ -24,6 +28,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   token: initialToken,
   user: null,
   loadingUser: false,
+  userError: null,
   login: async (username, password) => {
     const { token } = await loginApi(username, password);
     localStorage.setItem(TOKEN_KEY, token);
@@ -36,18 +41,28 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     set({ token: null, user: null });
   },
   fetchUser: async (force = false) => {
-    const { token, user, loadingUser } = get();
+    const { token, user, loadingUser, userError } = get();
     if (!token) return null;
     if (user && !force) return user;
     if (loadingUser) return user;
+    // 失败后不再自动重试，避免后端异常时前端无限刷请求
+    if (userError && !force) return null;
 
-    set({ loadingUser: true });
+    set({ loadingUser: true, userError: null });
     try {
       const u = await getUserApi();
       set({ user: u });
       return u;
+    } catch (e) {
+      // 401 已由 client 响应拦截器跳登录页处理，这里只兜底其余错误
+      const status = (e as { response?: { status?: number } })?.response?.status;
+      if (status !== 401) {
+        set({ userError: status ? `服务异常（${status}）` : '网络连接失败' });
+      }
+      return null;
     } finally {
       set({ loadingUser: false });
     }
   },
+  clearUserError: () => set({ userError: null }),
 }));

@@ -9,7 +9,9 @@ import { useAuthStore } from '@/store/auth';
 export function useRole() {
   const user = useAuthStore((s) => s.user);
   const loadingUser = useAuthStore((s) => s.loadingUser);
+  const userError = useAuthStore((s) => s.userError);
+  const clearUserError = useAuthStore((s) => s.clearUserError);
   const role = user?.role;
   const isAdmin = role === 'admin';
-  return { user, role, isAdmin, loadingUser };
+  return { user, role, isAdmin, loadingUser, userError, clearUserError };
 }
