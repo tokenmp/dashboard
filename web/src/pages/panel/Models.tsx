@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
-import { ChevronRight, Copy, LayoutGrid, RefreshCw, Search, Table as TableIcon } from 'lucide-react';
+import { ChevronRight, Copy, HelpCircle, LayoutGrid, RefreshCw, Search, Table as TableIcon } from 'lucide-react';
+import { useReactTable, getCoreRowModel, getSortedRowModel, flexRender, type ColumnDef, type SortingState } from '@tanstack/react-table';
 import { getModelKeyHealthApi, getPanelModelsApi, getPanelModelNamesApi } from '@/api/panel';
 import { usePagedQuery } from '@/hooks/usePagedQuery';
 import { useAsync } from '@/hooks/useAsync';
@@ -12,6 +13,7 @@ import { Sparkline } from '@/components/Sparkline';
 import { ModelSuccessDialog } from '@/components/ModelSuccessDialog';
 import { ProviderMappingsDialog } from '@/components/ProviderMappingsDialog';
 import { MiniSuccessBuckets } from '@/components/MiniSuccessBuckets';
+import { DataTableColumnHeader } from '@/components/ui/data-table-column-header';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
 import { CapabilityBadge } from '@/components/CapabilityBadge';
@@ -382,6 +384,137 @@ function Models() {
     return withMeta.map((x) => x.m);
   }, [list]);
 
+  const [sorting, setSorting] = useState<SortingState>([]);
+  const columns = useMemo<ColumnDef<AiModelItem>[]>(() => [
+    {
+      id: 'model',
+      accessorFn: (m) => m.display_name || m.name,
+      meta: { className: 'w-[220px]' },
+      header: ({ column }) => <DataTableColumnHeader column={column} title="模型" />,
+      cell: ({ row }) => {
+        const m = row.original;
+        return (
+          <div className="flex items-center gap-2">
+            <ModelIcon id={m.name} displayName={m.display_name ?? undefined} size={24} />
+            <div className="min-w-0">
+              <div className="truncate font-medium">{m.display_name || m.name}</div>
+              <div className="flex items-center gap-1">
+                <span className="truncate font-mono text-[10px] text-muted-foreground">{m.name}</span>
+                <button type="button" onClick={(e) => { e.stopPropagation(); navigator.clipboard.writeText(m.name); toast.success(`已复制模型 ID：${m.name}`); }} className="shrink-0 text-muted-foreground/50 transition-colors hover:text-foreground" title="复制模型 ID"><Copy className="h-3 w-3" /></button>
+              </div>
+            </div>
+          </div>
+        );
+      },
+    },
+    {
+      id: 'providers',
+      meta: { className: 'w-[150px]' },
+      header: () => <span className="text-xs font-medium text-muted-foreground">供应商</span>,
+      cell: ({ row }) => {
+        const ps = row.original.providers ?? [];
+        const provNames = Array.from(new Set(ps.map((p) => p.provider_display_name || p.provider_name)));
+        return (
+          <div className="truncate text-xs">
+            {provNames.length === 0 ? <span className="text-muted-foreground">—</span>
+              : provNames.length <= 3 ? provNames.join('、 ')
+              : <>{provNames[0]} 等 <span className="text-muted-foreground">{provNames.length} 个供应商</span></>}
+          </div>
+        );
+      },
+    },
+    {
+      id: 'mapping',
+      accessorFn: (m) => (m.providers ?? []).length,
+      meta: { className: 'w-[100px]' },
+      header: ({ column }) => <DataTableColumnHeader column={column} title="映射/供应商" />,
+      cell: ({ row }) => {
+        const ps = row.original.providers ?? [];
+        const provNames = Array.from(new Set(ps.map((p) => p.provider_display_name || p.provider_name)));
+        return <span className="text-xs text-muted-foreground">映射 <span className="text-foreground">{ps.length}</span> · 供应商 <span className="text-foreground">{provNames.length}</span></span>;
+      },
+    },
+    {
+      id: 'price',
+      accessorFn: (m) => { const ins = (m.providers ?? []).map((p) => p.input_price_per_token).filter((v): v is number => v != null); return ins.length ? Math.min(...ins) : Infinity; },
+      meta: { className: 'w-[150px]' },
+      header: ({ column }) => <DataTableColumnHeader column={column} title="输入/输出" />,
+      cell: ({ row }) => {
+        const ps = row.original.providers ?? [];
+        const inPrice = Math.min(...ps.map((p) => p.input_price_per_token ?? Infinity));
+        const outPrice = Math.min(...ps.map((p) => p.output_price_per_token ?? Infinity));
+        return (
+          <div className="text-xs text-muted-foreground">
+            输入 <span className="text-foreground">{inPrice !== Infinity ? `¥${(inPrice * 1_000_000).toFixed(2)}/M` : '—'}</span>
+            <div>输出 <span className="text-foreground">{outPrice !== Infinity ? `¥${(outPrice * 1_000_000).toFixed(2)}/M` : '—'}</span></div>
+          </div>
+        );
+      },
+    },
+    {
+      id: 'context',
+      accessorFn: (m) => m.context_window_tokens ?? 0,
+      meta: { className: 'w-[150px]' },
+      header: ({ column }) => <DataTableColumnHeader column={column} title="上下文/输出" />,
+      cell: ({ row }) => {
+        const m = row.original;
+        const maxOut = Math.max(0, ...(m.providers ?? []).map((p) => p.max_tokens ?? 0));
+        return (
+          <div className="text-xs text-muted-foreground">
+            上下文 <span className="text-foreground">{m.context_window_tokens ? formatCompact(m.context_window_tokens) : '—'}</span>
+            <div>最大输出 <span className="text-foreground">{maxOut ? formatCompact(maxOut) : '—'}</span></div>
+          </div>
+        );
+      },
+    },
+    {
+      id: 'multiplier',
+      accessorFn: (m) => Math.max(...(m.providers ?? []).map((p) => p.effective_multiplier ?? 1), 1),
+      meta: { className: 'w-[100px]' },
+      header: ({ column }) => <DataTableColumnHeader column={column} title={<span className="inline-flex items-center">倍率 <HelpCircle className="ml-0.5 h-3 w-3 text-muted-foreground/60" /></span>} />,
+      cell: ({ row }) => {
+        const ps = row.original.providers ?? [];
+        const effMap = new Map<number, string[]>();
+        for (const p of ps) {
+          const e = p.effective_multiplier ?? 1;
+          if (e > 1) {
+            const name = p.provider_display_name || p.provider_name;
+            if (!effMap.has(e)) effMap.set(e, []);
+            if (!effMap.get(e)!.includes(name)) effMap.get(e)!.push(name);
+          }
+        }
+        const effs = Array.from(effMap.keys()).sort((a, b) => a - b);
+        return (
+          <div className="text-xs">
+            {effs.length > 0 ? effs.map((e) => (<span key={e} title={`供应商：${effMap.get(e)?.join('、 ')}`} className="mr-1 inline-block rounded bg-amber-100 px-1 font-medium text-amber-700">×{e}</span>)) : <span className="text-muted-foreground">—</span>}
+          </div>
+        );
+      },
+    },
+    {
+      id: 'success',
+      accessorKey: 'success_rate',
+      meta: { className: 'w-[110px]' },
+      header: ({ column }) => <DataTableColumnHeader column={column} title="成功率 24h" />,
+      cell: ({ row }) => {
+        const r = row.original.success_rate;
+        return (
+          <div className="text-right">
+            <div className={r == null ? 'text-muted-foreground' : r >= 90 ? 'text-emerald-600' : r >= 60 ? 'text-amber-600' : 'text-red-600'}>{r == null ? '无数据' : `${r}%`}</div>
+            <div className="text-[10px] text-muted-foreground">{formatNumber(row.original.request_count_24h ?? 0)} 次</div>
+          </div>
+        );
+      },
+    },
+    {
+      id: 'trend',
+      meta: { className: 'w-[110px]' },
+      header: () => <span className="text-xs font-medium text-muted-foreground">趋势</span>,
+      cell: ({ row }) => <MiniSuccessBuckets modelId={row.original.id} />,
+    },
+  ], []);
+  const table = useReactTable({ data: sorted, columns, state: { sorting }, onSortingChange: setSorting, getCoreRowModel: getCoreRowModel(), getSortedRowModel: getSortedRowModel() });
+
   useEffect(() => { write(params); }, [params]);
 
   return (
@@ -480,73 +613,27 @@ function Models() {
       ) : viewMode === 'table' ? (
         <Card><CardContent className="p-0">
           <Table>
-            <TableHeader><TableRow>
-              <TableHead className="w-[220px]">模型</TableHead>
-              <TableHead className="w-[150px]">供应商</TableHead>
-              <TableHead className="w-[100px]">映射/供应商</TableHead>
-              <TableHead className="w-[150px]">输入/输出</TableHead>
-              <TableHead className="w-[150px]">上下文/输出</TableHead>
-              <TableHead className="w-[60px]">倍率</TableHead>
-              <TableHead className="w-[110px] text-right">成功率 24h</TableHead>
-              <TableHead className="w-[110px] text-right">趋势</TableHead>
-            </TableRow></TableHeader>
+            <TableHeader>
+              {table.getHeaderGroups().map((hg) => (
+                <TableRow key={hg.id}>
+                  {hg.headers.map((h) => (
+                    <TableHead key={h.id} className={(h.column.columnDef.meta as { className?: string } | undefined)?.className ?? ''}>
+                      {h.isPlaceholder ? null : flexRender(h.column.columnDef.header, h.getContext())}
+                    </TableHead>
+                  ))}
+                </TableRow>
+              ))}
+            </TableHeader>
             <TableBody>
-              {sorted.map((m) => {
-                const ps = m.providers ?? [];
-                const provNames = Array.from(new Set(ps.map((p) => p.provider_display_name || p.provider_name)));
-                const inPrices = ps.map((p) => p.input_price_per_token).filter((v): v is number => v != null);
-                const outPrices = ps.map((p) => p.output_price_per_token).filter((v): v is number => v != null);
-                const inPrice = inPrices.length ? Math.min(...inPrices) : null;
-                const outPrice = outPrices.length ? Math.min(...outPrices) : null;
-                const maxOut = Math.max(0, ...ps.map((p) => p.max_tokens ?? 0));
-                const maxEff = Math.max(1, ...ps.map((p) => p.effective_multiplier ?? 1));
-                const r = m.success_rate;
-                return (
-                  <TableRow key={m.id} className="cursor-pointer" onClick={() => setProvidersModel(m)}>
-                    <TableCell>
-                      <div className="flex items-center gap-2">
-                        <ModelIcon id={m.name} displayName={m.display_name ?? undefined} size={24} />
-                        <div className="min-w-0">
-                          <div className="truncate font-medium">{m.display_name || m.name}</div>
-                          <div className="flex items-center gap-1">
-                            <span className="truncate font-mono text-[10px] text-muted-foreground">{m.name}</span>
-                            <button
-                              type="button"
-                              onClick={(e) => { e.stopPropagation(); navigator.clipboard.writeText(m.name); toast.success(`已复制模型 ID：${m.name}`); }}
-                              className="shrink-0 text-muted-foreground/50 transition-colors hover:text-foreground"
-                              title="复制模型 ID"
-                            >
-                              <Copy className="h-3 w-3" />
-                            </button>
-                          </div>
-                        </div>
-                      </div>
+              {table.getRowModel().rows.map((row) => (
+                <TableRow key={row.id} className="cursor-pointer" onClick={() => setProvidersModel(row.original)}>
+                  {row.getVisibleCells().map((cell) => (
+                    <TableCell key={cell.id} className={(cell.column.columnDef.meta as { className?: string } | undefined)?.className ?? ''}>
+                      {flexRender(cell.column.columnDef.cell, cell.getContext())}
                     </TableCell>
-                    <TableCell>
-                      <div className="truncate text-xs">
-                        {provNames.length === 0 ? <span className="text-muted-foreground">—</span>
-                          : provNames.length <= 3 ? provNames.join('、 ')
-                          : <>{provNames[0]} 等 <span className="text-muted-foreground">{provNames.length} 个供应商</span></>}
-                      </div>
-                    </TableCell>
-                    <TableCell className="text-xs text-muted-foreground">映射 <span className="text-foreground">{ps.length}</span> · 供应商 <span className="text-foreground">{provNames.length}</span></TableCell>
-                    <TableCell className="text-xs text-muted-foreground">
-                      输入 <span className="text-foreground">{inPrice != null ? `¥${(inPrice * 1_000_000).toFixed(2)}/M` : '—'}</span>
-                      <div>输出 <span className="text-foreground">{outPrice != null ? `¥${(outPrice * 1_000_000).toFixed(2)}/M` : '—'}</span></div>
-                    </TableCell>
-                    <TableCell className="text-xs text-muted-foreground">
-                      上下文 <span className="text-foreground">{m.context_window_tokens ? formatCompact(m.context_window_tokens) : '—'}</span>
-                      <div>最大输出 <span className="text-foreground">{maxOut ? formatCompact(maxOut) : '—'}</span></div>
-                    </TableCell>
-                    <TableCell>{maxEff > 1 ? <span className="font-medium text-amber-600">×{maxEff}</span> : <span className="text-muted-foreground">—</span>}</TableCell>
-                    <TableCell className="text-right">
-                      <div className={r == null ? 'text-muted-foreground' : r >= 90 ? 'text-emerald-600' : r >= 60 ? 'text-amber-600' : 'text-red-600'}>{r == null ? '无数据' : `${r}%`}</div>
-                      <div className="text-[10px] text-muted-foreground">{formatNumber(m.request_count_24h ?? 0)} 次</div>
-                    </TableCell>
-                    <TableCell className="text-right"><MiniSuccessBuckets modelId={m.id} /></TableCell>
-                  </TableRow>
-                );
-              })}
+                  ))}
+                </TableRow>
+              ))}
             </TableBody>
           </Table>
         </CardContent></Card>
