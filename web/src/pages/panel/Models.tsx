@@ -436,6 +436,19 @@ function Models() {
       )}
 
       {loading && list.length === 0 ? (
+        viewMode === 'table' ? (
+          <Card><CardContent className="p-0">
+            <Table>
+              <TableBody>
+                {Array.from({ length: 8 }).map((_, i) => (
+                  <TableRow key={i}>
+                    <TableCell colSpan={8}><Skeleton className="h-10 w-full" /></TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </CardContent></Card>
+        ) : (
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
           {Array.from({ length: 6 }).map((_, index) => (
             <Card key={index}><CardContent className="p-4">
@@ -461,6 +474,7 @@ function Models() {
             </CardContent></Card>
           ))}
         </div>
+        )
       ) : list.length === 0 ? (
         <EmptyState title="暂无模型" description="尝试调整搜索或计费模式筛选" />
       ) : viewMode === 'table' ? (
