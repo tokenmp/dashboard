@@ -56,6 +56,8 @@ export interface QuotaItem {
   /** 计费单位：requests（coding）/ tokens（token、image） */
   unit: 'requests' | 'tokens';
   mode: 'window' | 'capped' | 'balance';
+  /** 计费模式（coding 派生）：metered/daily/weekly/monthly/quarterly/yearly/permanent */
+  billingModel?: string;
   /** 总额度（coding=本周额度、token/image capped=token_limit），无则 null */
   total?: number | null;
   /** window 模式 */

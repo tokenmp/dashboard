@@ -116,14 +116,16 @@ class QuotaService
     /**
      * 选定的 coding 套餐（多套餐时取限额最宽松的一条，对齐执行器 selected_coding_plan）。
      *
-     * @return array{name:string,weeklyLimit:int,hourlyLimit:int,activatedAt:string,expiresAt:?string}|null
+     * @return array{name:string,monthlyLimit:?int,weeklyLimit:int,hourlyLimit:int,cycleDays:?int,totalLimit:?int,activatedAt:string,expiresAt:?string}|null
      */
     private function selectedCodingPlan(string $userId): ?array
     {
         $rows = Db::connect('pgsql')->query(
             "select p.name,"
+            . " p.monthly_limit,"
             . " coalesce(p.weekly_limit,0) as weekly_limit,"
             . " coalesce(p.hourly_5h_limit,0) as hourly_5h_limit,"
+            . " p.cycle_days, p.default_duration_days, p.total_limit,"
             . " up.activated_at::text as activated_at,"
             . " up.expires_at::text as expires_at"
             . " from user_plans up join plans p on p.id = up.plan_id"
@@ -139,11 +141,14 @@ class QuotaService
         }
         $r = $rows[0];
         return [
-            'name'        => (string) $r['name'],
-            'weeklyLimit' => (int) $r['weekly_limit'],
-            'hourlyLimit' => (int) $r['hourly_5h_limit'],
-            'activatedAt' => (string) $r['activated_at'],
-            'expiresAt'   => $r['expires_at'] !== null ? (string) $r['expires_at'] : null,
+            'name'         => (string) $r['name'],
+            'monthlyLimit' => $r['monthly_limit'] !== null ? (int) $r['monthly_limit'] : null,
+            'weeklyLimit'  => (int) $r['weekly_limit'],
+            'hourlyLimit'  => (int) $r['hourly_5h_limit'],
+            'cycleDays'    => $r['cycle_days'] !== null ? (int) $r['cycle_days'] : ($r['default_duration_days'] !== null ? (int) $r['default_duration_days'] : null),
+            'totalLimit'   => $r['total_limit'] !== null ? (int) $r['total_limit'] : null,
+            'activatedAt'  => (string) $r['activated_at'],
+            'expiresAt'    => $r['expires_at'] !== null ? (string) $r['expires_at'] : null,
         ];
     }
 
@@ -204,46 +209,149 @@ class QuotaService
     /* ============================== 单项组装 ============================== */
 
     /**
-     * coding：滚动窗口（本周 / 近 5 小时）。$exp 为 null 表示永久有效（无上界）。
+     * coding：额度展示（面板口径）。
      *
-     * @param array{requests:int} $reserved
+     * 周期 cycle_days = COALESCE(plans.cycle_days, default_duration_days)（向后兼容老套餐）。
+     * 各限额为「各自独立的滚动窗口」（互不套住）：
+     *   5h=近 5 小时；周=UTC 当周；月=当前计费周期窗口（自 activated_at 滚动）；
+     *   总(total_limit)=自激活起累计，永不刷新。
+     * 仅渲染 limit>0 的窗口；全不限时回退展示当前周期已用，避免空白。
+     *
+     * 注意：本口径为面板展示用；执行器目前仍按「周期套住周/5h」的旧模型放行，待后续对齐。
      */
     private function codingItem(string $userId, ?array $plan, int $reserved): ?array
     {
         if ($plan === null) {
             return null; // 无有效 coding 套餐则不展示（执行器也不会放行 coding 请求）
         }
-        $act = $plan['activatedAt'];
-        $exp = $plan['expiresAt']; // string|null
+        $act        = $plan['activatedAt'];
+        $exp        = $plan['expiresAt'];   // string|null
+        $cycleDays  = $plan['cycleDays'];   // COALESCE(cycle_days, default_duration_days)；null→31
+        $monthLimit = $plan['monthlyLimit'];
+        $weekLimit  = $plan['weeklyLimit'];
+        $h5Limit    = $plan['hourlyLimit'];
+        $totalLimit = $plan['totalLimit'];
 
-        // usage_ledger charge 行按窗口聚合：下限 = greatest(本周一 UTC, activated_at)，
-        // 上限 = expires_at（NULL 时无上界）。$exp 绑定为 null → ?::timestamptz is null 成立。
-        $row = Db::connect('pgsql')->query(
-            "select"
-            . " coalesce(sum(case when created_at >= greatest((date_trunc('week', now() at time zone 'UTC') at time zone 'UTC'), ?::timestamptz)"
-            . " and (?::timestamptz is null or created_at <= ?::timestamptz) then -request_delta else 0 end),0) as week_used,"
-            . " coalesce(sum(case when created_at >= greatest(now() - interval '5 hours', ?::timestamptz)"
-            . " and (?::timestamptz is null or created_at <= ?::timestamptz) then -request_delta else 0 end),0) as h5_used"
-            . " from usage_ledger where user_id = ? and billing_plan = 'coding' and ledger_type = 'charge' and request_delta < 0",
-            [$act, $exp, $exp, $act, $exp, $exp, $userId]
-        )[0];
-        $weekUsed = (int) ($row['week_used'] ?? 0);
-        $h5Used   = (int) ($row['h5_used'] ?? 0);
+        $hasCap = ($monthLimit !== null && $monthLimit > 0)
+            || $weekLimit > 0 || $h5Limit > 0
+            || ($totalLimit !== null && $totalLimit > 0);
+        $billingModel = $this->billingModel($cycleDays, $hasCap);
+        $isPermanent  = ($cycleDays ?? 0) >= 3650; // 永久：周期公式会溢出 int4，且语义为「总量不刷新」
 
-        $wkLimit = $plan['weeklyLimit'];
-        $h5Limit = $plan['hourlyLimit'];
+        // 公共片段：5h / 周 / 总 三个独立窗口（以 [activated_at, expires_at] 为界，互不套住）。
+        $independentUsed = ""
+            . " coalesce(sum(case when created_at >= greatest(now() - interval '5 hours', b.act)"
+            . " and (b.exp is null or created_at <= b.exp) then -request_delta else 0 end), 0) as h5_used,"
+            . " coalesce(sum(case when created_at >= greatest((date_trunc('week', now() at time zone 'UTC') at time zone 'UTC'), b.act)"
+            . " and created_at < ((date_trunc('week', now() at time zone 'UTC') + interval '7 days') at time zone 'UTC')"
+            . " and (b.exp is null or created_at <= b.exp) then -request_delta else 0 end), 0) as week_used,"
+            . " coalesce(sum(case when created_at >= b.act and (b.exp is null or created_at <= b.exp)"
+            . " then -request_delta else 0 end), 0) as total_used";
+
+        if ($isPermanent) {
+            // 永久套餐：不计算月周期窗口（避免 cycle_days*86400 溢出 int4）
+            $row = Db::connect('pgsql')->query(
+                "with b as (select ?::timestamptz as act, ?::timestamptz as exp)"
+                . " select " . $independentUsed
+                . " from usage_ledger, b"
+                . " where user_id = ? and billing_plan = 'coding' and ledger_type = 'charge' and request_delta < 0",
+                [$act, $exp, $userId]
+            )[0];
+            $monthUsed = 0;
+        } else {
+            // 周期套餐：月(周期窗口) + 周/5h/总(独立窗口)
+            $row = Db::connect('pgsql')->query(
+                "with params as ("
+                . " select ?::timestamptz as activated_at, ?::timestamptz as expires_at,"
+                . " greatest(coalesce(?::int, 31), 1) as cycle_days"
+                . "), win as ("
+                . " select *, (date_trunc('day', (activated_at at time zone 'Asia/Shanghai')"
+                . " + make_interval(days => cycle_days)) + interval '1 day' - interval '1 second') at time zone 'Asia/Shanghai' as first_window_end"
+                . " from params"
+                . "), widx as ("
+                . " select *, case when now() <= first_window_end then 0"
+                . " else floor(extract(epoch from (now() - (first_window_end + interval '1 second'))) / (cycle_days * 86400))::int + 1 end as cycles_after_first"
+                . " from win"
+                . "), mwin as ("
+                . " select"
+                . " case when cycles_after_first = 0 then activated_at"
+                . " else first_window_end + make_interval(days => (cycles_after_first - 1) * cycle_days) + interval '1 second' end as monthly_window_start,"
+                . " case when expires_at is not null and expires_at < (first_window_end + make_interval(days => cycles_after_first * cycle_days))"
+                . " then expires_at else first_window_end + make_interval(days => cycles_after_first * cycle_days) end as monthly_window_end"
+                . " from widx"
+                . "), b as (select ?::timestamptz as act, ?::timestamptz as exp)"
+                . " select"
+                . " coalesce(sum(case when created_at >= monthly_window_start and created_at <= monthly_window_end then -request_delta else 0 end), 0) as month_used,"
+                . $independentUsed
+                . " from usage_ledger, mwin, b"
+                . " where user_id = ? and billing_plan = 'coding' and ledger_type = 'charge' and request_delta < 0",
+                [$act, $exp, $cycleDays, $act, $exp, $userId]
+            )[0];
+            $monthUsed = (int) ($row['month_used'] ?? 0);
+        }
+
+        $label     = $this->cycleLabel($cycleDays);
+        $h5Used    = max(0, (int) ($row['h5_used'] ?? 0));
+        $weekUsed  = max(0, (int) ($row['week_used'] ?? 0));
+        $totalUsed = max(0, (int) ($row['total_used'] ?? 0));
+
+        $windows = [];
+        if ($totalLimit !== null && $totalLimit > 0) {
+            $windows[] = ['key' => 'total', 'label' => '总量', 'limit' => $totalLimit, 'used' => $totalUsed];
+        }
+        if (!$isPermanent && $monthLimit !== null && $monthLimit > 0) {
+            $windows[] = ['key' => 'month', 'label' => $label, 'limit' => $monthLimit, 'used' => max(0, $monthUsed)];
+        }
+        if ($weekLimit > 0) {
+            $windows[] = ['key' => 'week', 'label' => '本周', 'limit' => $weekLimit, 'used' => $weekUsed];
+        }
+        if ($h5Limit > 0) {
+            $windows[] = ['key' => 'h5', 'label' => '近 5 小时', 'limit' => $h5Limit, 'used' => $h5Used];
+        }
+        if (!$windows) {
+            // 全不限套餐：回退展示当前周期已用，避免整块空白
+            $windows[] = ['key' => 'month', 'label' => $isPermanent ? '总量' : $label, 'limit' => null, 'used' => max(0, $isPermanent ? $totalUsed : $monthUsed)];
+        }
+
         return [
-            'billingPlan' => 'coding',
-            'planName'    => $plan['name'],
-            'unit'        => 'requests',
-            'mode'        => 'window',
-            'total'       => $wkLimit > 0 ? $wkLimit : null,
-            'windows'     => [
-                ['key' => 'week', 'label' => '本周',     'limit' => $wkLimit > 0 ? $wkLimit : null, 'used' => $weekUsed],
-                ['key' => 'h5',   'label' => '近 5 小时', 'limit' => $h5Limit > 0 ? $h5Limit : null, 'used' => $h5Used],
-            ],
-            'reserved'    => $reserved,
+            'billingPlan'  => 'coding',
+            'planName'     => $plan['name'],
+            'unit'         => 'requests',
+            'mode'         => 'window',
+            'billingModel' => $billingModel,
+            'total'        => null, // 不再单独渲染「总额」行，由各窗口自行展示已用/剩余
+            'windows'      => $windows,
+            'reserved'     => $reserved,
         ];
+    }
+
+    /** 周期长度（default_duration_days，空按月）→ 展示标签（与 billingModel 阈值对齐） */
+    private function cycleLabel(?int $cycleDays): string
+    {
+        $d = $cycleDays ?? 31;
+        if ($d >= 3650) return '总量';   // ≥10 年：视为永不刷新的总量桶
+        if ($d <= 1) return '本日';
+        if ($d <= 31) return '本月';
+        if ($d <= 92) return '本季';
+        return '本年';
+    }
+
+    /**
+     * 由周期长度与「是否有上限」派生计费模式（展示用，与执行器字段语义对齐）。
+     *
+     *  - metered   按量计费：5h/周/周期限额均为空 → 执行器视作不限（2147483647）
+     *  - permanent 永久：周期 ≥ 3650 天（≈10 年）→ 执行器按超长周期计，≈ 永不刷新的总量桶
+     *  - daily/monthly/quarterly/yearly：按 default_duration_days 换算的周期套餐
+     */
+    private function billingModel(?int $cycleDays, bool $hasCap): string
+    {
+        if (!$hasCap) return 'metered';
+        $d = $cycleDays ?? 31;
+        if ($d >= 3650) return 'permanent';
+        if ($d <= 1) return 'daily';
+        if ($d <= 31) return 'monthly';
+        if ($d <= 92) return 'quarterly';
+        return 'yearly';
     }
 
     /**

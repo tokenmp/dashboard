@@ -10,6 +10,8 @@ export interface PlanItem {
   hourly_5h_limit: number | null;
   weekly_limit: number | null;
   monthly_limit: number | null;
+  cycle_days: number | null;
+  total_limit: number | null;
   token_limit: number | null;
   price: number;
   status: 'active' | 'disabled' | 'deleted';
@@ -37,6 +39,8 @@ export interface PlanPayload {
   hourly_5h_limit: number | null;
   weekly_limit: number | null;
   monthly_limit: number | null;
+  cycle_days: number | null;
+  total_limit: number | null;
   token_limit: number | null;
   price: number;
   status: 'active' | 'disabled';

@@ -1,9 +1,19 @@
-import type { ReactNode } from 'react';
-import { RefreshCw, Activity, Zap, Gauge, CheckCircle2 } from 'lucide-react';
+import { Link, useNavigate } from 'react-router-dom';
+import {
+  RefreshCw,
+  Activity,
+  Zap,
+  Gauge,
+  CheckCircle2,
+  Sparkles,
+  Code2,
+  Coins,
+  Gift,
+} from 'lucide-react';
 import { getPanelOverviewApi } from '@/api/panel';
 import { useAsync } from '@/hooks/useAsync';
 import { StatCard } from '@/components/StatCard';
-import { QuotaCards } from '@/components/QuotaCards';
+import { QuotaCard } from '@/components/QuotaCards';
 import { TrendChart } from '@/components/TrendChart';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -11,6 +21,22 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
 import { formatCompact, formatNumber, formatPercent } from '@/utils/format';
 import type { UserOverview, TrendPoint, QuotaItem } from '@/types/dashboard';
+
+/** 概览页始终保证渲染的两个核心套餐槽位（编程 / Token） */
+type CorePlanType = 'coding' | 'token';
+
+const CORE_PLAN_META: Record<CorePlanType, { name: string; icon: typeof Code2; desc: string }> = {
+  coding: {
+    name: '编程套餐',
+    icon: Code2,
+    desc: '按周窗口计量请求次数，适合日常开发、Agent 与自动化调用。',
+  },
+  token: {
+    name: 'Token 套餐',
+    icon: Coins,
+    desc: '按 Token 计量的通用额度，可跨模型使用，灵活不浪费。',
+  },
+};
 
 /**
  * 用户面·概览：个人视角的今日 KPI、各计费类型额度（套餐感知）与 30 天趋势。
@@ -50,9 +76,18 @@ function Overview() {
 
 function OverviewView({ data }: { data: UserOverview }) {
   const { kpi, quota, trend } = data;
+
+  // 拆分：核心两个槽位（编程 / Token）+ 其余套餐（图像等，仅在有数据时追加）
+  const codingItem = quota.find((q) => q.billingPlan === 'coding');
+  const tokenItem = quota.find((q) => q.billingPlan === 'token');
+  const otherItems = quota.filter((q) => q.billingPlan !== 'coding' && q.billingPlan !== 'token');
+  const coreActive = [codingItem, tokenItem].filter(Boolean).length;
+
   return (
-    <>
-      {/* 今日 KPI + 各套餐概览 */}
+    <div className="space-y-6">
+      {/* 今日 KPI：恒为 4 张卡。
+          套餐充足时显示前两个套餐摘要；不足时依次用「今日成功率」「已开通套餐」补齐，
+          避免出现半空网格。 */}
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <StatCard
           label="今日请求"
@@ -69,13 +104,94 @@ function OverviewView({ data }: { data: UserOverview }) {
         {quota.slice(0, 2).map((q) => (
           <QuotaStatCard key={q.billingPlan} q={q} />
         ))}
+        {quota.length < 2 && (
+          <StatCard
+            label="今日成功率"
+            value={formatPercent(kpi.todaySuccessRate)}
+            hint="今日请求成功比例"
+            icon={<CheckCircle2 className="h-4 w-4" />}
+          />
+        )}
+        {quota.length === 0 && (
+          <StatCard
+            label="已开通套餐"
+            value={`${coreActive} / 2`}
+            hint={
+              <Link to="/panel/redemptions" className="text-primary hover:underline">
+                去开通 →
+              </Link>
+            }
+            icon={<Sparkles className="h-4 w-4" />}
+          />
+        )}
       </div>
 
-      {/* 额度明细：每个计费类型一张卡（按套餐类型区分展示） */}
-      {quota.length > 0 && <QuotaCards items={quota} className="grid grid-cols-1 gap-4 sm:grid-cols-2" />}
+      {/* 我的套餐：恒展示「编程 + Token」两个槽位，已开通渲染额度卡，未开通渲染占位 CTA 卡，
+          确保无套餐 / 单套餐场景下界面充实且有明确下一步。 */}
+      <section className="space-y-3">
+        <div className="flex items-center justify-between gap-4">
+          <div>
+            <h2 className="text-base font-semibold">我的套餐</h2>
+            <p className="text-xs text-muted-foreground">额度使用与开通情况</p>
+          </div>
+          <Button asChild variant="outline" size="sm">
+            <Link to="/panel/redemptions">
+              <Gift className="mr-1.5 h-4 w-4" />
+              兑换码
+            </Link>
+          </Button>
+        </div>
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+          <PlanSlot type="coding" item={codingItem} />
+          <PlanSlot type="token" item={tokenItem} />
+          {otherItems.map((q) => (
+            <QuotaCard key={q.billingPlan} q={q} />
+          ))}
+        </div>
+      </section>
 
-      <TrendSection trend={trend} extra={<SuccessNote rate={kpi.todaySuccessRate} />} />
-    </>
+      <TrendSection trend={trend} />
+    </div>
+  );
+}
+
+/* ----------------------------- 套餐槽位 ----------------------------- */
+
+/** 单个核心套餐槽位：有数据渲染额度卡，无数据渲染占位 CTA 卡 */
+function PlanSlot({ type, item }: { type: CorePlanType; item?: QuotaItem }) {
+  if (item) return <QuotaCard q={item} />;
+  return <EmptyPlanCard type={type} />;
+}
+
+/** 未开通套餐的占位卡：与额度卡等高，虚线边框 + 说明 + 开通 CTA */
+function EmptyPlanCard({ type }: { type: CorePlanType }) {
+  const navigate = useNavigate();
+  const meta = CORE_PLAN_META[type];
+  const Icon = meta.icon;
+  return (
+    <div className="flex h-full flex-col rounded-lg border border-dashed bg-muted/30 p-4">
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          <span className="flex h-8 w-8 items-center justify-center rounded-md bg-background text-muted-foreground">
+            <Icon className="h-4 w-4" />
+          </span>
+          <span className="text-sm font-medium text-muted-foreground">{meta.name}</span>
+        </div>
+        <Badge variant="outline" className="text-muted-foreground">
+          未开通
+        </Badge>
+      </div>
+      <p className="mt-3 text-xs leading-relaxed text-muted-foreground">{meta.desc}</p>
+      <Button
+        variant="outline"
+        size="sm"
+        className="mt-auto w-full"
+        onClick={() => navigate('/panel/redemptions')}
+      >
+        <Gift className="mr-1.5 h-4 w-4" />
+        兑换码开通
+      </Button>
+    </div>
   );
 }
 
@@ -85,13 +201,23 @@ function OverviewView({ data }: { data: UserOverview }) {
 function QuotaStatCard({ q }: { q: QuotaItem }) {
   const name = q.planName || planLabel(q.billingPlan);
   if (q.mode === 'window') {
-    const wk = q.windows?.find((w) => w.key === 'week');
-    const h5 = q.windows?.find((w) => w.key === 'h5');
+    // 首个窗口为主额度（周期/月 或 周），次窗口作 hint
+    const main = q.windows?.[0];
+    const sub = q.windows?.[1];
+    if (!main) {
+      return <StatCard label={name} value="—" icon={<Gauge className="h-4 w-4" />} />;
+    }
+    const limit = main.limit;
+    const capped = limit != null;
+    const remaining = capped ? Math.max(0, limit - main.used) : 0;
+    const subStr = sub
+      ? `${sub.label} 已用 ${formatNumber(sub.used)}${sub.limit ? ` / ${formatNumber(sub.limit)}` : ' · 不限'}`
+      : undefined;
     return (
       <StatCard
-        label={`${name} · 本周`}
-        value={wk ? `${formatNumber(wk.used)}${wk.limit ? ` / ${formatNumber(wk.limit)}` : ''}` : '—'}
-        hint={h5 ? `近 5 小时 ${formatNumber(h5.used)}${h5.limit ? ` / ${formatNumber(h5.limit)}` : ' / 不限'}` : undefined}
+        label={`${name} · ${capped ? `${main.label}剩余` : main.label}`}
+        value={capped ? formatNumber(remaining) : '不限'}
+        hint={subStr}
         icon={<Gauge className="h-4 w-4" />}
       />
     );
@@ -113,13 +239,12 @@ function QuotaStatCard({ q }: { q: QuotaItem }) {
 
 /* ----------------------------- 趋势区 ----------------------------- */
 
-function TrendSection({ trend, extra }: { trend: TrendPoint[]; extra?: ReactNode }) {
+function TrendSection({ trend }: { trend: TrendPoint[] }) {
   return (
     <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
       <Card>
         <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
           <CardTitle className="text-base">请求量（近 30 天）</CardTitle>
-          {extra}
         </CardHeader>
         <CardContent>
           <TrendChart data={trend} dataKey="requests" color="hsl(221.2 83.2% 53.3%)" />
@@ -134,15 +259,6 @@ function TrendSection({ trend, extra }: { trend: TrendPoint[]; extra?: ReactNode
         </CardContent>
       </Card>
     </div>
-  );
-}
-
-function SuccessNote({ rate }: { rate: number | null }) {
-  return (
-    <span className="flex items-center gap-1 text-xs text-muted-foreground">
-      <CheckCircle2 className="h-3.5 w-3.5" />
-      今日成功率 {formatPercent(rate)}
-    </span>
   );
 }
 

@@ -51,6 +51,8 @@ class Plan extends Model
         'hourly_5h_limit' => 'integer',
         'weekly_limit' => 'integer',
         'monthly_limit' => 'integer',
+        'cycle_days' => 'integer',
+        'total_limit' => 'integer',
         'token_limit' => 'integer',
         'price' => 'float',
         'created_at' => 'datetime',

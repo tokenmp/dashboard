@@ -145,6 +145,8 @@ class Plan extends BaseController
             'hourly_5h_limit'       => $this->nullableInt('hourly_5h_limit'),
             'weekly_limit'          => $this->nullableInt('weekly_limit'),
             'monthly_limit'         => $this->nullableInt('monthly_limit'),
+            'cycle_days'            => $this->nullableInt('cycle_days'),
+            'total_limit'           => $this->nullableInt('total_limit'),
             'token_limit'           => $this->nullableInt('token_limit'),
             'price'                 => (float) ($this->request->post('price', 0) ?? 0),
             'status'                => $status,
@@ -174,21 +176,22 @@ class Plan extends BaseController
         $db = Db::connect('pgsql');
         if ($id === null) {
             $db->execute(
-                "INSERT INTO plans (id, name, plan_type, hourly_5h_limit, weekly_limit, monthly_limit, "
+                "INSERT INTO plans (id, name, plan_type, hourly_5h_limit, weekly_limit, monthly_limit, cycle_days, total_limit, "
                 . "token_limit, price, status, default_duration_days, allowed_model_names, category, created_at, updated_at) "
-                . "VALUES (?,?,?,?,?,?,?,?,?,?,?::jsonb,?,?,?)",
+                . "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?::jsonb,?,?,?)",
                 [$row['id'], $row['name'], $row['plan_type'], $row['hourly_5h_limit'],
-                 $row['weekly_limit'], $row['monthly_limit'], $row['token_limit'], $row['price'],
+                 $row['weekly_limit'], $row['monthly_limit'], $row['cycle_days'], $row['total_limit'],
+                 $row['token_limit'], $row['price'],
                  $row['status'], $row['default_duration_days'], $json, $row['category'],
                  $row['created_at'], $row['updated_at']]
             );
         } else {
             $db->execute(
-                "UPDATE plans SET name=?, plan_type=?, hourly_5h_limit=?, weekly_limit=?, monthly_limit=?, "
+                "UPDATE plans SET name=?, plan_type=?, hourly_5h_limit=?, weekly_limit=?, monthly_limit=?, cycle_days=?, total_limit=?, "
                 . "token_limit=?, price=?, status=?, default_duration_days=?, allowed_model_names=?::jsonb, "
                 . "category=?, updated_at=NOW() WHERE id=? AND status <> 'deleted'",
                 [$row['name'], $row['plan_type'], $row['hourly_5h_limit'], $row['weekly_limit'],
-                 $row['monthly_limit'], $row['token_limit'], $row['price'], $row['status'],
+                 $row['monthly_limit'], $row['cycle_days'], $row['total_limit'], $row['token_limit'], $row['price'], $row['status'],
                  $row['default_duration_days'], $json, $row['category'], $id]
             );
         }

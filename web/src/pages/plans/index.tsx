@@ -40,6 +40,18 @@ import type { PlanItem, PlanListQuery, PlanPayload } from '@/types/plan';
 const PLAN_TYPES = ['coding', 'token', 'image'] as const;
 const CATEGORIES = ['', 'month', 'week', 'day', 'custom'] as const;
 
+/** 由周期/限额派生计费模式（与后端 QuotaService::billingModel 口径一致，仅展示用） */
+function deriveBillingModel(cycle: string, h5h: string, week: string, month: string, total: string): string {
+  const hasCap = [h5h, week, month, total].some((v) => v !== '' && Number(v) > 0);
+  if (!hasCap) return 'metered';
+  const d = cycle === '' ? 31 : Number(cycle);
+  if (d >= 3650) return 'permanent';
+  if (d <= 1) return 'daily';
+  if (d <= 31) return 'monthly';
+  if (d <= 92) return 'quarterly';
+  return 'yearly';
+}
+
 function Plans() {
   const { initial: urlInit, write } = useUrlQueryState([
     { name: 'q', key: 'keyword' },
@@ -261,6 +273,8 @@ function PlanDialog({ plan, open, submitting, onClose, onSubmit }: {
   const [token, setToken] = useState('');
   const [price, setPrice] = useState('0');
   const [duration, setDuration] = useState('');
+  const [cycle, setCycle] = useState('');
+  const [total, setTotal] = useState('');
   const [category, setCategory] = useState('');
   const [models, setModels] = useState('');
   useEffect(() => {
@@ -273,9 +287,24 @@ function PlanDialog({ plan, open, submitting, onClose, onSubmit }: {
     setToken(plan?.token_limit?.toString() ?? '');
     setPrice(plan?.price?.toString() ?? '0');
     setDuration(plan?.default_duration_days?.toString() ?? '');
+    setCycle(plan?.cycle_days?.toString() ?? '');
+    setTotal(plan?.total_limit?.toString() ?? '');
     setCategory(plan?.category ?? '');
     setModels((plan?.allowed_model_names ?? []).join(','));
   }, [visible, plan]);
+
+  /** 选择计费模式 → 预填周期与限额（仍可手动微调） */
+  const applyBillingModel = (m: string) => {
+    switch (m) {
+      case 'daily':     setCycle('1');     break;
+      case 'quarterly': setCycle('90');    break;
+      case 'yearly':    setCycle('365');   break;
+      case 'permanent': setCycle('24000'); break;
+      case 'metered':   setCycle(''); setH5h(''); setWeek(''); setMonth(''); setTotal(''); break;
+      default:          setCycle('');      break; // monthly（默认）
+    }
+    setCategory(m);
+  };
 
   const submit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -285,6 +314,8 @@ function PlanDialog({ plan, open, submitting, onClose, onSubmit }: {
       hourly_5h_limit: h5h === '' ? null : Number(h5h),
       weekly_limit: week === '' ? null : Number(week),
       monthly_limit: month === '' ? null : Number(month),
+      cycle_days: cycle === '' ? null : Number(cycle),
+      total_limit: total === '' ? null : Number(total),
       token_limit: token === '' ? null : Number(token),
       price: Number(price) || 0,
       status: 'active',
@@ -318,21 +349,41 @@ function PlanDialog({ plan, open, submitting, onClose, onSubmit }: {
               </Select>
             </div>
             <div className="space-y-1.5">
-              <Label>分类（展示用）</Label>
-              <Select value={category} onValueChange={setCategory}>
-                <SelectTrigger><SelectValue placeholder="无" /></SelectTrigger>
-                <SelectContent>
-                  {CATEGORIES.map((c) => <SelectItem key={c} value={c}>{c === '' ? '无' : c}</SelectItem>)}
-                </SelectContent>
-              </Select>
+              {planType === 'coding' ? (
+                <>
+                  <Label>计费模式</Label>
+                  <Select value={deriveBillingModel(cycle, h5h, week, month, total)} onValueChange={applyBillingModel}>
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="monthly">包月（默认）</SelectItem>
+                      <SelectItem value="daily">按天</SelectItem>
+                      <SelectItem value="quarterly">包季</SelectItem>
+                      <SelectItem value="yearly">包年</SelectItem>
+                      <SelectItem value="permanent">永久（不刷新）</SelectItem>
+                      <SelectItem value="metered">按量计费（不限）</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </>
+              ) : (
+                <>
+                  <Label>分类（展示用）</Label>
+                  <Select value={category} onValueChange={setCategory}>
+                    <SelectTrigger><SelectValue placeholder="无" /></SelectTrigger>
+                    <SelectContent>
+                      {CATEGORIES.map((c) => <SelectItem key={c} value={c}>{c === '' ? '无' : c}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                </>
+              )}
             </div>
           </div>
 
           {planType === 'coding' && (
-            <div className="grid grid-cols-3 gap-3">
+            <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1.5"><Label>5h 限额</Label><Input type="number" value={h5h} onChange={(e) => setH5h(e.target.value)} placeholder="不限" /></div>
               <div className="space-y-1.5"><Label>周限额</Label><Input type="number" value={week} onChange={(e) => setWeek(e.target.value)} placeholder="不限" /></div>
-              <div className="space-y-1.5"><Label>月/总限额</Label><Input type="number" value={month} onChange={(e) => setMonth(e.target.value)} placeholder="不限" /></div>
+              <div className="space-y-1.5"><Label>周期限额（月）</Label><Input type="number" value={month} onChange={(e) => setMonth(e.target.value)} placeholder="每个计费周期上限" /></div>
+              <div className="space-y-1.5"><Label>总限额（不刷新）</Label><Input type="number" value={total} onChange={(e) => setTotal(e.target.value)} placeholder="生命周期总量" /></div>
             </div>
           )}
           {planType === 'token' && (
