@@ -1,0 +1,48 @@
+# TokenMP Dashboard 部署 —— 推 v* 标签时, GitHub 托管 runner 通过 SSH 连到生产服务器,
+# 在 /opt/tokenmp-dashboard 本地 build + 重建容器 + 写回 versions.env。
+# 不使用 self-hosted runner, 无需在服务器常驻 runner 进程。
+#
+# 所需 GitHub Secrets (见 docs/deployment.md):
+#   DEPLOY_HOST     生产服务器地址
+#   DEPLOY_USER     部署账号(对 /opt/tokenmp 有写权限、在 docker 组、已配 GitHub git 凭证)
+#   DEPLOY_SSH_KEY  部署账号的 SSH 私钥(ed25519, 对应服务器 authorized_keys 里的公钥)
+name: deploy
+
+on:
+  push:
+    tags: ['v*']
+
+concurrency:
+  group: deploy-dashboard-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: SSH deploy
+        uses: appleboy/ssh-action@v1.2.0
+        env:
+          TAG: ${{ github.ref_name }}
+        with:
+          host: ${{ secrets.DEPLOY_HOST }}
+          username: ${{ secrets.DEPLOY_USER }}
+          key: ${{ secrets.DEPLOY_SSH_KEY }}
+          envs: TAG
+          command_timeout: 20m
+          script_stop: true
+          script: |
+            set -euo pipefail
+            cd /opt/tokenmp-dashboard
+            git fetch --tags --force origin
+            git checkout "$TAG"
+            docker build -t tokenmp-dashboard:"$TAG" -t tokenmp-dashboard:latest .
+            sed -i "s/^DASHBOARD_VERSION=.*/DASHBOARD_VERSION=$TAG/" /opt/tokenmp/versions.env
+            docker compose --env-file /opt/tokenmp/versions.env \
+              -f docker-compose.1panel.yml up -d --no-deps --no-build --force-recreate
+            sleep 3
+            curl -fsS "http://127.0.0.1:${DASHBOARD_PORT:-8088}/" >/dev/null
+            echo "✓ dashboard $TAG deployed"

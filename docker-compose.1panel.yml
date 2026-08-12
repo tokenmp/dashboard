@@ -1,0 +1,53 @@
+# ============================================================
+# TokenMP Dashboard —— 1Panel「容器→编排」生产编排
+# 来源: github.com/tokenmp/dashboard
+# 运行时: FrankenPHP(Caddy+PHP 8.4),容器内 80
+# 数据库: 复用现有 PostgreSQL 容器 1Panel-postgresql-eyuK(库 tokenmp)
+# 端口:   仅绑 127.0.0.1:8088 —— 外网访问不到,只供同机的 OpenResty 反代
+#         (OpenResty 是 host 网络模式,不在 1panel-network,故走 127.0.0.1 本地端口)
+# ============================================================
+#
+# 密钥与版本(单一来源, 详见 docs/deployment.md):
+#   - env_file: /opt/tokenmp/secrets.env   注入容器内密钥
+#     (JWT_SECRET / API_KEY_PEPPER / MASTER_ENCRYPTION_KEY / PG_PASS 等)
+#     ⚠️ API_KEY_PEPPER / MASTER_ENCRYPTION_KEY 必须与 executor 容器一致,
+#        两边都只来自这一份文件 —— 用 scripts/gen-secrets.sh 生成。
+#   - image tag: tokenmp-dashboard:${DASHBOARD_VERSION}
+#     版本号由 `docker compose --env-file /opt/tokenmp/versions.env` 插值提供。
+#
+# 日常部署: 打 v* git 标签 → self-hosted runner 自动 build + 重建 + 写回 versions.env。
+# ============================================================
+services:
+  tokenmp-dashboard:
+    image: tokenmp-dashboard:${DASHBOARD_VERSION:-latest}
+    container_name: tokenmp-dashboard
+    restart: always
+    networks:
+      - 1panel-network
+    ports:
+      - "127.0.0.1:${PANEL_APP_PORT_HTTP:-8088}:80"
+    # 共享密钥 (JWT_SECRET / API_KEY_PEPPER / MASTER_ENCRYPTION_KEY / PG_PASS 等)
+    # 统一来自宿主机 /opt/tokenmp/secrets.env —— 单一来源, 与 executor 容器保持一致。
+    env_file:
+      - /opt/tokenmp/secrets.env
+    environment:
+      JWT_EXPIRE: "604800"
+      JWT_PREFIX: "Bearer"
+      APP_DEBUG: "false"
+      PG_HOST: "${PG_HOST:-1Panel-postgresql-eyuK}"
+      PG_PORT: "${PG_PORT:-5432}"
+      PG_DB: "${PG_DB:-tokenmp}"
+      PG_USER: "${PG_USER:-tokenmp}"
+      PG_CHARSET: "utf8"
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fs -o /dev/null http://localhost/ || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+    volumes:
+      - ./data:/app/runtime
+    labels:
+      createdBy: "Apps"
+networks:
+  1panel-network:
+    external: true
