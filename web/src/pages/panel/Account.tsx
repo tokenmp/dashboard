@@ -336,9 +336,9 @@ function PlanStrategyCard({ stored, onSaved }: { stored: string; onSaved: () => 
 
       {/* 详情弹窗：作用说明、当前顺序、修改方式与规则词典 */}
       <Dialog open={detailOpen} onOpenChange={setDetailOpen}>
-        <DialogContent className="max-w-lg">
+        <DialogContent className="max-h-[85vh] max-w-lg overflow-y-auto">
           <DialogHeader><DialogTitle>扣费套餐策略说明</DialogTitle></DialogHeader>
-          <div className="space-y-5 text-sm">
+          <div className="space-y-4 text-sm">
             <section className="space-y-1.5">
               <h4 className="text-xs font-semibold text-muted-foreground">一、这是什么</h4>
               <p className="leading-relaxed text-muted-foreground">
