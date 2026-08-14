@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react';
 import { toast } from 'sonner';
-import { RefreshCw, Search, Plus, Zap, Trash2 } from 'lucide-react';
+import { RefreshCw, Search, Plus, Zap, Trash2, Power, PowerOff } from 'lucide-react';
+import { ToggleIconButton } from '@/components/ToggleIconButton';
 import { getDashboardUpstreamKeysApi, getDashboardUpstreamKeyDetailApi, probeUpstreamKeyApi, updateUpstreamKeyStatusApi, deleteUpstreamKeyApi } from '@/api/dashboard';
 import { CreateKeyDialog } from './CreateKeyDialog';
 import { ConfirmDialog } from '@/components/ConfirmDialog';
@@ -44,6 +45,22 @@ export function KeysTab({ providerId }: { providerId?: string }) {
     } finally { setProbingId(null); }
   };
   const [pendingDelete, setPendingDelete] = useState<{ id: string; name: string } | null>(null);
+  const [togglingId, setTogglingId] = useState<string | null>(null);
+  const [pendingDisable, setPendingDisable] = useState<UpstreamKeyItem | null>(null);
+  const doToggleStatus = async (k: UpstreamKeyItem, next: 'active' | 'disabled') => {
+    setTogglingId(k.id);
+    try {
+      await updateUpstreamKeyStatusApi(k.id, next);
+      toast.success(next === 'active' ? `已启用「${k.name}」` : `已禁用「${k.name}」`);
+      reload();
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : '操作失败');
+    } finally { setTogglingId(null); }
+  };
+  const toggleStatusRow = (k: UpstreamKeyItem) => {
+    if (k.status === 'active') { setPendingDisable(k); return; }
+    doToggleStatus(k, 'active');
+  };
   const deleteRow = (id: string, name: string) => setPendingDelete({ id, name });
   const confirmDelete = async () => {
     if (!pendingDelete) return;
@@ -116,6 +133,13 @@ export function KeysTab({ providerId }: { providerId?: string }) {
           const k = row.original;
           return (
             <div className="flex items-center justify-end gap-1">
+              <ToggleIconButton
+                icon={k.status === 'active' ? <Power className="h-4 w-4" /> : <PowerOff className="h-4 w-4" />}
+                tip={k.status === 'active' ? '禁用账号' : '启用账号'}
+                disabled={togglingId === k.id}
+                className={k.status === 'active' ? 'text-emerald-600 hover:text-destructive' : 'text-muted-foreground hover:text-emerald-600'}
+                onClick={() => toggleStatusRow(k)}
+              />
               <Button variant="ghost" size="icon" className="h-7 w-7" title="测试" disabled={probingId === k.id} onClick={(e) => { e.stopPropagation(); probeRow(k.id, k.name); }}>
                 <Zap className="h-4 w-4" />
               </Button>
@@ -128,7 +152,7 @@ export function KeysTab({ providerId }: { providerId?: string }) {
       },
     );
     return cols;
-  }, [providerId, probingId, probeRow, deleteRow]);
+  }, [providerId, probingId, probeRow, deleteRow, togglingId, toggleStatusRow]);
 
   return (
     <div className="space-y-3">
@@ -213,6 +237,15 @@ export function KeysTab({ providerId }: { providerId?: string }) {
         confirmText="删除"
         variant="destructive"
         onConfirm={confirmDelete}
+      />
+      <ConfirmDialog
+        open={!!pendingDisable}
+        onOpenChange={(o) => !o && setPendingDisable(null)}
+        title="禁用账号"
+        description={pendingDisable ? `确认禁用账号「${pendingDisable.name}」？禁用后该账号不再被调用（可随时重新启用）。` : ''}
+        confirmText="禁用"
+        variant="destructive"
+        onConfirm={() => { if (pendingDisable) doToggleStatus(pendingDisable, 'disabled'); }}
       />
     </div>
   );

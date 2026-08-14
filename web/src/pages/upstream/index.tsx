@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ChevronRight, Copy, Pencil, Plus, RefreshCw, Search, Settings2, Plug } from 'lucide-react';
+import { AlertTriangle, CheckCircle2, ChevronRight, Copy, LayoutGrid, Pencil, Plus, Power, PowerOff, RefreshCw, Search, Settings2, Plug, Table as TableIcon } from 'lucide-react';
+import { CoinIcon, ToggleIconButton } from '@/components/ToggleIconButton';
 import { usePagedQuery } from '@/hooks/usePagedQuery';
 import { useUrlQueryState } from '@/hooks/useUrlQueryState';
 import { StatusBadge } from '@/components/StatusBadge';
@@ -16,8 +17,8 @@ import { DebouncedInput } from '@/components/DebouncedInput';
 import { Skeleton } from '@/components/ui/skeleton';
 import { type ColumnDef } from '@tanstack/react-table';
 import { DataTable } from '@/components/ui/data-table';
+import { DataTableColumnHeader } from '@/components/ui/data-table-column-header';
 import { formatCompact, formatNumber } from '@/utils/format';
-import { billingLabel, billingVariant } from '@/utils/billing';
 import { ProviderCreateDialog } from './ProviderCreateDialog';
 import { ProviderEndpointsDialog } from './ProviderEndpointsDialog';
 import { KeysTab } from './KeysTab';
@@ -208,12 +209,13 @@ function formatPrice(price: number | null): string {
   return `¥${perMillion.toFixed(2)}/M`;
 }
 
-function ModelCard({ m, onEdit, onManageMappings }: { m: AiModelItem; onEdit: () => void; onManageMappings: () => void }) {
+function ModelCard({ m, onEdit, onManageMappings, onPatch, toggling }: { m: AiModelItem; onEdit: () => void; onManageMappings: () => void; onPatch: (patch: { billing_mode?: string; status?: string }) => void; toggling: boolean }) {
   const [providerDialogOpen, setProviderDialogOpen] = useState(false);
   const [healthData, setHealthData] = useState<Record<string, number[]>>({});
   const [healthLoading, setHealthLoading] = useState(false);
   const [togglingId, setTogglingId] = useState<string | null>(null);
   const [pendingDisable, setPendingDisable] = useState<string | null>(null);
+  const [pendingModelDisable, setPendingModelDisable] = useState(false);
   const doToggle = async (mappingId: string, next: 'active' | 'disabled') => {
     setTogglingId(mappingId);
     try {
@@ -274,24 +276,67 @@ function ModelCard({ m, onEdit, onManageMappings }: { m: AiModelItem; onEdit: ()
             <div className="flex min-w-0 items-center gap-3">
               <ModelIcon id={m.name} displayName={m.display_name ?? undefined} size={36} />
               <div className="min-w-0">
-                <div className="truncate font-medium">{m.display_name || m.name}</div>
+                <div className="flex items-center gap-1">
+                  <span className="truncate font-medium">{m.display_name || m.name}</span>
+                  {m.v1_issues && m.v1_issues.length > 0 ? (
+                    <span title={`不可正常加载：${m.v1_issues.join('；')}`}>
+                      <AlertTriangle className="h-3.5 w-3.5 shrink-0 text-amber-500" />
+                    </span>
+                  ) : m.v1_visible && (
+                    <span title="模型可正常加载">
+                      <CheckCircle2 className="h-3.5 w-3.5 shrink-0 text-green-600" />
+                    </span>
+                  )}
+                </div>
                 <div className="truncate font-mono text-xs text-muted-foreground">{m.name}</div>
               </div>
             </div>
             <div className="flex shrink-0 items-center gap-1">
-              <Badge variant={billingVariant(m.billing_mode)} className="text-[10px]">{billingLabel(m.billing_mode)}</Badge>
+              <ToggleIconButton
+                icon={m.status === 'active' ? <Power className="h-4 w-4" /> : <PowerOff className="h-4 w-4" />}
+                tip={m.status === 'active' ? '禁用模型' : '启用模型'}
+                disabled={toggling}
+                className={m.status === 'active' ? 'text-emerald-600 hover:text-destructive' : 'text-muted-foreground hover:text-emerald-600'}
+                onClick={() => {
+                  if (m.status === 'active') { setPendingModelDisable(true); return; }
+                  onPatch({ status: 'active' });
+                }}
+              />
+              <ToggleIconButton
+                icon={<CoinIcon slashed={m.billing_mode === 'free_global'} />}
+                tip={m.billing_mode !== 'free_global' ? '切换为不计费' : '切换为计费'}
+                disabled={toggling}
+                className={m.billing_mode !== 'free_global' ? 'text-amber-600' : 'text-muted-foreground hover:text-amber-600'}
+                onClick={() => onPatch({ billing_mode: m.billing_mode !== 'free_global' ? 'free_global' : 'billable' })}
+              />
               <Button variant="ghost" size="sm" className="h-7 px-2" onClick={onEdit}>
                 <Pencil className="h-3.5 w-3.5" />
               </Button>
             </div>
           </div>
           {m.description && <p className="mt-1 line-clamp-2 text-xs text-muted-foreground">{m.description}</p>}
+          {m.v1_issues && m.v1_issues.length > 0 && (
+            <div
+              className="mt-2 rounded-md border border-amber-300/70 bg-amber-50 px-2 py-1.5 dark:border-amber-500/40 dark:bg-amber-500/10"
+              title="executor /v1/models 只加载整条链路 active 的模型：模型 → 映射 → 上游 Key → 供应商 → 端点"
+            >
+              <div className="flex items-start gap-1.5 text-[11px] leading-relaxed text-amber-700 dark:text-amber-400">
+                <AlertTriangle className="mt-0.5 h-3 w-3 shrink-0" />
+                <div>
+                  <span className="font-medium">不会出现在 /v1/models：</span>
+                  {m.v1_issues.map((issue, i) => (
+                    <span key={i}>{i > 0 && '；'}{issue}</span>
+                  ))}
+                </div>
+              </div>
+            </div>
+          )}
           <div className="mt-2 flex flex-wrap gap-1">
             {(m.capabilities ?? []).map((c) => <CapabilityBadge key={c} capability={c} />)}
           </div>
           <div className="mt-2 flex items-center gap-x-4 text-xs text-muted-foreground">
             <span>上下文：<span className="text-foreground">{m.context_window_tokens ? formatCompact(m.context_window_tokens) : '—'}</span></span>
-            <span>最大输出：<span className="text-foreground">{(() => { const mo = Math.max(0, ...providers.map(p => p.max_tokens ?? 0)); return mo ? formatCompact(mo) : '—'; })()}</span></span>
+            <span title={m.max_tokens ? '模型级配置' : '取活跃映射最大值'}>最大输出：<span className="text-foreground">{(() => { const mo = m.max_tokens ?? Math.max(0, ...providers.map(p => p.max_tokens ?? 0)); return mo ? formatCompact(mo) : '—'; })()}</span></span>
           </div>
           <div className="mt-2 flex w-full items-center justify-between border-t pt-2 text-[11px] font-medium text-muted-foreground">
             <button type="button" className="flex items-center gap-1 hover:text-foreground" onClick={() => setProviderDialogOpen(true)}>
@@ -411,6 +456,15 @@ function ModelCard({ m, onEdit, onManageMappings }: { m: AiModelItem; onEdit: ()
         variant="destructive"
         onConfirm={() => { if (pendingDisable) doToggle(pendingDisable, 'disabled'); }}
       />
+      <ConfirmDialog
+        open={pendingModelDisable}
+        onOpenChange={setPendingModelDisable}
+        title="禁用模型"
+        description={`确认禁用「${m.display_name || m.name}」？禁用后该模型将不可用（可随时重新启用）。`}
+        confirmText="禁用"
+        variant="destructive"
+        onConfirm={() => onPatch({ status: 'disabled' })}
+      />
     </>
   );
 }
@@ -429,12 +483,159 @@ function ModelsTab() {
   const navigate = useNavigate();
   const [editModel, setEditModel] = useState<AiModelItem | null>(null);
   const [editOpen, setEditOpen] = useState(false);
+  const [toggling, setToggling] = useState(false);
+  const [pendingTableDisable, setPendingTableDisable] = useState<AiModelItem | null>(null);
+  const [viewMode, setViewMode] = useState<'card' | 'table'>(() => (localStorage.getItem('dashboardModelsView') === 'table' ? 'table' : 'card'));
+  const switchView = (mode: 'card' | 'table') => {
+    setViewMode(mode);
+    localStorage.setItem('dashboardModelsView', mode);
+  };
+
+  // 卡片上的 状态/计费 toggle：按当前条目组装完整 payload 更新（PUT 全量语义）
+  const patchModel = async (item: AiModelItem, patch: { billing_mode?: string; status?: string }) => {
+    setToggling(true);
+    try {
+      await updateModelApi(item.id, {
+        name: item.name,
+        display_name: item.display_name,
+        description: item.description,
+        billing_mode: patch.billing_mode ?? item.billing_mode,
+        status: patch.status ?? item.status,
+        capabilities: item.capabilities?.length ? item.capabilities : ['text'],
+        context_window_tokens: item.context_window_tokens,
+        max_tokens: item.max_tokens,
+      });
+      toast.success(patch.status ? (patch.status === 'active' ? '已启用' : '已禁用') : (patch.billing_mode === 'free_global' ? '已切换为不计费' : '已切换为计费'));
+      reload();
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : '操作失败');
+    } finally {
+      setToggling(false);
+    }
+  };
   // 监听映射刷新事件（新建映射后刷新列表）
   useEffect(() => {
     const handler = () => reload();
     window.addEventListener('mapping-refresh', handler);
     return () => window.removeEventListener('mapping-refresh', handler);
   }, [reload]);
+
+  // 列表视图列定义
+  const modelColumns = useMemo<ColumnDef<AiModelItem>[]>(() => [
+    {
+      id: 'model',
+      accessorFn: (m) => m.display_name || m.name,
+      header: ({ column }) => <DataTableColumnHeader column={column} title="模型" />,
+      cell: ({ row }) => {
+        const m = row.original;
+        return (
+          <div className="flex items-center gap-2">
+            <ModelIcon id={m.name} displayName={m.display_name ?? undefined} size={24} />
+            <div className="min-w-0">
+              <div className="flex items-center gap-1 truncate font-medium">
+                <span className="truncate">{m.display_name || m.name}</span>
+                {m.v1_issues && m.v1_issues.length > 0 && (
+                  <span title={`不会出现在 /v1/models：${m.v1_issues.join('；')}`}>
+                    <AlertTriangle className="h-3.5 w-3.5 shrink-0 text-amber-500" />
+                  </span>
+                )}
+                {m.v1_visible && !(m.v1_issues && m.v1_issues.length) && (
+                  <span title="/v1/models 可见">
+                    <CheckCircle2 className="h-3.5 w-3.5 shrink-0 text-green-600" />
+                  </span>
+                )}
+              </div>
+              <span className="truncate font-mono text-[10px] text-muted-foreground">{m.name}</span>
+            </div>
+          </div>
+        );
+      },
+    },
+    {
+      id: 'capabilities',
+      header: () => <span className="text-xs font-medium text-muted-foreground">能力</span>,
+      cell: ({ row }) => (
+        <div className="flex flex-wrap gap-1">
+          {(row.original.capabilities ?? []).map((c) => <CapabilityBadge key={c} capability={c} />)}
+        </div>
+      ),
+    },
+    {
+      id: 'limits',
+      accessorFn: (m) => m.context_window_tokens ?? 0,
+      header: ({ column }) => <DataTableColumnHeader column={column} title="上下文/最大输出" />,
+      cell: ({ row }) => {
+        const m = row.original;
+        const maxOut = m.max_tokens ?? Math.max(0, ...(m.providers ?? []).map((p) => p.max_tokens ?? 0));
+        return (
+          <div className="text-xs text-muted-foreground">
+            上下文 <span className="text-foreground">{m.context_window_tokens ? formatCompact(m.context_window_tokens) : '—'}</span>
+            <div>最大输出 <span className="text-foreground">{maxOut ? formatCompact(maxOut) : '—'}</span></div>
+          </div>
+        );
+      },
+    },
+    {
+      id: 'providers',
+      accessorFn: (m) => (m.providers ?? []).length,
+      header: ({ column }) => <DataTableColumnHeader column={column} title="供应商/映射" />,
+      cell: ({ row }) => {
+        const ps = row.original.providers ?? [];
+        const provNames = Array.from(new Set(ps.map((p) => p.provider_display_name || p.provider_name)));
+        return (
+          <span className="text-xs text-muted-foreground">
+            映射 <span className="text-foreground">{ps.length}</span> · <span className="text-foreground">{provNames.length}</span> 供应商
+          </span>
+        );
+      },
+    },
+    {
+      id: 'billing',
+      accessorFn: (m) => m.billing_mode,
+      header: () => <span className="text-xs font-medium text-muted-foreground">计费</span>,
+      cell: ({ row }) => (
+        <Badge variant="outline" className="text-[10px]">{row.original.billing_mode === 'free_global' ? '不计费' : '计费'}</Badge>
+      ),
+    },
+    {
+      id: 'status',
+      accessorFn: (m) => m.status,
+      header: () => <span className="text-xs font-medium text-muted-foreground">状态</span>,
+      cell: ({ row }) => (
+        <span className={`inline-flex items-center gap-1 text-xs ${row.original.status === 'active' ? 'text-emerald-600' : 'text-red-500'}`}>
+          <span>●</span>{row.original.status === 'active' ? '正常' : '已禁用'}
+        </span>
+      ),
+    },
+    {
+      id: 'action',
+      meta: { className: 'w-[90px]' },
+      header: () => null,
+      cell: ({ row }) => {
+        const m = row.original;
+        return (
+          <div className="flex items-center justify-end gap-1">
+            <ToggleIconButton
+              icon={m.status === 'active' ? <Power className="h-4 w-4" /> : <PowerOff className="h-4 w-4" />}
+              tip={m.status === 'active' ? '禁用模型' : '启用模型'}
+              disabled={toggling}
+              className={m.status === 'active' ? 'text-emerald-600 hover:text-destructive' : 'text-muted-foreground hover:text-emerald-600'}
+              onClick={() => {
+                if (m.status === 'active') { setPendingTableDisable(m); return; }
+                patchModel(m, { status: 'active' });
+              }}
+            />
+            <Button variant="ghost" size="icon" className="h-7 w-7" title="编辑" onClick={() => { setEditModel(m); setEditOpen(true); }}>
+              <Pencil className="h-3.5 w-3.5" />
+            </Button>
+            <Button variant="ghost" size="icon" className="h-7 w-7" title="映射管理" onClick={() => navigate(`/dashboard/upstream/models/${m.id}/mappings`, { state: { name: m.display_name || m.name } })}>
+              <Settings2 className="h-3.5 w-3.5" />
+            </Button>
+          </div>
+        );
+      },
+    },
+  ], [navigate, toggling, patchModel, setPendingTableDisable]);
   return (
     <div className="space-y-3">
       <Card><CardContent className="flex items-end gap-3 p-4">
@@ -453,28 +654,52 @@ function ModelsTab() {
           <label className="mb-1 block text-xs text-muted-foreground">计费模式</label>
           <ModelBillingSelect value={params.billingMode ?? 'all'} onChange={(v) => setFilters({ billingMode: v === 'all' ? '' : v })} />
         </div>
+        <div className="flex items-center gap-0.5 rounded-md border p-0.5">
+          <Button size="sm" variant={viewMode === 'card' ? 'default' : 'ghost'} className="h-7 w-7 p-0" title="卡片视图" onClick={() => switchView('card')}><LayoutGrid className="h-4 w-4" /></Button>
+          <Button size="sm" variant={viewMode === 'table' ? 'default' : 'ghost'} className="h-7 w-7 p-0" title="列表视图" onClick={() => switchView('table')}><TableIcon className="h-4 w-4" /></Button>
+        </div>
         <Button variant="outline" size="sm" onClick={reload} disabled={loading}><RefreshCw className={`mr-1.5 h-4 w-4 ${loading ? 'animate-spin' : ''}`} />刷新</Button>
         <Button size="sm" onClick={() => { setEditModel(null); setEditOpen(true); }}><Plus className="mr-1.5 h-4 w-4" />新建模型</Button>
       </CardContent></Card>
       {error && <Card className="border-destructive"><CardContent className="py-3 text-sm text-destructive">{error}</CardContent></Card>}
-      {loading && list.length === 0 ? <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">{Array.from({ length: 6 }).map((_, i) => <Skeleton key={i} className="h-32" />)}</div>
-        : list.length === 0 ? <EmptyState title="暂无模型" />
-        : <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
+      {loading && list.length === 0 ? (
+        viewMode === 'table'
+          ? <Card><CardContent className="space-y-2 p-4">{Array.from({ length: 8 }).map((_, i) => <Skeleton key={i} className="h-10 w-full" />)}</CardContent></Card>
+          : <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">{Array.from({ length: 6 }).map((_, i) => <Skeleton key={i} className="h-32" />)}</div>
+      ) : list.length === 0 ? <EmptyState title="暂无模型" />
+      : viewMode === 'table' ? (
+        <Card><CardContent className="p-0">
+          <DataTable columns={modelColumns} data={list} emptyComponent={<EmptyState className="mx-4 my-6" title="暂无模型" />} />
+        </CardContent></Card>
+      ) : (
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
             {list.map((m) => (
               <ModelCard
                 key={m.id}
                 m={m}
                 onEdit={() => { setEditModel(m); setEditOpen(true); }}
                 onManageMappings={() => navigate(`/dashboard/upstream/models/${m.id}/mappings`, { state: { name: m.display_name || m.name } })}
+                onPatch={(patch) => patchModel(m, patch)}
+                toggling={toggling}
               />
             ))}
-          </div>}
+          </div>
+      )}
       <Pager page={page} size={size} total={total} loading={loading} setPage={setPage} />
       <ModelEditDialog open={editOpen} onOpenChange={setEditOpen} model={editModel} onSaved={reload} />
+      <ConfirmDialog
+        open={!!pendingTableDisable}
+        onOpenChange={(o) => !o && setPendingTableDisable(null)}
+        title="禁用模型"
+        description={pendingTableDisable ? `确认禁用「${pendingTableDisable.display_name || pendingTableDisable.name}」？禁用后该模型将不可用（可随时重新启用）。` : ''}
+        confirmText="禁用"
+        variant="destructive"
+        onConfirm={() => { if (pendingTableDisable) patchModel(pendingTableDisable, { status: 'disabled' }); }}
+      />
     </div>
   );
 }
-import { getDashboardModelsApi, getModelKeyHealthApi, updateMappingStatusApi } from '@/api/dashboard';
+import { getDashboardModelsApi, getModelKeyHealthApi, updateMappingStatusApi, updateModelApi } from '@/api/dashboard';
 import { toast } from 'sonner';
 const getModelsApiLazy = (p: UpstreamQuery) => getDashboardModelsApi(p);
 

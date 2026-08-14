@@ -146,6 +146,8 @@ export interface AiModelItem {
   description: string | null;
   capabilities: string[];
   context_window_tokens: number | null;
+  /** 模型级最大输出；null/0 = 未声明，/v1/models 回退取活跃映射 MAX(max_tokens) */
+  max_tokens: number | null;
   billing_mode: string;
   metadata: Record<string, unknown>;
   status: string;
@@ -154,6 +156,10 @@ export interface AiModelItem {
   created_at: string;
   updated_at: string;
   providers: AiModelProvider[];
+  /** /v1/models 可见性诊断（list 接口附带；true = 会被 executor 加载） */
+  v1_visible?: boolean;
+  /** 不可被 /v1/models 加载的原因列表（空数组/缺省 = 正常） */
+  v1_issues?: string[];
 }
 
 /** 模型映射（管理面，含 disabled） */
@@ -166,6 +172,8 @@ export interface ModelMappingItem {
   input_price_per_token: number | null;
   output_price_per_token: number | null;
   max_tokens: number | null;
+  /** 映射级上下文窗口；null = 未声明，沿用模型级 context_window_tokens */
+  context_window_tokens: number | null;
   status: string;
   provider_endpoint_id: string | null;
   provider_name: string;
