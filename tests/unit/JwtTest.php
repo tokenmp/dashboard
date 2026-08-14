@@ -35,8 +35,8 @@ final class JwtTest extends TestCase
         $this->assertSame('super', $payload->role);
         $this->assertTrue(property_exists($payload, 'iat'));
         $this->assertTrue(property_exists($payload, 'exp'));
-        // exp - iat 应等于 JWT_EXPIRE(bootstrap 注入 3600)
-        $this->assertSame(3600, $payload->exp - $payload->iat);
+        // exp - iat 应等于当前生效的 JWT_EXPIRE(CI 有 .env 时为 604800,本地 bootstrap 为 3600)
+        $this->assertSame((int) Env::get('JWT_EXPIRE', 604800), $payload->exp - $payload->iat);
         $this->assertEqualsWithDelta(time(), $payload->iat, 5); // 容差 5 秒
     }
 
