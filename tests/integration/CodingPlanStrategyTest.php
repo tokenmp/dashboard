@@ -103,6 +103,37 @@ final class CodingPlanStrategyTest extends IntegrationTestCase
         }
     }
 
+    public function testUpdateRejectsSameGroupConflict(): void
+    {
+        $user = $this->uuid();
+        $this->seedUser($user);
+
+        // 同组互斥：soonest_expiry 与 latest_expiry 不能并存
+        try {
+            $this->putStrategy($user, 'soonest_expiry,latest_expiry');
+            $this->fail('同组互斥策略应 400');
+        } catch (HttpException $e) {
+            $this->assertSame(400, $e->getStatusCode());
+            $this->assertStringContainsString('互斥', $e->getMessage());
+        }
+
+        // 非冲突组合正常落库
+        $body = $this->body($this->putStrategy($user, 'latest_expiry,most_remaining,newest_first'))['data'];
+        $this->assertSame('latest_expiry,most_remaining,newest_first', $body['coding_plan_strategy']);
+    }
+
+    public function testEnumSiblingAndGroup(): void
+    {
+        $this->assertSame('latest_expiry', CodingPlanStrategy::SoonestExpiry->sibling()->value);
+        $this->assertSame('expiry', CodingPlanStrategy::SoonestExpiry->group());
+        // lenient：同组冲突保留先出现者，其余正常项保留
+        $parsed = CodingPlanStrategy::parseListLenient('soonest_expiry,latest_expiry,oldest_first');
+        $this->assertSame(
+            ['soonest_expiry', 'oldest_first'],
+            array_map(fn (CodingPlanStrategy $s) => $s->value, $parsed),
+        );
+    }
+
     public function testEnumLenientParseFallsBackToDefault(): void
     {
         $this->assertSame(

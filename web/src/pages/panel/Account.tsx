@@ -72,6 +72,17 @@ const ALL_KEYS = STRATEGY_META.map((m) => m.key);
 const metaOf = (key: CodingPlanStrategyKey) => STRATEGY_META.find((m) => m.key === key)!;
 /** 默认策略（与后端 CodingPlanStrategy::DEFAULT_LIST 一致） */
 const DEFAULT_ORDER: CodingPlanStrategyKey[] = ['soonest_expiry', 'smallest_limit', 'least_remaining', 'oldest_first'];
+/** 同组互斥项（如 最近到期 vs 最晚到期），后端枚举 sibling() 一致 */
+const SIBLING: Record<CodingPlanStrategyKey, CodingPlanStrategyKey> = {
+  largest_limit: 'smallest_limit',
+  smallest_limit: 'largest_limit',
+  least_remaining: 'most_remaining',
+  most_remaining: 'least_remaining',
+  soonest_expiry: 'latest_expiry',
+  latest_expiry: 'soonest_expiry',
+  oldest_first: 'newest_first',
+  newest_first: 'oldest_first',
+};
 
 /** 可拖拽的策略条目（dnd-kit useSortable：支持鼠标/触屏/键盘） */
 function SortableStrategyItem({ rank, meta, onRemove }: { rank: number; meta: (typeof STRATEGY_META)[number]; onRemove: () => void }) {
@@ -128,7 +139,17 @@ function PlanStrategyCard({ stored, onSaved }: { stored: string; onSaved: () => 
 
   const add = (key: CodingPlanStrategyKey) => {
     setDirty(true);
-    setEnabled((prev) => [...prev, key]);
+    setEnabled((prev) => {
+      // 同组互斥：点击同类项时原位替换其互斥项（保持优先级位置），否则追加
+      const sibling = SIBLING[key];
+      const idx = prev.indexOf(sibling);
+      if (idx >= 0) {
+        const next = [...prev];
+        next[idx] = key;
+        return next;
+      }
+      return [...prev, key];
+    });
   };
   const remove = (key: CodingPlanStrategyKey) => {
     setDirty(true);
@@ -194,28 +215,33 @@ function PlanStrategyCard({ stored, onSaved }: { stored: string; onSaved: () => 
 
           {/* 未启用：点击添加 */}
           <section className="space-y-2">
-            <p className="text-xs font-medium text-muted-foreground">未启用（点击添加）</p>
+            <p className="text-xs font-medium text-muted-foreground">未启用（点击添加；同向互斥，点击将替换已启用的反向项）</p>
             {disabledList.length === 0 ? (
               <div className="rounded-lg border border-dashed p-4 text-center text-xs text-muted-foreground">全部策略均已启用</div>
             ) : (
               <div className="grid gap-1.5">
-                {disabledList.map((m) => (
-                  <button
-                    key={m.key}
-                    type="button"
-                    onClick={() => add(m.key)}
-                    className="group flex items-center gap-2.5 rounded-lg border border-dashed p-2.5 text-left transition-colors hover:border-primary/50 hover:bg-primary/5"
-                  >
-                    <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md bg-muted text-muted-foreground group-hover:bg-primary/10 group-hover:text-primary">
-                      <Plus className="h-3.5 w-3.5" />
-                    </span>
-                    <span className="min-w-0 flex-1">
-                      <span className="block truncate text-sm font-medium">{m.label}</span>
-                      <span className="block truncate text-xs text-muted-foreground">{m.hint}</span>
-                    </span>
-                    <span className="shrink-0 rounded border px-1.5 py-0.5 text-[10px] text-muted-foreground">{m.group}</span>
-                  </button>
-                ))}
+                {disabledList.map((m) => {
+                  const replaces = enabled.includes(SIBLING[m.key]);
+                  return (
+                    <button
+                      key={m.key}
+                      type="button"
+                      onClick={() => add(m.key)}
+                      className="group flex items-center gap-2.5 rounded-lg border border-dashed p-2.5 text-left transition-colors hover:border-primary/50 hover:bg-primary/5"
+                    >
+                      <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md bg-muted text-muted-foreground group-hover:bg-primary/10 group-hover:text-primary">
+                        <Plus className="h-3.5 w-3.5" />
+                      </span>
+                      <span className="min-w-0 flex-1">
+                        <span className="block truncate text-sm font-medium">{m.label}</span>
+                        <span className="block truncate text-xs text-muted-foreground">
+                          {m.hint}{replaces ? `（替换「${metaOf(SIBLING[m.key]).label}」）` : ''}
+                        </span>
+                      </span>
+                      <span className="shrink-0 rounded border px-1.5 py-0.5 text-[10px] text-muted-foreground">{m.group}</span>
+                    </button>
+                  );
+                })}
               </div>
             )}
           </section>
