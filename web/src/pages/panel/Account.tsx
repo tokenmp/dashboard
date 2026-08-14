@@ -1,13 +1,9 @@
 import { useMemo, useState } from 'react';
 import type { ReactNode } from 'react';
-import { GripVertical, Plus, RefreshCw, RotateCcw, X } from 'lucide-react';
+import { ChevronDown, Plus, RefreshCw, RotateCcw } from 'lucide-react';
 import { toast } from 'sonner';
-import { DndContext, KeyboardSensor, PointerSensor, closestCenter, useSensor, useSensors } from '@dnd-kit/core';
-import type { DragEndEvent } from '@dnd-kit/core';
-import { SortableContext, arrayMove, sortableKeyboardCoordinates, useSortable, verticalListSortingStrategy } from '@dnd-kit/sortable';
-import { CSS } from '@dnd-kit/utilities';
 import { getPanelProfileApi, updatePanelPlanStrategyApi } from '@/api/panel';
-import { cn } from '@/lib/utils';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { useAsync } from '@/hooks/useAsync';
 import { StatusBadge } from '@/components/StatusBadge';
 import { Badge } from '@/components/ui/badge';
@@ -72,48 +68,34 @@ const ALL_KEYS = STRATEGY_META.map((m) => m.key);
 const metaOf = (key: CodingPlanStrategyKey) => STRATEGY_META.find((m) => m.key === key)!;
 /** 默认策略（与后端 CodingPlanStrategy::DEFAULT_LIST 一致） */
 const DEFAULT_ORDER: CodingPlanStrategyKey[] = ['soonest_expiry', 'smallest_limit', 'least_remaining', 'oldest_first'];
-/** 同组互斥项（如 最近到期 vs 最晚到期），后端枚举 sibling() 一致 */
-const SIBLING: Record<CodingPlanStrategyKey, CodingPlanStrategyKey> = {
-  largest_limit: 'smallest_limit',
-  smallest_limit: 'largest_limit',
-  least_remaining: 'most_remaining',
-  most_remaining: 'least_remaining',
-  soonest_expiry: 'latest_expiry',
-  latest_expiry: 'soonest_expiry',
-  oldest_first: 'newest_first',
-  newest_first: 'oldest_first',
-};
-
-/** 可拖拽的策略条目（dnd-kit useSortable：支持鼠标/触屏/键盘） */
-function SortableStrategyItem({ rank, meta, onRemove }: { rank: number; meta: (typeof STRATEGY_META)[number]; onRemove: () => void }) {
-  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: meta.key });
+/** 策略下拉菜单内容：可切换为任一未被其他槽位占用的策略；filled 槽位额外提供移除 */
+function StrategyMenuContent({ excludeKeys, onSelect, onRemove }: {
+  excludeKeys: CodingPlanStrategyKey[];
+  onSelect: (key: CodingPlanStrategyKey) => void;
+  onRemove?: () => void;
+}) {
   return (
-    <li
-      ref={setNodeRef}
-      style={{ transform: CSS.Transform.toString(transform), transition }}
-      className={cn(
-        'flex items-center gap-3 rounded-lg border bg-card p-2.5 pl-2 shadow-sm',
-        isDragging && 'z-10 opacity-70 shadow-md ring-1 ring-primary/40',
+    <DropdownMenuContent align="start" className="w-64">
+      <DropdownMenuLabel>选择策略</DropdownMenuLabel>
+      {STRATEGY_META.map((m) => {
+        const used = excludeKeys.includes(m.key);
+        return (
+          <DropdownMenuItem key={m.key} disabled={used} onClick={() => onSelect(m.key)}>
+            <span className="flex min-w-0 flex-1 flex-col">
+              <span className="text-sm">{m.label}{used ? '（已启用）' : ''}</span>
+              <span className="text-xs text-muted-foreground">{m.hint}</span>
+            </span>
+            <span className="ml-2 shrink-0 rounded border px-1.5 py-0.5 text-[10px] text-muted-foreground">{m.group}</span>
+          </DropdownMenuItem>
+        );
+      })}
+      {onRemove && (
+        <>
+          <DropdownMenuSeparator />
+          <DropdownMenuItem className="text-destructive focus:text-destructive" onClick={onRemove}>移除此条</DropdownMenuItem>
+        </>
       )}
-    >
-      <button
-        type="button"
-        className="flex h-7 w-6 shrink-0 cursor-grab touch-none items-center justify-center rounded text-muted-foreground/50 hover:bg-muted active:cursor-grabbing"
-        title="拖动调整优先级"
-        {...attributes}
-        {...listeners}
-      >
-        <GripVertical className="h-4 w-4" />
-      </button>
-      <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-primary/10 text-[11px] font-semibold text-primary">{rank}</span>
-      <span className="min-w-0 flex-1">
-        <span className="block truncate text-sm font-medium">{meta.label}</span>
-        <span className="block truncate text-xs text-muted-foreground">{meta.hint}</span>
-      </span>
-      <Button type="button" variant="ghost" size="icon" className="h-7 w-7 shrink-0 text-muted-foreground hover:text-destructive" title="移除" onClick={onRemove}>
-        <X className="h-3.5 w-3.5" />
-      </Button>
-    </li>
+    </DropdownMenuContent>
   );
 }
 
@@ -129,40 +111,17 @@ function PlanStrategyCard({ stored, onSaved }: { stored: string; onSaved: () => 
   const [saving, setSaving] = useState(false);
   const [dirty, setDirty] = useState(false);
 
-  // PointerSensor 带 4px 激活距离：避免误触点击；KeyboardSensor 提供无障碍排序
-  const sensors = useSensors(
-    useSensor(PointerSensor, { activationConstraint: { distance: 4 } }),
-    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
-  );
-
-  const disabledList = STRATEGY_META.filter((m) => !enabled.includes(m.key));
-
-  const add = (key: CodingPlanStrategyKey) => {
+  const setSlot = (index: number, key: CodingPlanStrategyKey) => {
     setDirty(true);
-    setEnabled((prev) => {
-      // 同组互斥：点击同类项时原位替换其互斥项（保持优先级位置），否则追加
-      const sibling = SIBLING[key];
-      const idx = prev.indexOf(sibling);
-      if (idx >= 0) {
-        const next = [...prev];
-        next[idx] = key;
-        return next;
-      }
-      return [...prev, key];
-    });
+    setEnabled((prev) => prev.map((k, i) => (i === index ? key : k)));
   };
-  const remove = (key: CodingPlanStrategyKey) => {
+  const addSlot = (key: CodingPlanStrategyKey) => {
     setDirty(true);
-    setEnabled((prev) => prev.filter((k) => k !== key));
+    setEnabled((prev) => [...prev, key]);
   };
-  const handleDragEnd = ({ active, over }: DragEndEvent) => {
-    if (!over || active.id === over.id) return;
+  const removeSlot = (index: number) => {
     setDirty(true);
-    setEnabled((prev) => {
-      const from = prev.indexOf(active.id as CodingPlanStrategyKey);
-      const to = prev.indexOf(over.id as CodingPlanStrategyKey);
-      return arrayMove(prev, from, to);
-    });
+    setEnabled((prev) => prev.filter((_, i) => i !== index));
   };
 
   const save = async () => {
@@ -180,71 +139,61 @@ function PlanStrategyCard({ stored, onSaved }: { stored: string; onSaved: () => 
     }
   };
 
+  // 一行四列：前 N 格 = 生效策略（点击下拉切换），第 N+1 格 = 添加，其余占位
+  const slots: ({ kind: 'filled'; index: number; key: CodingPlanStrategyKey } | { kind: 'add' } | { kind: 'empty' })[] = [
+    ...enabled.map((key, index) => ({ kind: 'filled' as const, index, key })),
+    { kind: 'add' as const },
+    ...Array.from({ length: Math.max(0, 3 - enabled.length) }, () => ({ kind: 'empty' as const })),
+  ].slice(0, 4);
+
   return (
     <Card>
       <CardHeader className="pb-3">
         <CardTitle className="text-sm">扣费套餐策略</CardTitle>
         <p className="text-xs text-muted-foreground">
-          多个编程套餐共存时，按「生效顺序」依次决定先扣哪个套餐（前者持平再比后者）。
+          多个编程套餐共存时，按 1→4 的顺序依次决定先扣哪个套餐（前者持平再比后者）。点击卡片可切换该位置的策略。
         </p>
       </CardHeader>
       <CardContent className="space-y-4">
-        <div className="grid items-start gap-4 lg:grid-cols-2">
-          {/* 生效顺序：拖拽排序 */}
-          <section className="space-y-2">
-            <div className="flex items-center justify-between">
-              <p className="text-xs font-medium text-muted-foreground">生效顺序</p>
-              {enabled.length > 1 && <p className="text-[11px] text-muted-foreground">按住 ⠿ 拖动调整</p>}
-            </div>
-            {enabled.length === 0 ? (
-              <div className="rounded-lg border border-dashed p-4 text-center text-xs text-muted-foreground">
-                未启用任何策略，请从右侧添加
-              </div>
-            ) : (
-              <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
-                <SortableContext items={enabled} strategy={verticalListSortingStrategy}>
-                  <ol className="space-y-1.5">
-                    {enabled.map((key, i) => (
-                      <SortableStrategyItem key={key} rank={i + 1} meta={metaOf(key)} onRemove={() => remove(key)} />
-                    ))}
-                  </ol>
-                </SortableContext>
-              </DndContext>
-            )}
-          </section>
-
-          {/* 未启用：点击添加 */}
-          <section className="space-y-2">
-            <p className="text-xs font-medium text-muted-foreground">未启用（点击添加；同向互斥，点击将替换已启用的反向项）</p>
-            {disabledList.length === 0 ? (
-              <div className="rounded-lg border border-dashed p-4 text-center text-xs text-muted-foreground">全部策略均已启用</div>
-            ) : (
-              <div className="grid gap-1.5">
-                {disabledList.map((m) => {
-                  const replaces = enabled.includes(SIBLING[m.key]);
-                  return (
-                    <button
-                      key={m.key}
-                      type="button"
-                      onClick={() => add(m.key)}
-                      className="group flex items-center gap-2.5 rounded-lg border border-dashed p-2.5 text-left transition-colors hover:border-primary/50 hover:bg-primary/5"
-                    >
-                      <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md bg-muted text-muted-foreground group-hover:bg-primary/10 group-hover:text-primary">
-                        <Plus className="h-3.5 w-3.5" />
-                      </span>
-                      <span className="min-w-0 flex-1">
-                        <span className="block truncate text-sm font-medium">{m.label}</span>
-                        <span className="block truncate text-xs text-muted-foreground">
-                          {m.hint}{replaces ? `（替换「${metaOf(SIBLING[m.key]).label}」）` : ''}
-                        </span>
-                      </span>
-                      <span className="shrink-0 rounded border px-1.5 py-0.5 text-[10px] text-muted-foreground">{m.group}</span>
+        <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+          {slots.map((slot, i) => {
+            if (slot.kind === 'empty') {
+              return <div key={`empty-${i}`} className="min-h-[7.5rem] rounded-lg border border-dashed opacity-40" />;
+            }
+            if (slot.kind === 'add') {
+              return (
+                <DropdownMenu key="add">
+                  <DropdownMenuTrigger asChild>
+                    <button type="button" className="flex min-h-[7.5rem] flex-col items-center justify-center gap-1.5 rounded-lg border border-dashed p-3 text-muted-foreground transition-colors hover:border-primary/50 hover:bg-primary/5">
+                      <span className="flex h-7 w-7 items-center justify-center rounded-md bg-muted"><Plus className="h-4 w-4" /></span>
+                      <span className="text-xs">添加策略</span>
                     </button>
-                  );
-                })}
-              </div>
-            )}
-          </section>
+                  </DropdownMenuTrigger>
+                  <StrategyMenuContent excludeKeys={enabled} onSelect={addSlot} />
+                </DropdownMenu>
+              );
+            }
+            const meta = metaOf(slot.key);
+            return (
+              <DropdownMenu key={slot.key}>
+                <DropdownMenuTrigger asChild>
+                  <button type="button" className="flex min-h-[7.5rem] flex-col items-start gap-1 rounded-lg border border-primary/50 bg-primary/5 p-3 text-left shadow-sm transition-colors hover:border-primary">
+                    <span className="flex w-full items-center justify-between">
+                      <span className="flex h-6 w-6 items-center justify-center rounded-full bg-primary text-[11px] font-semibold text-primary-foreground">{slot.index + 1}</span>
+                      <ChevronDown className="h-4 w-4 text-muted-foreground" />
+                    </span>
+                    <span className="text-sm font-medium">{meta.label}</span>
+                    <span className="text-xs leading-snug text-muted-foreground">{meta.hint}</span>
+                  </button>
+                </DropdownMenuTrigger>
+                <StrategyMenuContent
+                  excludeKeys={enabled.filter((_, idx) => idx !== slot.index)}
+                  onSelect={(key) => setSlot(slot.index, key)}
+                  onRemove={() => removeSlot(slot.index)}
+                />
+              </DropdownMenu>
+            );
+          })}
         </div>
 
         <div className="flex flex-wrap items-center gap-3 border-t pt-3">
