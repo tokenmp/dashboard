@@ -346,7 +346,7 @@ function PlanStrategyCard({ stored, onSaved }: { stored: string; onSaved: () => 
                 如果你只有一个编程套餐，这里不影响你——所有请求都从它扣额度。
               </p>
               <p className="leading-relaxed text-muted-foreground">
-                当你同时拥有<strong className="text-foreground">多个</strong>编程套餐时，每次请求需要决定从哪个套餐扣。这套规则就是做这件事的：<strong className="text-foreground">按 1→4 的顺序依次比较，排在前面的规则先说了算</strong>；只有前面的规则分不出先后（比如两个套餐同一天到期），才看下一条。
+                当你同时拥有多个编程套餐时，每次请求需要决定从哪个套餐扣。这套规则就是做这件事的：<strong className="text-foreground">按 1→4 的顺序依次比较，排在前面的规则先说了算</strong>；只有前面的规则分不出先后（比如两个套餐同一天到期），才看下一条。
               </p>
               <p className="rounded-md bg-muted px-3 py-2 text-xs leading-relaxed text-muted-foreground">
                 举例：你的顺序是「先用快到期的 → 先用小额度的」。此时你有一个 3 天后到期的日套餐和一个包月套餐——因为“到期时间”能分出先后，每次请求都会先扣日套餐，直到它用完或过期，包月套餐才会被扣。
@@ -367,18 +367,18 @@ function PlanStrategyCard({ stored, onSaved }: { stored: string; onSaved: () => 
             <section className="space-y-1.5">
               <h4 className="text-xs font-semibold text-muted-foreground">三、如何修改</h4>
               <p className="leading-relaxed text-muted-foreground">
-                当前为<strong className="text-foreground">仅展示</strong>状态，不能操作。点击右上角「<strong className="text-foreground">编辑</strong>」后可以调整：
+                当前为仅展示状态，不能操作。点击右上角「编辑」后可以调整：
               </p>
               <table className="w-full text-xs">
                 <tbody className="[&_td]:border-b [&_td]:py-1.5">
-                  <tr><td className="w-20 text-muted-foreground">调整顺序</td><td>按住卡片左侧 <strong className="text-foreground">⠿</strong> 拖动，拖到哪就排到哪</td></tr>
-                  <tr><td className="text-muted-foreground">更换规则</td><td><strong className="text-foreground">点击卡片</strong>，从弹出菜单里选一条新规则</td></tr>
-                  <tr><td className="text-muted-foreground">移除规则</td><td>点击卡片上的 <strong className="text-foreground">✕</strong></td></tr>
-                  <tr><td className="text-muted-foreground">增加规则</td><td>点击「<strong className="text-foreground">＋ 添加策略</strong>」虚线卡</td></tr>
+                  <tr><td className="w-20 text-muted-foreground">调整顺序</td><td>按住卡片左侧 ⠿ 拖动，拖到哪就排到哪</td></tr>
+                  <tr><td className="text-muted-foreground">更换规则</td><td>点击卡片，从弹出菜单里选一条新规则</td></tr>
+                  <tr><td className="text-muted-foreground">移除规则</td><td>点击卡片上的 ✕</td></tr>
+                  <tr><td className="text-muted-foreground">增加规则</td><td>点击「＋ 添加策略」虚线卡</td></tr>
                 </tbody>
               </table>
               <p className="leading-relaxed text-muted-foreground">
-                每种规则只能使用一次（比如选了“先用快到期的”，就不能再选“先用长期的”——它们是同一件事的两个方向）。调整完后点击「<strong className="text-foreground">保存策略</strong>」才会生效；「<strong className="text-foreground">取消编辑</strong>」会放弃所有改动。
+                每种规则只能使用一次（比如选了“先用快到期的”，就不能再选“先用长期的”——它们是同一件事的两个方向）。调整完后点击「保存策略」才会生效；「取消编辑」会放弃所有改动。
               </p>
             </section>
             <div className="border-t pt-3">
