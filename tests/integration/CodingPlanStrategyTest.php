@@ -49,7 +49,7 @@ final class CodingPlanStrategyTest extends IntegrationTestCase
 
         $this->assertSame(CodingPlanStrategy::defaultStored(), $body['coding_plan_strategy']);
         $this->assertSame(
-            ['soonest_expiry', 'smallest_limit', 'least_remaining', 'oldest_first'],
+            ['soonest_expiry', 'least_remaining', 'smallest_limit', 'oldest_first'],
             array_map(fn (CodingPlanStrategy $s) => $s->value, CodingPlanStrategy::DEFAULT_LIST),
         );
     }
