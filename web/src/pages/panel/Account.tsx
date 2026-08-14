@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import type { ReactNode } from 'react';
-import { BatteryMedium, CalendarClock, ChevronDown, Gauge, GripVertical, History, Plus, RefreshCw, RotateCcw, X } from 'lucide-react';
+import { BatteryMedium, CalendarClock, ChevronDown, Gauge, GripVertical, History, Pencil, Plus, RefreshCw, RotateCcw, X } from 'lucide-react';
 import { toast } from 'sonner';
 import { DndContext, KeyboardSensor, PointerSensor, closestCenter, useSensor, useSensors } from '@dnd-kit/core';
 import type { DragEndEvent } from '@dnd-kit/core';
@@ -182,6 +182,8 @@ function PlanStrategyCard({ stored, onSaved }: { stored: string; onSaved: () => 
   const [enabled, setEnabled] = useState<CodingPlanStrategyKey[]>(initial);
   const [saving, setSaving] = useState(false);
   const [dirty, setDirty] = useState(false);
+  // 先决条件：默认只读，点击「编辑」后才开放操作（避免误触，确保用户先理解再操作）
+  const [editing, setEditing] = useState(false);
 
   const setSlot = (index: number, key: CodingPlanStrategyKey) => {
     setDirty(true);
@@ -222,6 +224,7 @@ function PlanStrategyCard({ stored, onSaved }: { stored: string; onSaved: () => 
       await updatePanelPlanStrategyApi(enabled.join(','));
       toast.success('扣费策略已保存');
       setDirty(false);
+      setEditing(false);
       onSaved();
     } catch (e) {
       toast.error((e as Error).message || '保存失败');
@@ -246,6 +249,7 @@ function PlanStrategyCard({ stored, onSaved }: { stored: string; onSaved: () => 
         </p>
       </CardHeader>
       <CardContent className="space-y-4">
+        {editing ? (
         <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
           <SortableContext items={enabled} strategy={rectSortingStrategy}>
             <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
@@ -286,20 +290,45 @@ function PlanStrategyCard({ stored, onSaved }: { stored: string; onSaved: () => 
             </div>
           </SortableContext>
         </DndContext>
+        ) : (
+          <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+            {enabled.map((key, i) => {
+              const meta = metaOf(key);
+              return (
+                <div key={key} className="flex h-11 items-center gap-2 rounded-lg border bg-muted/30 px-2.5" title={meta.hint}>
+                  <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-muted-foreground/15 text-[11px] font-semibold text-muted-foreground">{i + 1}</span>
+                  <span className="min-w-0 flex-1 truncate text-sm text-muted-foreground">{meta.label}</span>
+                </div>
+              );
+            })}
+          </div>
+        )}
 
         <div className="flex flex-wrap items-center gap-3 border-t pt-3">
-          <Button size="sm" disabled={saving || !dirty || enabled.length === 0} onClick={save}>{saving ? '保存中…' : '保存策略'}</Button>
-          <Button
-            size="sm"
-            variant="ghost"
-            disabled={saving || (enabled.length === DEFAULT_ORDER.length && DEFAULT_ORDER.every((k, i) => enabled[i] === k))}
-            title="恢复为系统默认策略顺序"
-            onClick={() => { setDirty(true); setEnabled([...DEFAULT_ORDER]); }}
-          >
-            <RotateCcw className="mr-1 h-3.5 w-3.5" />还原默认
-          </Button>
+          {editing ? (
+            <>
+              <Button size="sm" disabled={saving || !dirty || enabled.length === 0} onClick={save}>{saving ? '保存中…' : '保存策略'}</Button>
+              <Button
+                size="sm"
+                variant="ghost"
+                disabled={saving || (enabled.length === DEFAULT_ORDER.length && DEFAULT_ORDER.every((k, i) => enabled[i] === k))}
+                title="恢复为系统默认策略顺序"
+                onClick={() => { setDirty(true); setEnabled([...DEFAULT_ORDER]); }}
+              >
+                <RotateCcw className="mr-1 h-3.5 w-3.5" />还原默认
+              </Button>
+              <Button size="sm" variant="outline" disabled={saving} onClick={() => { setEnabled(initial); setDirty(false); setEditing(false); }}>取消编辑</Button>
+            </>
+          ) : (
+            <>
+              <Button size="sm" variant="outline" onClick={() => setEditing(true)}>
+                <Pencil className="mr-1 h-3.5 w-3.5" />编辑
+              </Button>
+              <span className="text-[11px] text-muted-foreground">默认仅展示，不可操作；点击「编辑」后可调整策略与扣费顺序</span>
+            </>
+          )}
           <span className="text-[11px] text-muted-foreground">扣费顺序：{enabled.length > 0 ? enabled.map((k, i) => `${i + 1}. ${metaOf(k).label}`).join('；') : '—'}</span>
-          {dirty && <span className="text-xs text-amber-600">有未保存的修改</span>}
+          {editing && dirty && <span className="text-xs text-amber-600">有未保存的修改</span>}
         </div>
       </CardContent>
     </Card>
