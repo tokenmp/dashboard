@@ -82,7 +82,7 @@ sudo docker compose --env-file /opt/tokenmp/versions.env \
 
 - **向后兼容改动**(加可选字段、新端点、加列):单边打 tag 即可。
 - **破坏性改动**(删/改字段类型、改 API 契约、破坏性 schema):先发受影响方的兼容版 → 再发另一边;或两边同步打 tag。
-- **DB 迁移走 expand-then-contract**:先加新列(兼容旧码)→ 部署 → 再删旧列。executor migrations 按 `psql` 字典序执行,天然支持分步。
+- **DB 迁移走 expand-then-contract**:先加新列(兼容旧码)→ 部署 → 再删旧列。迁移唯一源在 executor 仓库 `migrations/`(2026-08-14 起,原 dashboard `db/migrations` 已并入其 `000055`–`000069`),按 `psql` 字典序执行,天然支持分步。
 - `API_KEY_PEPPER`、`MASTER_ENCRYPTION_KEY` 永远只来自 `/opt/tokenmp/secrets.env`,两边一致。
 
 executor `/healthz` 返回 `version`,可与 `versions.env` 交叉核对。
