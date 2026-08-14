@@ -78,7 +78,7 @@ class Usage extends BaseController
             $plan     = $p['billing_plan'];
             $byReq    = $plan === 'coding';
             $res      = $reservedMap[$plan] ?? ['tokens' => 0, 'requests' => 0];
-            $balance  = $byReq ? (int) $p['request_balance'] : (int) $p['token_balance'];
+            $balance  = $byReq ? (float) $p['request_balance'] : (int) $p['token_balance'];
             $reserve  = $byReq ? $res['requests'] : $res['tokens'];
             $plans[]  = [
                 'billingPlan' => $plan,
@@ -108,7 +108,7 @@ class Usage extends BaseController
                 'email'          => $r['email'],
                 'role'           => $r['role'],
                 'tokenBalance'   => (int) $r['token_balance'],
-                'requestBalance' => (int) $r['request_balance'],
+                'requestBalance' => (float) $r['request_balance'],
             ];
         }, $users);
 
