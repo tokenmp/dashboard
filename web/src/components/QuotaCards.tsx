@@ -1,3 +1,4 @@
+import { useEffect, useState } from 'react';
 import type { QuotaItem } from '@/types/dashboard';
 import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
@@ -20,11 +21,41 @@ const BILLING_MODEL_META: Record<string, { label: string; cls: string }> = {
   permanent:  { label: '永久',     cls: 'border-amber-500/50 text-amber-600' },
 };
 
+/** 每分钟走动的「当前时刻」，供重置倒计时刷新。 */
+function useNow(intervalMs = 30_000): number {
+  const [now, setNow] = useState(Date.now());
+  useEffect(() => {
+    const t = setInterval(() => setNow(Date.now()), intervalMs);
+    return () => clearInterval(t);
+  }, [intervalMs]);
+  return now;
+}
+
+/** 距目标时刻的剩余时长文案：3天2小时 / 5小时12分 / 8分 / 已到点 */
+function formatCountdown(ms: number): string {
+  if (ms <= 0) return '已到点';
+  const totalMin = Math.floor(ms / 60_000);
+  const d = Math.floor(totalMin / 1440);
+  const h = Math.floor((totalMin % 1440) / 60);
+  const m = totalMin % 60;
+  if (d > 0) return `${d}天${h}小时`;
+  if (h > 0) return `${h}小时${m}分`;
+  return m > 0 ? `${m}分` : '即将重置';
+}
+
+/** 重置时刻的绝对时间（MM-dd HH:mm，本地时区） */
+function formatResetTime(iso: string): string {
+  const dt = new Date(iso);
+  const pad = (n: number) => String(n).padStart(2, '0');
+  return `${pad(dt.getMonth() + 1)}-${pad(dt.getDate())} ${pad(dt.getHours())}:${pad(dt.getMinutes())}`;
+}
+
 /**
  * 单个计费类型的额度明细卡（window / capped / balance）。
  * 单独导出便于 panel 概览按「槽位」与占位卡混排；dashboard 与 panel 共用。
  */
 export function QuotaCard({ q, className }: { q: QuotaItem; className?: string }) {
+  const now = useNow();
   const name = q.planName || PLAN_LABEL[q.billingPlan] || q.billingPlan;
   return (
     <div className={cn('flex h-full flex-col rounded-lg border p-4', className)}>
@@ -76,8 +107,14 @@ export function QuotaCard({ q, className }: { q: QuotaItem; className?: string }
           ) : (
             <>
               <UsageBar ratio={Math.min(1, used / (limit as number))} />
-              <div className="mt-1 text-right text-[11px] text-muted-foreground tabular-nums">
-                剩余 {formatNumber(remaining)}
+              <div className="mt-1 flex items-center justify-between text-[11px] text-muted-foreground tabular-nums">
+                <span>剩余 {formatNumber(remaining)}</span>
+                {w.resetAt && (
+                  <span title={`重置于 ${formatResetTime(w.resetAt)}`}>
+                    {w.key === 'h5' ? '恢复' : '重置'} · {formatCountdown(new Date(w.resetAt).getTime() - now)}
+                    <span className="ml-1 text-muted-foreground/70">({formatResetTime(w.resetAt)})</span>
+                  </span>
+                )}
               </div>
             </>
           )}

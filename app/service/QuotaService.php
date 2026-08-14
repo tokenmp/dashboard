@@ -396,6 +396,7 @@ class QuotaService
                 . "), b as (select ?::timestamptz as act, ?::timestamptz as wra, ?::timestamptz as exp)"
                 . " select"
                 . " coalesce(sum(case when created_at >= cycle_window_start and created_at <= cycle_window_end then -request_delta else 0 end), 0) as cycle_used,"
+                . " min(mwin.cycle_window_end)::text as cycle_reset,"
                 . $independentUsed
                 . " from usage_ledger, mwin, b"
                 . " where user_id = ? and billing_plan = 'coding' and ledger_type = 'charge' and request_delta < 0"
@@ -405,6 +406,24 @@ class QuotaService
             $monthUsed = (float) ($row['cycle_used'] ?? 0);
         }
 
+        // 5h 滚动窗「下次恢复」时刻：窗内最早一笔用量滚出窗口的时间（无用量则 null）
+        $h5ResetRaw = Db::connect('pgsql')->query(
+            "select (min(created_at) + interval '5 hours')::text as h5_reset"
+            . " from usage_ledger"
+            . " where user_id = ? and billing_plan = 'coding' and ledger_type = 'charge' and request_delta < 0"
+            . " and user_plan_id = ?::uuid"
+            . " and created_at >= greatest(now() - interval '5 hours', ?::timestamptz, coalesce(?::timestamptz, '-infinity'::timestamptz))"
+            . " and (?::timestamptz is null or created_at <= ?::timestamptz)",
+            [$userId, $plan['bindingId'], $act, $wra, $exp, $exp]
+        )[0]['h5_reset'] ?? null;
+        $h5Reset = $h5ResetRaw !== null ? (new \DateTimeImmutable($h5ResetRaw))->format(\DateTimeInterface::ATOM) : null;
+        // 周（自然周，沪时区）重置时刻 = 下周一 00:00
+        $nowCst    = new \DateTimeImmutable('now', new \DateTimeZone('Asia/Shanghai'));
+        $dow       = (int) $nowCst->format('N'); // 1=周一 … 7=周日
+        $weekReset = $nowCst->setTime(0, 0, 0)->modify('-' . ($dow - 1) . ' days')->modify('+7 days')->format(\DateTimeInterface::ATOM);
+        $cycleReset = isset($row['cycle_reset']) && $row['cycle_reset'] !== null
+            ? (new \DateTimeImmutable($row['cycle_reset']))->format(\DateTimeInterface::ATOM) : null;
+
         $label     = $this->cycleLabel($cycleDays);
         $h5Used    = max(0, (float) ($row['h5_used'] ?? 0));
         $weekUsed  = max(0, (float) ($row['week_used'] ?? 0));
@@ -412,16 +431,16 @@ class QuotaService
 
         $windows = [];
         if ($totalLimit !== null && $totalLimit > 0) {
-            $windows[] = ['key' => 'total', 'label' => '总量', 'limit' => $totalLimit, 'used' => $totalUsed];
+            $windows[] = ['key' => 'total', 'label' => '总量', 'limit' => $totalLimit, 'used' => $totalUsed, 'resetAt' => null];
         }
         if (!$isPermanent && $cycleLimit !== null && $cycleLimit > 0) {
-            $windows[] = ['key' => 'month', 'label' => $label, 'limit' => $cycleLimit, 'used' => max(0, $monthUsed)];
+            $windows[] = ['key' => 'month', 'label' => $label, 'limit' => $cycleLimit, 'used' => max(0, $monthUsed), 'resetAt' => $cycleReset];
         }
         if ($weekLimit > 0) {
-            $windows[] = ['key' => 'week', 'label' => '本周', 'limit' => $weekLimit, 'used' => $weekUsed];
+            $windows[] = ['key' => 'week', 'label' => '本周', 'limit' => $weekLimit, 'used' => $weekUsed, 'resetAt' => $weekReset];
         }
         if ($h5Limit > 0) {
-            $windows[] = ['key' => 'h5', 'label' => '近 5 小时', 'limit' => $h5Limit, 'used' => $h5Used];
+            $windows[] = ['key' => 'h5', 'label' => '近 5 小时', 'limit' => $h5Limit, 'used' => $h5Used, 'resetAt' => $h5Reset];
         }
         if (!$windows) {
             // 全不限套餐：回退展示当前周期已用，避免整块空白

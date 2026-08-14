@@ -41,6 +41,8 @@ export interface QuotaWindow {
   /** 套餐限额，null 表示不限 */
   limit: number | null;
   used: number;
+  /** 窗口重置时刻（ISO-8601）；null=无固定重置（总量桶 / 5h 窗内暂无用量） */
+  resetAt?: string | null;
 }
 
 /**
