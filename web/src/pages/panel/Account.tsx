@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import type { ReactNode } from 'react';
-import { ChevronDown, GripVertical, Plus, RefreshCw, RotateCcw } from 'lucide-react';
+import { BatteryMedium, CalendarClock, ChevronDown, Gauge, GripVertical, History, Plus, RefreshCw, RotateCcw, X } from 'lucide-react';
 import { toast } from 'sonner';
 import { DndContext, KeyboardSensor, PointerSensor, closestCenter, useSensor, useSensors } from '@dnd-kit/core';
 import type { DragEndEvent } from '@dnd-kit/core';
@@ -8,7 +8,7 @@ import { SortableContext, arrayMove, rectSortingStrategy, sortableKeyboardCoordi
 import { CSS } from '@dnd-kit/utilities';
 import { getPanelProfileApi, updatePanelPlanStrategyApi } from '@/api/panel';
 import { cn } from '@/lib/utils';
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { useAsync } from '@/hooks/useAsync';
 import { StatusBadge } from '@/components/StatusBadge';
 import { Badge } from '@/components/ui/badge';
@@ -58,24 +58,37 @@ function Account() {
 /* --------------------------- 扣费套餐策略 --------------------------- */
 
 /** 策略元数据（与后端枚举一一对应；key 为 CodingPlanStrategyKey 联合类型，禁止任意 string）
- *  dim/dir：槽位按钮上的短标签（维度 · 方向）；label/hint：完整名称与说明（菜单里展示） */
-const STRATEGY_META: { key: CodingPlanStrategyKey; label: string; hint: string; group: string; dim: string; dir: string }[] = [
-  { key: 'soonest_expiry', label: '先用快到期的套餐', hint: '即将过期的额度先花掉，避免到期作废', group: '到期', dim: '到期', dir: '最近' },
-  { key: 'latest_expiry', label: '先用长期的套餐', hint: '先消耗有效期长的，短期套餐留着后面用', group: '到期', dim: '到期', dir: '最晚' },
-  { key: 'smallest_limit', label: '先用小额度的套餐', hint: '先把小额度套餐用完，大额度留着以后慢慢用', group: '限额', dim: '限额', dir: '小' },
-  { key: 'largest_limit', label: '先用大额度的套餐', hint: '优先消耗大额度套餐，小额度当备用', group: '限额', dim: '限额', dir: '大' },
-  { key: 'least_remaining', label: '先用快用完的套餐', hint: '先把剩得最少的套餐用光，再换下一个', group: '剩余', dim: '剩余', dir: '最少' },
-  { key: 'most_remaining', label: '先用额度充裕的套餐', hint: '优先消耗剩余最多的套餐', group: '剩余', dim: '剩余', dir: '最多' },
-  { key: 'oldest_first', label: '先用最早开通的套餐', hint: '按开通顺序排队，先开通的先用完', group: '激活', dim: '激活', dir: '先' },
-  { key: 'newest_first', label: '先用最新开通的套餐', hint: '新拿到的套餐先用，旧的留着', group: '激活', dim: '激活', dir: '新' },
+ *  emph：差异关键词（菜单中主色加粗，聚焦视觉）；label/hint：完整行为句与后果说明 */
+const STRATEGY_META: { key: CodingPlanStrategyKey; label: string; emph: string; hint: string; group: string; dim: string; dir: string }[] = [
+  { key: 'soonest_expiry', label: '先用快到期的套餐', emph: '快到期', hint: '即将过期的额度先花掉，避免到期作废', group: '到期', dim: '到期', dir: '最近' },
+  { key: 'latest_expiry', label: '先用长期的套餐', emph: '长期', hint: '先消耗有效期长的，短期套餐留着后面用', group: '到期', dim: '到期', dir: '最晚' },
+  { key: 'smallest_limit', label: '先用小额度的套餐', emph: '小额度', hint: '先把小额度套餐用完，大额度留着以后慢慢用', group: '限额', dim: '限额', dir: '小' },
+  { key: 'largest_limit', label: '先用大额度的套餐', emph: '大额度', hint: '优先消耗大额度套餐，小额度当备用', group: '限额', dim: '限额', dir: '大' },
+  { key: 'least_remaining', label: '先用快用完的套餐', emph: '快用完', hint: '先把剩得最少的套餐用光，再换下一个', group: '剩余', dim: '剩余', dir: '最少' },
+  { key: 'most_remaining', label: '先用额度充裕的套餐', emph: '额度充裕', hint: '优先消耗剩余最多的套餐', group: '剩余', dim: '剩余', dir: '最多' },
+  { key: 'oldest_first', label: '先用最早开通的套餐', emph: '最早', hint: '按开通顺序排队，先开通的先用完', group: '激活', dim: '激活', dir: '先' },
+  { key: 'newest_first', label: '先用最新开通的套餐', emph: '最新', hint: '新拿到的套餐先用，旧的留着', group: '激活', dim: '激活', dir: '新' },
 ];
 
 const ALL_KEYS = STRATEGY_META.map((m) => m.key);
 /** 菜单分组顺序（同组两条目相邻展示） */
 const GROUP_ORDER = ['到期', '限额', '剩余', '激活'];
+/** 分组图标（视觉锚点） */
+const GROUP_ICON: Record<string, typeof CalendarClock> = {
+  到期: CalendarClock,
+  限额: Gauge,
+  剩余: BatteryMedium,
+  激活: History,
+};
 const metaOf = (key: CodingPlanStrategyKey) => STRATEGY_META.find((m) => m.key === key)!;
 /** 默认策略（与后端 CodingPlanStrategy::DEFAULT_LIST 一致） */
 const DEFAULT_ORDER: CodingPlanStrategyKey[] = ['soonest_expiry', 'smallest_limit', 'least_remaining', 'oldest_first'];
+/** 把 label 按 emph 关键词切成三段，供加重渲染 */
+function splitEmphasis(label: string, emph: string): [string, string, string] {
+  const i = label.indexOf(emph);
+  if (i < 0) return [label, '', ''];
+  return [label.slice(0, i), emph, label.slice(i + emph.length)];
+}
 /** 可拖拽的策略槽位：⠿ 把手拖动排序（dnd-kit，其他卡片实时让位），
  *  卡片主体点击仍弹菜单切换策略——把手与菜单触发分离，互不干扰 */
 function SortableStrategySlot({ rank, meta, visibleGroups, onSet, onRemove }: {
@@ -106,48 +119,53 @@ function SortableStrategySlot({ rank, meta, visibleGroups, onSet, onRemove }: {
           <button type="button" className="flex h-11 min-w-0 flex-1 items-center gap-2 rounded-lg text-left">
             <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-primary text-[11px] font-semibold text-primary-foreground">{rank}</span>
             <span className="min-w-0 flex-1 truncate text-sm font-medium" title={meta.hint}>{meta.label}</span>
+            <button
+              type="button"
+              className="flex h-6 w-6 shrink-0 items-center justify-center rounded text-muted-foreground/60 transition-colors hover:bg-muted hover:text-destructive"
+              title="移除此策略"
+              onClick={onRemove}
+            >
+              <X className="h-3.5 w-3.5" />
+            </button>
             <ChevronDown className="h-4 w-4 shrink-0 text-muted-foreground" />
           </button>
         </DropdownMenuTrigger>
-        <StrategyMenuContent
-          visibleGroups={visibleGroups}
-          onSelect={onSet}
-          onRemove={onRemove}
-        />
+        <StrategyMenuContent visibleGroups={visibleGroups} onSelect={onSet} />
       </DropdownMenu>
     </div>
   );
 }
 
-/** 策略下拉菜单内容：只展示「本槽位维度 + 未被占用的维度」，
- *  已被其他槽位占用的维度整组隐藏（不占菜单空间）。 */
-function StrategyMenuContent({ visibleGroups, onSelect, onRemove }: {
+/** 策略下拉菜单内容：只展示「本槽位维度 + 未被占用的维度」，已占用的整组隐藏。
+ *  分组头带图标；条目差异关键词（emph）主色加粗聚焦视觉；限高滚动防溢出。 */
+function StrategyMenuContent({ visibleGroups, onSelect }: {
   visibleGroups: string[];
   onSelect: (key: CodingPlanStrategyKey) => void;
-  onRemove?: () => void;
 }) {
   return (
-    <DropdownMenuContent align="start" className="w-72">
+    <DropdownMenuContent align="start" className="max-h-72 w-72 overflow-y-auto">
       {visibleGroups.flatMap((group) => {
+        const Icon = GROUP_ICON[group];
         const items = STRATEGY_META.filter((m) => m.group === group);
         return [
-          <DropdownMenuLabel key={`g-${group}`} className="text-[11px] text-muted-foreground">按{group}排序</DropdownMenuLabel>,
-          ...items.map((m) => (
-            <DropdownMenuItem key={m.key} onClick={() => onSelect(m.key)}>
-              <span className="flex min-w-0 flex-1 flex-col">
-                <span className="text-sm">{m.label}</span>
-                <span className="text-xs text-muted-foreground">{m.hint}</span>
-              </span>
-            </DropdownMenuItem>
-          )),
+          <DropdownMenuLabel key={`g-${group}`} className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
+            {Icon && <Icon className="h-3.5 w-3.5" />}按{group}排序
+          </DropdownMenuLabel>,
+          ...items.map((m) => {
+            const [pre, emph, post] = splitEmphasis(m.label, m.emph);
+            return (
+              <DropdownMenuItem key={m.key} onClick={() => onSelect(m.key)}>
+                <span className="flex min-w-0 flex-1 flex-col">
+                  <span className="text-sm">
+                    {pre}<span className="font-semibold text-primary">{emph}</span>{post}
+                  </span>
+                  <span className="text-xs text-muted-foreground">{m.hint}</span>
+                </span>
+              </DropdownMenuItem>
+            );
+          }),
         ];
       })}
-      {onRemove && (
-        <>
-          <DropdownMenuSeparator />
-          <DropdownMenuItem className="text-destructive focus:text-destructive" onClick={onRemove}>移除此条</DropdownMenuItem>
-        </>
-      )}
     </DropdownMenuContent>
   );
 }
