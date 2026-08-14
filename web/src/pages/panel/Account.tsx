@@ -119,19 +119,20 @@ function SortableStrategySlot({ rank, meta, visibleGroups, onSet, onRemove }: {
           <button type="button" className="flex h-11 min-w-0 flex-1 items-center gap-2 rounded-lg text-left">
             <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-primary text-[11px] font-semibold text-primary-foreground">{rank}</span>
             <span className="min-w-0 flex-1 truncate text-sm font-medium" title={meta.hint}>{meta.label}</span>
-            <button
-              type="button"
-              className="flex h-6 w-6 shrink-0 items-center justify-center rounded text-muted-foreground/60 transition-colors hover:bg-muted hover:text-destructive"
-              title="移除此策略"
-              onClick={onRemove}
-            >
-              <X className="h-3.5 w-3.5" />
-            </button>
             <ChevronDown className="h-4 w-4 shrink-0 text-muted-foreground" />
           </button>
         </DropdownMenuTrigger>
         <StrategyMenuContent visibleGroups={visibleGroups} onSelect={onSet} />
       </DropdownMenu>
+      {/* X 与菜单触发器为兄弟节点：嵌套在 trigger 内会导致点击冒泡误开菜单 */}
+      <button
+        type="button"
+        className="flex h-6 w-6 shrink-0 items-center justify-center rounded text-muted-foreground/60 transition-colors hover:bg-muted hover:text-destructive"
+        title="移除此策略"
+        onClick={onRemove}
+      >
+        <X className="h-3.5 w-3.5" />
+      </button>
     </div>
   );
 }
