@@ -1,8 +1,13 @@
 import { useMemo, useState } from 'react';
 import type { ReactNode } from 'react';
-import { ArrowDown, ArrowLeftRight, RefreshCw } from 'lucide-react';
+import { GripVertical, Plus, RefreshCw, X } from 'lucide-react';
 import { toast } from 'sonner';
+import { DndContext, KeyboardSensor, PointerSensor, closestCenter, useSensor, useSensors } from '@dnd-kit/core';
+import type { DragEndEvent } from '@dnd-kit/core';
+import { SortableContext, arrayMove, sortableKeyboardCoordinates, useSortable, verticalListSortingStrategy } from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
 import { getPanelProfileApi, updatePanelPlanStrategyApi } from '@/api/panel';
+import { cn } from '@/lib/utils';
 import { useAsync } from '@/hooks/useAsync';
 import { StatusBadge } from '@/components/StatusBadge';
 import { Badge } from '@/components/ui/badge';
@@ -53,17 +58,51 @@ function Account() {
 
 /** 策略元数据（与后端枚举一一对应；key 为 CodingPlanStrategyKey 联合类型，禁止任意 string） */
 const STRATEGY_META: { key: CodingPlanStrategyKey; label: string; hint: string; group: string }[] = [
-  { key: 'largest_limit', label: '限额大优先', hint: '先扣限额大的套餐', group: '限额' },
-  { key: 'smallest_limit', label: '限额小优先', hint: '先消耗小套餐', group: '限额' },
-  { key: 'least_remaining', label: '剩余最少优先', hint: '把快用完的打满再换新', group: '剩余' },
-  { key: 'most_remaining', label: '剩余最多优先', hint: '先用富余的套餐', group: '剩余' },
   { key: 'soonest_expiry', label: '最近到期优先', hint: '快过期的先用，避免浪费', group: '到期' },
   { key: 'latest_expiry', label: '最晚到期优先', hint: '长期套餐先垫着用', group: '到期' },
+  { key: 'smallest_limit', label: '限额小优先', hint: '先消耗小套餐', group: '限额' },
+  { key: 'largest_limit', label: '限额大优先', hint: '先扣限额大的套餐', group: '限额' },
+  { key: 'least_remaining', label: '剩余最少优先', hint: '把快用完的打满再换新', group: '剩余' },
+  { key: 'most_remaining', label: '剩余最多优先', hint: '先用富余的套餐', group: '剩余' },
   { key: 'oldest_first', label: '先激活先用', hint: 'FIFO，把已开通的用完', group: '激活' },
   { key: 'newest_first', label: '最新激活先用', hint: '优先新套餐', group: '激活' },
 ];
 
 const ALL_KEYS = STRATEGY_META.map((m) => m.key);
+const metaOf = (key: CodingPlanStrategyKey) => STRATEGY_META.find((m) => m.key === key)!;
+
+/** 可拖拽的策略条目（dnd-kit useSortable：支持鼠标/触屏/键盘） */
+function SortableStrategyItem({ rank, meta, onRemove }: { rank: number; meta: (typeof STRATEGY_META)[number]; onRemove: () => void }) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: meta.key });
+  return (
+    <li
+      ref={setNodeRef}
+      style={{ transform: CSS.Transform.toString(transform), transition }}
+      className={cn(
+        'flex items-center gap-3 rounded-lg border bg-card p-2.5 pl-2 shadow-sm',
+        isDragging && 'z-10 opacity-70 shadow-md ring-1 ring-primary/40',
+      )}
+    >
+      <button
+        type="button"
+        className="flex h-7 w-6 shrink-0 cursor-grab touch-none items-center justify-center rounded text-muted-foreground/50 hover:bg-muted active:cursor-grabbing"
+        title="拖动调整优先级"
+        {...attributes}
+        {...listeners}
+      >
+        <GripVertical className="h-4 w-4" />
+      </button>
+      <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-primary/10 text-[11px] font-semibold text-primary">{rank}</span>
+      <span className="min-w-0 flex-1">
+        <span className="block truncate text-sm font-medium">{meta.label}</span>
+        <span className="block truncate text-xs text-muted-foreground">{meta.hint}</span>
+      </span>
+      <Button type="button" variant="ghost" size="icon" className="h-7 w-7 shrink-0 text-muted-foreground hover:text-destructive" title="移除" onClick={onRemove}>
+        <X className="h-3.5 w-3.5" />
+      </Button>
+    </li>
+  );
+}
 
 function PlanStrategyCard({ stored, onSaved }: { stored: string; onSaved: () => void }) {
   // 解析为有序启用列表；非法内容回退默认（与后端 lenient 解析一致）
@@ -77,18 +116,29 @@ function PlanStrategyCard({ stored, onSaved }: { stored: string; onSaved: () => 
   const [saving, setSaving] = useState(false);
   const [dirty, setDirty] = useState(false);
 
-  const toggle = (key: CodingPlanStrategyKey) => {
+  // PointerSensor 带 4px 激活距离：避免误触点击；KeyboardSensor 提供无障碍排序
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 4 } }),
+    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
+  );
+
+  const disabledList = STRATEGY_META.filter((m) => !enabled.includes(m.key));
+
+  const add = (key: CodingPlanStrategyKey) => {
     setDirty(true);
-    setEnabled((prev) => (prev.includes(key) ? prev.filter((k) => k !== key) : [...prev, key]));
+    setEnabled((prev) => [...prev, key]);
   };
-  const move = (index: number, dir: -1 | 1) => {
-    const target = index + dir;
-    if (target < 0 || target >= enabled.length) return;
+  const remove = (key: CodingPlanStrategyKey) => {
+    setDirty(true);
+    setEnabled((prev) => prev.filter((k) => k !== key));
+  };
+  const handleDragEnd = ({ active, over }: DragEndEvent) => {
+    if (!over || active.id === over.id) return;
     setDirty(true);
     setEnabled((prev) => {
-      const next = [...prev];
-      [next[index], next[target]] = [next[target], next[index]];
-      return next;
+      const from = prev.indexOf(active.id as CodingPlanStrategyKey);
+      const to = prev.indexOf(over.id as CodingPlanStrategyKey);
+      return arrayMove(prev, from, to);
     });
   };
 
@@ -109,55 +159,70 @@ function PlanStrategyCard({ stored, onSaved }: { stored: string; onSaved: () => 
 
   return (
     <Card>
-      <CardHeader className="pb-2">
+      <CardHeader className="pb-3">
         <CardTitle className="text-sm">扣费套餐策略</CardTitle>
         <p className="text-xs text-muted-foreground">
-          多个编程套餐共存时，按下方已启用策略的先后顺序决定先扣哪个套餐（前者持平再比后者）。
+          多个编程套餐共存时，按「生效顺序」依次决定先扣哪个套餐（前者持平再比后者）。
         </p>
       </CardHeader>
       <CardContent className="space-y-4">
-        <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-          {STRATEGY_META.map((m) => {
-            const active = enabled.includes(m.key);
-            return (
-              <button
-                key={m.key}
-                type="button"
-                onClick={() => toggle(m.key)}
-                className={`flex items-center justify-between rounded-lg border p-2.5 text-left text-sm transition-colors ${active ? 'border-primary/60 bg-primary/5' : 'hover:bg-muted/60'}`}
-              >
-                <span>
-                  <span className="font-medium">{m.label}</span>
-                  <span className="ml-2 text-xs text-muted-foreground">{m.hint}</span>
-                </span>
-                <span className="ml-2 shrink-0 text-xs text-muted-foreground">{active ? `#${enabled.indexOf(m.key) + 1}` : '未启用'}</span>
-              </button>
-            );
-          })}
+        <div className="grid items-start gap-4 lg:grid-cols-2">
+          {/* 生效顺序：拖拽排序 */}
+          <section className="space-y-2">
+            <div className="flex items-center justify-between">
+              <p className="text-xs font-medium text-muted-foreground">生效顺序</p>
+              {enabled.length > 1 && <p className="text-[11px] text-muted-foreground">按住 ⠿ 拖动调整</p>}
+            </div>
+            {enabled.length === 0 ? (
+              <div className="rounded-lg border border-dashed p-4 text-center text-xs text-muted-foreground">
+                未启用任何策略，请从右侧添加
+              </div>
+            ) : (
+              <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
+                <SortableContext items={enabled} strategy={verticalListSortingStrategy}>
+                  <ol className="space-y-1.5">
+                    {enabled.map((key, i) => (
+                      <SortableStrategyItem key={key} rank={i + 1} meta={metaOf(key)} onRemove={() => remove(key)} />
+                    ))}
+                  </ol>
+                </SortableContext>
+              </DndContext>
+            )}
+          </section>
+
+          {/* 未启用：点击添加 */}
+          <section className="space-y-2">
+            <p className="text-xs font-medium text-muted-foreground">未启用（点击添加）</p>
+            {disabledList.length === 0 ? (
+              <div className="rounded-lg border border-dashed p-4 text-center text-xs text-muted-foreground">全部策略均已启用</div>
+            ) : (
+              <div className="grid gap-1.5">
+                {disabledList.map((m) => (
+                  <button
+                    key={m.key}
+                    type="button"
+                    onClick={() => add(m.key)}
+                    className="group flex items-center gap-2.5 rounded-lg border border-dashed p-2.5 text-left transition-colors hover:border-primary/50 hover:bg-primary/5"
+                  >
+                    <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md bg-muted text-muted-foreground group-hover:bg-primary/10 group-hover:text-primary">
+                      <Plus className="h-3.5 w-3.5" />
+                    </span>
+                    <span className="min-w-0 flex-1">
+                      <span className="block truncate text-sm font-medium">{m.label}</span>
+                      <span className="block truncate text-xs text-muted-foreground">{m.hint}</span>
+                    </span>
+                    <span className="shrink-0 rounded border px-1.5 py-0.5 text-[10px] text-muted-foreground">{m.group}</span>
+                  </button>
+                ))}
+              </div>
+            )}
+          </section>
         </div>
 
-        {enabled.length > 0 && (
-          <div className="space-y-1.5">
-            <p className="text-xs font-medium text-muted-foreground">生效顺序（上方调优先级）</p>
-            {enabled.map((key, i) => {
-              const meta = STRATEGY_META.find((m) => m.key === key)!;
-              return (
-                <div key={key} className="flex items-center gap-2 rounded-md border px-2.5 py-1.5 text-sm">
-                  <span className="w-5 text-xs text-muted-foreground">{i + 1}.</span>
-                  <span className="font-medium">{meta.label}</span>
-                  <span className="ml-auto flex gap-1">
-                    <Button type="button" variant="ghost" size="icon" className="h-6 w-6" disabled={i === 0} onClick={() => move(i, -1)} title="上移"><ArrowDown className="h-3.5 w-3.5 rotate-180" /></Button>
-                    <Button type="button" variant="ghost" size="icon" className="h-6 w-6" disabled={i === enabled.length - 1} onClick={() => move(i, 1)} title="下移"><ArrowDown className="h-3.5 w-3.5" /></Button>
-                  </span>
-                </div>
-              );
-            })}
-          </div>
-        )}
-
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-3 border-t pt-3">
           <Button size="sm" disabled={saving || !dirty || enabled.length === 0} onClick={save}>{saving ? '保存中…' : '保存策略'}</Button>
-          {dirty && <span className="text-xs text-muted-foreground"><ArrowLeftRight className="mr-1 inline h-3 w-3" />有未保存的修改</span>}
+          <span className="font-mono text-[11px] text-muted-foreground">当前顺序：{enabled.length > 0 ? enabled.map((k) => metaOf(k).label).join(' → ') : '—'}</span>
+          {dirty && <span className="text-xs text-amber-600">有未保存的修改</span>}
         </div>
       </CardContent>
     </Card>
