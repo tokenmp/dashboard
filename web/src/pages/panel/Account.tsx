@@ -1,8 +1,13 @@
 import { useMemo, useState } from 'react';
 import type { ReactNode } from 'react';
-import { ChevronDown, ChevronLeft, ChevronRight, Plus, RefreshCw, RotateCcw } from 'lucide-react';
+import { ChevronDown, GripVertical, Plus, RefreshCw, RotateCcw } from 'lucide-react';
 import { toast } from 'sonner';
+import { DndContext, KeyboardSensor, PointerSensor, closestCenter, useSensor, useSensors } from '@dnd-kit/core';
+import type { DragEndEvent } from '@dnd-kit/core';
+import { SortableContext, arrayMove, rectSortingStrategy, sortableKeyboardCoordinates, useSortable } from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
 import { getPanelProfileApi, updatePanelPlanStrategyApi } from '@/api/panel';
+import { cn } from '@/lib/utils';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { useAsync } from '@/hooks/useAsync';
 import { StatusBadge } from '@/components/StatusBadge';
@@ -71,6 +76,49 @@ const GROUP_ORDER = ['到期', '限额', '剩余', '激活'];
 const metaOf = (key: CodingPlanStrategyKey) => STRATEGY_META.find((m) => m.key === key)!;
 /** 默认策略（与后端 CodingPlanStrategy::DEFAULT_LIST 一致） */
 const DEFAULT_ORDER: CodingPlanStrategyKey[] = ['soonest_expiry', 'smallest_limit', 'least_remaining', 'oldest_first'];
+/** 可拖拽的策略槽位：⠿ 把手拖动排序（dnd-kit，其他卡片实时让位），
+ *  卡片主体点击仍弹菜单切换策略——把手与菜单触发分离，互不干扰 */
+function SortableStrategySlot({ rank, meta, visibleGroups, onSet, onRemove }: {
+  rank: number;
+  meta: (typeof STRATEGY_META)[number];
+  visibleGroups: string[];
+  onSet: (key: CodingPlanStrategyKey) => void;
+  onRemove: () => void;
+}) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: meta.key });
+  return (
+    <div
+      ref={setNodeRef}
+      style={{ transform: CSS.Transform.toString(transform), transition }}
+      className={cn('flex h-11 items-center gap-1 rounded-lg border border-primary/50 bg-primary/5 pl-1.5 pr-2.5 shadow-sm', isDragging && 'z-10 opacity-70 ring-1 ring-primary/40')}
+    >
+      <button
+        type="button"
+        className="flex h-8 w-5 shrink-0 cursor-grab touch-none items-center justify-center rounded text-muted-foreground/50 hover:bg-muted active:cursor-grabbing"
+        title="拖动调整顺序"
+        {...attributes}
+        {...listeners}
+      >
+        <GripVertical className="h-4 w-4" />
+      </button>
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <button type="button" className="flex h-11 min-w-0 flex-1 items-center gap-2 rounded-lg text-left">
+            <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-primary text-[11px] font-semibold text-primary-foreground">{rank}</span>
+            <span className="min-w-0 flex-1 truncate text-sm font-medium">{meta.dim} · {meta.dir}</span>
+            <ChevronDown className="h-4 w-4 shrink-0 text-muted-foreground" />
+          </button>
+        </DropdownMenuTrigger>
+        <StrategyMenuContent
+          visibleGroups={visibleGroups}
+          onSelect={onSet}
+          onRemove={onRemove}
+        />
+      </DropdownMenu>
+    </div>
+  );
+}
+
 /** 策略下拉菜单内容：只展示「本槽位维度 + 未被占用的维度」，
  *  已被其他槽位占用的维度整组隐藏（不占菜单空间）。 */
 function StrategyMenuContent({ visibleGroups, onSelect, onRemove }: {
@@ -128,13 +176,17 @@ function PlanStrategyCard({ stored, onSaved }: { stored: string; onSaved: () => 
     setDirty(true);
     setEnabled((prev) => prev.filter((_, i) => i !== index));
   };
-  /** 左右移动槽位调序（与相邻槽位交换） */
-  const moveSlot = (index: number, dir: -1 | 1) => {
-    const target = index + dir;
-    if (target < 0 || target >= enabled.length) return;
+  /** 拖拽调序：卡片拖到哪个位置就落哪个位置（dnd-kit 让位动画提供可感知反馈） */
+  const handleDragEnd = ({ active, over }: DragEndEvent) => {
+    if (!over || active.id === over.id) return;
     setDirty(true);
-    setEnabled((prev) => prev.map((k, i) => (i === index ? prev[target] : i === target ? prev[index] : k)));
+    setEnabled((prev) => arrayMove(prev, prev.indexOf(active.id as CodingPlanStrategyKey), prev.indexOf(over.id as CodingPlanStrategyKey)));
   };
+  // 4px 激活距离：点击（弹菜单）不触发拖拽
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 4 } }),
+    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
+  );
   /** 其他槽位已占用的维度集合 */
   const occupiedGroups = (exceptIndex?: number) =>
     new Set(enabled.filter((_, i) => i !== exceptIndex).map((k) => metaOf(k).group));
@@ -171,63 +223,50 @@ function PlanStrategyCard({ stored, onSaved }: { stored: string; onSaved: () => 
       <CardHeader className="pb-3">
         <CardTitle className="text-sm">扣费套餐策略</CardTitle>
         <p className="text-xs text-muted-foreground">
-          多个编程套餐共存时，按 1→4 的顺序依次决定先扣哪个套餐（前者持平再比后者）。点击槽位切换策略（同一维度只能出现一次，已占用的维度不再列出）；‹ › 调整顺序。
+          多个编程套餐共存时，按 1→4 的顺序依次决定先扣哪个套餐（前者持平再比后者）。点击卡片切换策略（同一维度只能出现一次，已占用的维度不再列出）；按住 ⠿ 拖动调整顺序。
         </p>
       </CardHeader>
       <CardContent className="space-y-4">
-        <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
-          {slots.map((slot, i) => {
-            if (slot.kind === 'empty') {
-              return <div key={`empty-${i}`} className="h-11 rounded-lg border border-dashed opacity-40" />;
-            }
-            if (slot.kind === 'add') {
-              const free = freeGroupsFor();
-              if (free.length === 0) return <div key="add-none" className="h-11 rounded-lg border border-dashed opacity-40" />;
-              return (
-                <DropdownMenu key="add">
-                  <DropdownMenuTrigger asChild>
-                    <button type="button" className="flex h-11 items-center justify-center gap-1.5 rounded-lg border border-dashed text-sm text-muted-foreground transition-colors hover:border-primary/50 hover:bg-primary/5">
-                      <Plus className="h-4 w-4" />添加策略
-                    </button>
-                  </DropdownMenuTrigger>
-                  <StrategyMenuContent visibleGroups={free} onSelect={addSlot} />
-                </DropdownMenu>
-              );
-            }
-            const meta = metaOf(slot.key);
-            const ownFirst = freeGroupsFor(slot.index).includes(meta.group);
-            const visibleGroups = ownFirst
-              ? [meta.group, ...freeGroupsFor(slot.index).filter((g) => g !== meta.group)]
-              : freeGroupsFor(slot.index);
-            return (
-              <div key={slot.key} className="flex flex-col gap-1">
-                <DropdownMenu>
-                  <DropdownMenuTrigger asChild>
-                    <button type="button" className="flex h-11 w-full items-center gap-2 rounded-lg border border-primary/50 bg-primary/5 px-2.5 text-left shadow-sm transition-colors hover:border-primary">
-                      <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-primary text-[11px] font-semibold text-primary-foreground">{slot.index + 1}</span>
-                      <span className="min-w-0 flex-1 truncate text-sm font-medium">{meta.dim} · {meta.dir}</span>
-                      <ChevronDown className="h-4 w-4 shrink-0 text-muted-foreground" />
-                    </button>
-                  </DropdownMenuTrigger>
-                  <StrategyMenuContent
+        <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
+          <SortableContext items={enabled} strategy={rectSortingStrategy}>
+            <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+              {slots.map((slot, i) => {
+                if (slot.kind === 'empty') {
+                  return <div key={`empty-${i}`} className="h-11 rounded-lg border border-dashed opacity-40" />;
+                }
+                if (slot.kind === 'add') {
+                  const free = freeGroupsFor();
+                  if (free.length === 0) return <div key="add-none" className="h-11 rounded-lg border border-dashed opacity-40" />;
+                  return (
+                    <DropdownMenu key="add">
+                      <DropdownMenuTrigger asChild>
+                        <button type="button" className="flex h-11 items-center justify-center gap-1.5 rounded-lg border border-dashed text-sm text-muted-foreground transition-colors hover:border-primary/50 hover:bg-primary/5">
+                          <Plus className="h-4 w-4" />添加策略
+                        </button>
+                      </DropdownMenuTrigger>
+                      <StrategyMenuContent visibleGroups={free} onSelect={addSlot} />
+                    </DropdownMenu>
+                  );
+                }
+                const meta = metaOf(slot.key);
+                const free = freeGroupsFor(slot.index);
+                const visibleGroups = free.includes(meta.group)
+                  ? [meta.group, ...free.filter((g) => g !== meta.group)]
+                  : free;
+                return (
+                  <SortableStrategySlot
+                    key={slot.key}
+                    rank={slot.index + 1}
+                    meta={meta}
                     visibleGroups={visibleGroups}
-                    onSelect={(key) => setSlot(slot.index, key)}
+                    onSet={(key) => setSlot(slot.index, key)}
                     onRemove={() => removeSlot(slot.index)}
                   />
-                </DropdownMenu>
-                {/* 调序：置于卡片下方，左=移动到上一项，右=移动到下一项 */}
-                <div className="flex items-center justify-between gap-1">
-                  <button type="button" className="flex items-center gap-0.5 rounded px-1 py-0.5 text-[11px] text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:opacity-25 disabled:hover:bg-transparent" disabled={slot.index === 0} title="移动到上一项" onClick={() => moveSlot(slot.index, -1)}>
-                    <ChevronLeft className="h-3 w-3" />上一项
-                  </button>
-                  <button type="button" className="flex items-center gap-0.5 rounded px-1 py-0.5 text-[11px] text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:opacity-25 disabled:hover:bg-transparent" disabled={slot.index === enabled.length - 1} title="移动到下一项" onClick={() => moveSlot(slot.index, 1)}>
-                    下一项<ChevronRight className="h-3 w-3" />
-                  </button>
-                </div>
-              </div>
-            );
-          })}
-        </div>
+                );
+              })}
+            </div>
+          </SortableContext>
+        </DndContext>
 
         <div className="flex flex-wrap items-center gap-3 border-t pt-3">
           <Button size="sm" disabled={saving || !dirty || enabled.length === 0} onClick={save}>{saving ? '保存中…' : '保存策略'}</Button>
