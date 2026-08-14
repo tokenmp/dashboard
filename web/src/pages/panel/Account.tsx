@@ -200,10 +200,10 @@ function PlanStrategyCard({ stored, onSaved }: { stored: string; onSaved: () => 
               ? [meta.group, ...freeGroupsFor(slot.index).filter((g) => g !== meta.group)]
               : freeGroupsFor(slot.index);
             return (
-              <div key={slot.key} className="flex items-center gap-1">
+              <div key={slot.key} className="flex flex-col gap-1">
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
-                    <button type="button" className="flex h-11 min-w-0 flex-1 items-center gap-2 rounded-lg border border-primary/50 bg-primary/5 px-2.5 text-left shadow-sm transition-colors hover:border-primary">
+                    <button type="button" className="flex h-11 w-full items-center gap-2 rounded-lg border border-primary/50 bg-primary/5 px-2.5 text-left shadow-sm transition-colors hover:border-primary">
                       <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-primary text-[11px] font-semibold text-primary-foreground">{slot.index + 1}</span>
                       <span className="min-w-0 flex-1 truncate text-sm font-medium">{meta.dim} · {meta.dir}</span>
                       <ChevronDown className="h-4 w-4 shrink-0 text-muted-foreground" />
@@ -215,10 +215,15 @@ function PlanStrategyCard({ stored, onSaved }: { stored: string; onSaved: () => 
                     onRemove={() => removeSlot(slot.index)}
                   />
                 </DropdownMenu>
-                <span className="flex shrink-0 flex-col">
-                  <button type="button" className="flex h-5 w-5 items-center justify-center rounded text-muted-foreground/60 hover:bg-muted hover:text-foreground disabled:opacity-20" disabled={slot.index === 0} title="前移" onClick={() => moveSlot(slot.index, -1)}><ChevronLeft className="h-3.5 w-3.5" /></button>
-                  <button type="button" className="flex h-5 w-5 items-center justify-center rounded text-muted-foreground/60 hover:bg-muted hover:text-foreground disabled:opacity-20" disabled={slot.index === enabled.length - 1} title="后移" onClick={() => moveSlot(slot.index, 1)}><ChevronRight className="h-3.5 w-3.5" /></button>
-                </span>
+                {/* 调序：置于卡片下方，左=移动到上一项，右=移动到下一项 */}
+                <div className="flex items-center justify-between gap-1">
+                  <button type="button" className="flex items-center gap-0.5 rounded px-1 py-0.5 text-[11px] text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:opacity-25 disabled:hover:bg-transparent" disabled={slot.index === 0} title="移动到上一项" onClick={() => moveSlot(slot.index, -1)}>
+                    <ChevronLeft className="h-3 w-3" />上一项
+                  </button>
+                  <button type="button" className="flex items-center gap-0.5 rounded px-1 py-0.5 text-[11px] text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:opacity-25 disabled:hover:bg-transparent" disabled={slot.index === enabled.length - 1} title="移动到下一项" onClick={() => moveSlot(slot.index, 1)}>
+                    下一项<ChevronRight className="h-3 w-3" />
+                  </button>
+                </div>
               </div>
             );
           })}
