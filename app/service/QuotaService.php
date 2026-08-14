@@ -3,6 +3,7 @@ declare(strict_types=1);
 
 namespace app\service;
 
+use app\enums\CodingPlanStrategy;
 use think\facade\Db;
 
 /**
@@ -13,7 +14,7 @@ use think\facade\Db;
  *
  * 三种计费类型：
  *  - coding（编程套餐）：滚动窗口制。本周窗口 = date_trunc('week', now()
- *    AT TIME ZONE 'UTC') = 周一 00:00 UTC（中国时间周一 08:00）；近 5 小时
+ *    AT TIME ZONE 'Asia/Shanghai') = 北京时间周一 00:00（与周期窗日切口径一致）；近 5 小时
  *    为 now() - interval '5 hours'。「已用」取自 usage_ledger 的 charge 行
  *    （ledger_type='charge' 且 request_delta<0，取 -request_delta 求和），
  *    下限为「所选套餐 activated_at」，上限为 expires_at。多套餐时选「限额最
@@ -27,7 +28,7 @@ use think\facade\Db;
  * ⚠️ Schema 说明：本服务面向「dump 基线」库（迁移 000047/048/049 之前），
  *    不引用 plans.daily_limit / total_limit、user_plans.*_delta、
  *    usage_ledger.billing_user_plan_id 等尚未存在的列。待库迁移到 048/049 后，
- *    可把 monthly_limit 换成 COALESCE(total_limit, monthly_limit)，并在限额上
+ *    可把 cycle_limit 换成 COALESCE(total_limit, cycle_limit)，并在限额上
  *    叠加 COALESCE(up.*_delta,0)，即可对齐执行器的逐套餐加量语义。
  */
 class QuotaService
@@ -40,14 +41,19 @@ class QuotaService
      */
     public function summary(string $userId): array
     {
-        $plans         = $this->activePlansByType($userId);
-        $codingPlanRow = $this->selectedCodingPlan($userId);
-        $ledger        = $this->ledgerTotals($userId);
-        $reserved      = $this->reservedTotals($userId);
+        $plans          = $this->activePlansByType($userId);
+        $codingPlanRows = $this->allCodingPlans($userId);
+        $ledger         = $this->ledgerTotals($userId);
+        $reserved       = $this->reservedTotals($userId);
+        $reservedByPlan = $this->reservedByCodingPlan($userId);
 
         $items = [];
-        if (($c = $this->codingItem($userId, $codingPlanRow, $reserved['coding']['requests'] ?? 0)) !== null) {
-            $items[] = $c;
+        // coding 逐套餐输出（多套餐共存时用户应看到每一张卡的独立额度；顺序=执行器 fallback 优先级）
+        foreach ($codingPlanRows as $row) {
+            $bindingId = $row['bindingId'];
+            if (($c = $this->codingItem($userId, $row, $reservedByPlan[$bindingId] ?? 0)) !== null) {
+                $items[] = $c;
+            }
         }
         if (($t = $this->tokenItem($plans['token'] ?? null, $ledger['token'] ?? null, $reserved['token']['tokens'] ?? 0)) !== null) {
             $items[] = $t;
@@ -114,42 +120,126 @@ class QuotaService
     }
 
     /**
-     * 选定的 coding 套餐（多套餐时取限额最宽松的一条，对齐执行器 selected_coding_plan）。
+     * 全部 active coding 套餐（多套餐共存时逐卡展示；排序对齐执行器 listActiveCodingPlans：
+     * cycle→weekly→5h→activated 降序，即扣费优先级）。
      *
-     * @return array{name:string,monthlyLimit:?int,weeklyLimit:int,hourlyLimit:int,cycleDays:?int,totalLimit:?int,activatedAt:string,expiresAt:?string}|null
+     * @return list<array{name:string,bindingId:string,cycleLimit:?int,weeklyLimit:int,rolling5hLimit:int,cycleDays:?int,totalLimit:?int,activatedAt:string,windowsResetAt:?string,expiresAt:?string}>
      */
-    private function selectedCodingPlan(string $userId): ?array
+    private function allCodingPlans(string $userId): array
     {
+        // 每套餐四维剩余的最小值（与执行器 listActiveCodingPlansQuery 的 LATERAL 同口径），
+        // 供 least/most_remaining 策略排序。
+        $cd  = "greatest(coalesce(coalesce(p.cycle_days, p.default_duration_days), 31), 1)";
+        $chg = "ul.user_id = ? and ul.billing_plan = 'coding' and ul.ledger_type = 'charge' and ul.request_delta < 0 and ul.user_plan_id = up.id";
+        $shortFloor = "greatest(up.activated_at, coalesce(up.windows_reset_at, '-infinity'::timestamptz))";
+        $weekStart  = "(date_trunc('week', now() at time zone 'Asia/Shanghai') at time zone 'Asia/Shanghai')";
+        $weekEnd    = "((date_trunc('week', now() at time zone 'Asia/Shanghai') + interval '7 days') at time zone 'Asia/Shanghai')";
         $rows = Db::connect('pgsql')->query(
             "select p.name,"
-            . " p.monthly_limit,"
+            . " p.cycle_limit,"
             . " coalesce(p.weekly_limit,0) as weekly_limit,"
-            . " coalesce(p.hourly_5h_limit,0) as hourly_5h_limit,"
+            . " coalesce(p.rolling_5h_limit,0) as rolling_5h_limit,"
             . " p.cycle_days, p.default_duration_days, p.total_limit,"
             . " up.activated_at::text as activated_at,"
-            . " up.expires_at::text as expires_at"
+            . " up.windows_reset_at::text as windows_reset_at,"
+            . " up.expires_at::text as expires_at,"
+            . " up.id::text as binding_id,"
+            . " rem.least_remaining"
             . " from user_plans up join plans p on p.id = up.plan_id"
+            . " left join lateral ("
+            . "   with fw as (select ((date_trunc('day', (up.activated_at at time zone 'Asia/Shanghai') + make_interval(days => {$cd})) + interval '1 day' - interval '1 second') at time zone 'Asia/Shanghai') as first_window_end),"
+            . "   wi as (select *, case when now() <= first_window_end then 0 else floor(extract(epoch from (now() - (first_window_end + interval '1 second'))) / ({$cd}::bigint * 86400))::int + 1 end as cycles_after_first from fw),"
+            . "   win as (select *,"
+            . "     case when cycles_after_first = 0 then up.activated_at else first_window_end + make_interval(days => (cycles_after_first - 1) * {$cd}) + interval '1 second' end as cycle_window_start,"
+            . "     case when up.expires_at is not null and up.expires_at < (first_window_end + make_interval(days => cycles_after_first * {$cd})) then up.expires_at else first_window_end + make_interval(days => cycles_after_first * {$cd}) end as cycle_window_end"
+            . "   from wi)"
+            . "   select least("
+            . "     case when coalesce(p.cycle_limit,0) = 0 then 2147483647 else coalesce(p.cycle_limit,0) - coalesce((select sum(-ul.request_delta) from usage_ledger ul where {$chg} and ul.created_at >= win.cycle_window_start and ul.created_at <= win.cycle_window_end), 0) end,"
+            . "     case when coalesce(p.weekly_limit,0) = 0 then 2147483647 else coalesce(p.weekly_limit,0) - coalesce((select sum(-ul.request_delta) from usage_ledger ul where {$chg} and ul.created_at >= greatest({$weekStart}, {$shortFloor}) and ul.created_at < {$weekEnd}), 0) end,"
+            . "     case when coalesce(p.rolling_5h_limit,0) = 0 then 2147483647 else coalesce(p.rolling_5h_limit,0) - coalesce((select sum(-ul.request_delta) from usage_ledger ul where {$chg} and ul.created_at >= greatest(now() - interval '5 hours', {$shortFloor})), 0) end,"
+            . "     case when coalesce(p.total_limit,0) = 0 then 2147483647 else coalesce(p.total_limit,0) - coalesce((select sum(-ul.request_delta) from usage_ledger ul where {$chg} and ul.created_at >= up.activated_at), 0) end"
+            . "   )::bigint as least_remaining from win"
+            . " ) rem on true"
             . " where up.user_id = ? and up.plan_type = 'coding' and up.status = 'active' and p.status = 'active'"
-            . " and (up.expires_at is null or up.expires_at > now())"
-            . " order by coalesce(p.monthly_limit,0) desc, coalesce(p.weekly_limit,0) desc,"
-            . " coalesce(p.hourly_5h_limit,0) desc, up.activated_at desc"
-            . " limit 1",
-            [$userId]
+            . " and (up.expires_at is null or up.expires_at > now())",
+            array_fill(0, 5, $userId) // 4×LATERAL 用量过滤 + 1×主查询
         );
-        if (empty($rows)) {
-            return null;
+        $out = [];
+        foreach ($rows as $r) {
+            $out[] = [
+                'name'           => (string) $r['name'],
+                'bindingId'      => (string) $r['binding_id'],
+                'cycleLimit'     => $r['cycle_limit'] !== null ? (int) $r['cycle_limit'] : null,
+                'weeklyLimit'    => (int) $r['weekly_limit'],
+                'rolling5hLimit' => (int) $r['rolling_5h_limit'],
+                'cycleDays'      => $r['cycle_days'] !== null ? (int) $r['cycle_days'] : ($r['default_duration_days'] !== null ? (int) $r['default_duration_days'] : null),
+                'totalLimit'     => $r['total_limit'] !== null ? (int) $r['total_limit'] : null,
+                'activatedAt'    => (string) $r['activated_at'],
+                'windowsResetAt' => $r['windows_reset_at'] !== null ? (string) $r['windows_reset_at'] : null,
+                'expiresAt'      => $r['expires_at'] !== null ? (string) $r['expires_at'] : null,
+                'leastRemaining' => (int) ($r['least_remaining'] ?? 2147483647),
+            ];
         }
-        $r = $rows[0];
-        return [
-            'name'         => (string) $r['name'],
-            'monthlyLimit' => $r['monthly_limit'] !== null ? (int) $r['monthly_limit'] : null,
-            'weeklyLimit'  => (int) $r['weekly_limit'],
-            'hourlyLimit'  => (int) $r['hourly_5h_limit'],
-            'cycleDays'    => $r['cycle_days'] !== null ? (int) $r['cycle_days'] : ($r['default_duration_days'] !== null ? (int) $r['default_duration_days'] : null),
-            'totalLimit'   => $r['total_limit'] !== null ? (int) $r['total_limit'] : null,
-            'activatedAt'  => (string) $r['activated_at'],
-            'expiresAt'    => $r['expires_at'] !== null ? (string) $r['expires_at'] : null,
-        ];
+        // 按用户策略排序（枚举比较器，与执行器 plan_strategy.go 同规则）
+        $stored = Db::connect('pgsql')->query(
+            'select coding_plan_strategy from users where id = ?',
+            [$userId],
+        )[0]['coding_plan_strategy'] ?? null;
+        $this->sortCodingPlansByStrategy($out, CodingPlanStrategy::parseListLenient($stored));
+        return $out;
+    }
+
+    /** 按策略列表稳定排序套餐行（与执行器 Go 比较器同规则；负数=a 先扣）。 */
+    private function sortCodingPlansByStrategy(array &$plans, array $strategies): void
+    {
+        usort($plans, function (array $a, array $b) use ($strategies): int {
+            foreach ($strategies as $s) {
+                /** @var CodingPlanStrategy $s */
+                $r = match ($s) {
+                    CodingPlanStrategy::LargestLimit  => $this->compareLimits($b, $a),
+                    CodingPlanStrategy::SmallestLimit => $this->compareLimits($a, $b),
+                    CodingPlanStrategy::LeastRemaining => $a['leastRemaining'] <=> $b['leastRemaining'],
+                    CodingPlanStrategy::MostRemaining  => $b['leastRemaining'] <=> $a['leastRemaining'],
+                    CodingPlanStrategy::SoonestExpiry => $this->compareExpiry($a, $b),
+                    CodingPlanStrategy::LatestExpiry  => $this->compareExpiry($b, $a, false),
+                    CodingPlanStrategy::OldestFirst   => strtotime($a['activatedAt']) <=> strtotime($b['activatedAt']),
+                    CodingPlanStrategy::NewestFirst   => strtotime($b['activatedAt']) <=> strtotime($a['activatedAt']),
+                };
+                if ($r !== 0) {
+                    return $r;
+                }
+            }
+            return 0;
+        });
+    }
+
+    /** 限额比较（cycle→weekly→5h），$asc=false 为降序。 */
+    private function compareLimits(array $a, array $b): int
+    {
+        foreach (['cycleLimit', 'weeklyLimit', 'rolling5hLimit'] as $k) {
+            $r = ($a[$k] ?? 0) <=> ($b[$k] ?? 0);
+            if ($r !== 0) {
+                return $r;
+            }
+        }
+        return 0;
+    }
+
+    /** 到期比较；永久（null）永远殿后。$soonest=true 最近到期优先。 */
+    private function compareExpiry(array $a, array $b, bool $soonest = true): int
+    {
+        $ea = $a['expiresAt'] !== null ? strtotime($a['expiresAt']) : null;
+        $eb = $b['expiresAt'] !== null ? strtotime($b['expiresAt']) : null;
+        if ($ea === null && $eb === null) {
+            return 0;
+        }
+        if ($ea === null) {
+            return 1;
+        }
+        if ($eb === null) {
+            return -1;
+        }
+        return $soonest ? $ea <=> $eb : $eb <=> $ea;
     }
 
     /* ============================== 流水 / 预扣 ============================== */
@@ -206,6 +296,26 @@ class QuotaService
         return $map;
     }
 
+    /** coding 各绑定的未过期预留请求数（多套餐逐卡展示用，对齐执行器 per-plan 口径）。
+     * @return array<string,int> bindingId => reserved requests
+     */
+    private function reservedByCodingPlan(string $userId): array
+    {
+        $rows = Db::connect('pgsql')->query(
+            "select user_plan_id::text as binding_id, coalesce(sum(reserved_requests),0) as reserved_requests"
+            . " from quota_reservations"
+            . " where user_id = ? and billing_plan = 'coding' and status = 'reserved' and expires_at > now()"
+            . " and user_plan_id is not null"
+            . " group by user_plan_id",
+            [$userId]
+        );
+        $map = [];
+        foreach ($rows as $r) {
+            $map[$r['binding_id']] = (int) $r['reserved_requests'];
+        }
+        return $map;
+    }
+
     /* ============================== 单项组装 ============================== */
 
     /**
@@ -218,6 +328,7 @@ class QuotaService
      * 仅渲染 limit>0 的窗口；全不限时回退展示当前周期已用，避免空白。
      *
      * 注意：本口径为面板展示用；执行器目前仍按「周期套住周/5h」的旧模型放行，待后续对齐。
+     * 多套餐共存时每个绑定各出一张卡：用量/预留均按 user_plan_id 隔离（对齐执行器 per-plan 容量）。
      */
     private function codingItem(string $userId, ?array $plan, int $reserved): ?array
     {
@@ -226,24 +337,26 @@ class QuotaService
         }
         $act        = $plan['activatedAt'];
         $exp        = $plan['expiresAt'];   // string|null
+        $wra        = $plan['windowsResetAt'] ?? null; // 短期窗(5h/周)重置锚点；null=从未重置
         $cycleDays  = $plan['cycleDays'];   // COALESCE(cycle_days, default_duration_days)；null→31
-        $monthLimit = $plan['monthlyLimit'];
+        $cycleLimit = $plan['cycleLimit'];
         $weekLimit  = $plan['weeklyLimit'];
-        $h5Limit    = $plan['hourlyLimit'];
+        $h5Limit    = $plan['rolling5hLimit'];
         $totalLimit = $plan['totalLimit'];
 
-        $hasCap = ($monthLimit !== null && $monthLimit > 0)
+        $hasCap = ($cycleLimit !== null && $cycleLimit > 0)
             || $weekLimit > 0 || $h5Limit > 0
             || ($totalLimit !== null && $totalLimit > 0);
         $billingModel = $this->billingModel($cycleDays, $hasCap);
         $isPermanent  = ($cycleDays ?? 0) >= 3650; // 永久：周期公式会溢出 int4，且语义为「总量不刷新」
 
         // 公共片段：5h / 周 / 总 三个独立窗口（以 [activated_at, expires_at] 为界，互不套住）。
+        // 5h/周下界纳入短期窗重置锚点 wra（GREATEST 忽略 NULL）；周期窗与总量仍只认 act
         $independentUsed = ""
-            . " coalesce(sum(case when created_at >= greatest(now() - interval '5 hours', b.act)"
+            . " coalesce(sum(case when created_at >= greatest(now() - interval '5 hours', b.act, b.wra)"
             . " and (b.exp is null or created_at <= b.exp) then -request_delta else 0 end), 0) as h5_used,"
-            . " coalesce(sum(case when created_at >= greatest((date_trunc('week', now() at time zone 'UTC') at time zone 'UTC'), b.act)"
-            . " and created_at < ((date_trunc('week', now() at time zone 'UTC') + interval '7 days') at time zone 'UTC')"
+            . " coalesce(sum(case when created_at >= greatest((date_trunc('week', now() at time zone 'Asia/Shanghai') at time zone 'Asia/Shanghai'), b.act, b.wra)"
+            . " and created_at < ((date_trunc('week', now() at time zone 'Asia/Shanghai') + interval '7 days') at time zone 'Asia/Shanghai')"
             . " and (b.exp is null or created_at <= b.exp) then -request_delta else 0 end), 0) as week_used,"
             . " coalesce(sum(case when created_at >= b.act and (b.exp is null or created_at <= b.exp)"
             . " then -request_delta else 0 end), 0) as total_used";
@@ -251,11 +364,12 @@ class QuotaService
         if ($isPermanent) {
             // 永久套餐：不计算月周期窗口（避免 cycle_days*86400 溢出 int4）
             $row = Db::connect('pgsql')->query(
-                "with b as (select ?::timestamptz as act, ?::timestamptz as exp)"
+                "with b as (select ?::timestamptz as act, ?::timestamptz as wra, ?::timestamptz as exp)"
                 . " select " . $independentUsed
                 . " from usage_ledger, b"
-                . " where user_id = ? and billing_plan = 'coding' and ledger_type = 'charge' and request_delta < 0",
-                [$act, $exp, $userId]
+                . " where user_id = ? and billing_plan = 'coding' and ledger_type = 'charge' and request_delta < 0"
+                . " and user_plan_id = ?::uuid",
+                [$act, $wra, $exp, $userId, $plan['bindingId']]
             )[0];
             $monthUsed = 0;
         } else {
@@ -275,19 +389,20 @@ class QuotaService
                 . "), mwin as ("
                 . " select"
                 . " case when cycles_after_first = 0 then activated_at"
-                . " else first_window_end + make_interval(days => (cycles_after_first - 1) * cycle_days) + interval '1 second' end as monthly_window_start,"
+                . " else first_window_end + make_interval(days => (cycles_after_first - 1) * cycle_days) + interval '1 second' end as cycle_window_start,"
                 . " case when expires_at is not null and expires_at < (first_window_end + make_interval(days => cycles_after_first * cycle_days))"
-                . " then expires_at else first_window_end + make_interval(days => cycles_after_first * cycle_days) end as monthly_window_end"
+                . " then expires_at else first_window_end + make_interval(days => cycles_after_first * cycle_days) end as cycle_window_end"
                 . " from widx"
-                . "), b as (select ?::timestamptz as act, ?::timestamptz as exp)"
+                . "), b as (select ?::timestamptz as act, ?::timestamptz as wra, ?::timestamptz as exp)"
                 . " select"
-                . " coalesce(sum(case when created_at >= monthly_window_start and created_at <= monthly_window_end then -request_delta else 0 end), 0) as month_used,"
+                . " coalesce(sum(case when created_at >= cycle_window_start and created_at <= cycle_window_end then -request_delta else 0 end), 0) as cycle_used,"
                 . $independentUsed
                 . " from usage_ledger, mwin, b"
-                . " where user_id = ? and billing_plan = 'coding' and ledger_type = 'charge' and request_delta < 0",
-                [$act, $exp, $cycleDays, $act, $exp, $userId]
+                . " where user_id = ? and billing_plan = 'coding' and ledger_type = 'charge' and request_delta < 0"
+                . " and user_plan_id = ?::uuid",
+                [$act, $exp, $cycleDays, $act, $wra, $exp, $userId, $plan['bindingId']]
             )[0];
-            $monthUsed = (int) ($row['month_used'] ?? 0);
+            $monthUsed = (int) ($row['cycle_used'] ?? 0);
         }
 
         $label     = $this->cycleLabel($cycleDays);
@@ -299,8 +414,8 @@ class QuotaService
         if ($totalLimit !== null && $totalLimit > 0) {
             $windows[] = ['key' => 'total', 'label' => '总量', 'limit' => $totalLimit, 'used' => $totalUsed];
         }
-        if (!$isPermanent && $monthLimit !== null && $monthLimit > 0) {
-            $windows[] = ['key' => 'month', 'label' => $label, 'limit' => $monthLimit, 'used' => max(0, $monthUsed)];
+        if (!$isPermanent && $cycleLimit !== null && $cycleLimit > 0) {
+            $windows[] = ['key' => 'month', 'label' => $label, 'limit' => $cycleLimit, 'used' => max(0, $monthUsed)];
         }
         if ($weekLimit > 0) {
             $windows[] = ['key' => 'week', 'label' => '本周', 'limit' => $weekLimit, 'used' => $weekUsed];

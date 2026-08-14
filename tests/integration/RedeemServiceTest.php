@@ -87,7 +87,7 @@ final class RedeemServiceTest extends IntegrationTestCase
     {
         $user  = $this->uuid();
         $code  = 'INACTIVE-' . bin2hex(random_bytes(3));
-        $plan  = $this->seedPlan(['plan_type' => 'coding', 'monthly_limit' => 1000, 'status' => 'disabled']);
+        $plan  = $this->seedPlan(['plan_type' => 'coding', 'cycle_limit' => 1000, 'status' => 'disabled']);
         $this->seedRedeemCode($code, ['coding_plan_id' => $plan]);
         $this->redeemExpect(400, $user, $code);
     }
@@ -98,7 +98,7 @@ final class RedeemServiceTest extends IntegrationTestCase
     {
         $user = $this->uuid();
         $code = 'HAPPY-' . bin2hex(random_bytes(3));
-        $plan = $this->seedPlan(['plan_type' => 'coding', 'monthly_limit' => 1000]);
+        $plan = $this->seedPlan(['plan_type' => 'coding', 'cycle_limit' => 1000]);
         $this->seedRedeemCode($code, ['token_amount' => 500, 'coding_plan_id' => $plan, 'duration_days' => 30]);
         $this->seedUser($user);
 
@@ -148,8 +148,8 @@ final class RedeemServiceTest extends IntegrationTestCase
     public function testCodingDowngradeRejected(): void
     {
         $user    = $this->uuid();
-        $strong   = $this->seedPlan(['plan_type' => 'coding', 'monthly_limit' => 1000]);
-        $weak     = $this->seedPlan(['plan_type' => 'coding', 'monthly_limit' => 500]);
+        $strong   = $this->seedPlan(['plan_type' => 'coding', 'cycle_limit' => 1000]);
+        $weak     = $this->seedPlan(['plan_type' => 'coding', 'cycle_limit' => 500]);
         // 用户当前持有更强套餐
         $this->seedUserPlan($user, $strong, ['plan_type' => 'coding', 'expires_at' => date('Y-m-d H:i:s', strtotime('+5 days'))]);
 
@@ -165,7 +165,7 @@ final class RedeemServiceTest extends IntegrationTestCase
     public function testCodingRenewExtendsSameRankPlanExpiry(): void
     {
         $user  = $this->uuid();
-        $plan   = $this->seedPlan(['plan_type' => 'coding', 'monthly_limit' => 1000]);
+        $plan   = $this->seedPlan(['plan_type' => 'coding', 'cycle_limit' => 1000]);
         $existingExpiry = date('Y-m-d H:i:s', strtotime('+5 days'));
         $upId  = $this->seedUserPlan($user, $plan, ['plan_type' => 'coding', 'expires_at' => $existingExpiry]);
 
@@ -186,8 +186,8 @@ final class RedeemServiceTest extends IntegrationTestCase
     public function testCodingUpgradeReplacesLowerRankPlan(): void
     {
         $user  = $this->uuid();
-        $weak   = $this->seedPlan(['plan_type' => 'coding', 'monthly_limit' => 500]);
-        $strong = $this->seedPlan(['plan_type' => 'coding', 'monthly_limit' => 1000]);
+        $weak   = $this->seedPlan(['plan_type' => 'coding', 'cycle_limit' => 500]);
+        $strong = $this->seedPlan(['plan_type' => 'coding', 'cycle_limit' => 1000]);
         $this->seedUserPlan($user, $weak, ['plan_type' => 'coding', 'expires_at' => date('Y-m-d H:i:s', strtotime('+5 days'))]);
 
         $code = 'UP-' . bin2hex(random_bytes(3));

@@ -57,6 +57,7 @@ Route::group('api/v1', function () {
             // 我的账户中心
             Route::group('user', function () {
                 Route::get('', 'panel/User/profile');
+                Route::put('plan-strategy', 'panel/User/updatePlanStrategy');
                 // 注意：keys/bot* 必须在 keys* 之前注册——ThinkPHP 静态路由 keys 会前缀匹配
                 // keys/xxx，若 keys 在前会吞掉 keys/bot 导致 Bot Key 端点误返回 API Key。
                 Route::get('keys/bot', 'panel/User/botKeys');
@@ -135,6 +136,7 @@ Route::group('api/v1', function () {
                     Route::post(':userId/plans', 'dashboard/UserPlan/grant')->pattern(['userId' => '[\w\-]+']);
                     Route::post(':userId/plans/:planId/renew', 'dashboard/UserPlan/renew')->pattern(['userId' => '[\w\-]+', 'planId' => '[\w\-]+']);
                     Route::put(':userId/plans/:planId/disable', 'dashboard/UserPlan/disable')->pattern(['userId' => '[\w\-]+', 'planId' => '[\w\-]+']);
+                    Route::post(':userId/plans/:planId/reset-windows', 'dashboard/UserPlan/resetWindows')->pattern(['userId' => '[\w\-]+', 'planId' => '[\w\-]+']);
                 });
 
                 // 套餐目录（模板）CRUD

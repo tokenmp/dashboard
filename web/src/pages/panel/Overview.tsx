@@ -77,8 +77,11 @@ function Overview() {
 function OverviewView({ data }: { data: UserOverview }) {
   const { kpi, quota, trend } = data;
 
-  // 拆分：核心两个槽位（编程 / Token）+ 其余套餐（图像等，仅在有数据时追加）
-  const codingItem = quota.find((q) => q.billingPlan === 'coding');
+  // 拆分：核心两个槽位（编程 / Token）+ 其余套餐（图像等，仅在有数据时追加）。
+  // coding 多套餐共存时逐卡展示：首张占「编程」槽位（扣费优先级最高），其余追加。
+  const codingItems = quota.filter((q) => q.billingPlan === 'coding');
+  const codingItem = codingItems[0];
+  const extraCodingItems = codingItems.slice(1);
   const tokenItem = quota.find((q) => q.billingPlan === 'token');
   const otherItems = quota.filter((q) => q.billingPlan !== 'coding' && q.billingPlan !== 'token');
   const coreActive = [codingItem, tokenItem].filter(Boolean).length;
@@ -102,7 +105,7 @@ function OverviewView({ data }: { data: UserOverview }) {
           icon={<Zap className="h-4 w-4" />}
         />
         {quota.slice(0, 2).map((q) => (
-          <QuotaStatCard key={q.billingPlan} q={q} />
+          <QuotaStatCard key={`${q.billingPlan}-${q.planName ?? ''}`} q={q} />
         ))}
         {quota.length < 2 && (
           <StatCard
@@ -144,8 +147,11 @@ function OverviewView({ data }: { data: UserOverview }) {
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           <PlanSlot type="coding" item={codingItem} />
           <PlanSlot type="token" item={tokenItem} />
+          {extraCodingItems.map((q) => (
+            <QuotaCard key={`${q.billingPlan}-${q.planName ?? ''}`} q={q} />
+          ))}
           {otherItems.map((q) => (
-            <QuotaCard key={q.billingPlan} q={q} />
+            <QuotaCard key={`${q.billingPlan}-${q.planName ?? ''}`} q={q} />
           ))}
         </div>
       </section>

@@ -12,9 +12,22 @@ export interface UserBasic {
   status: string;
   preferred_billing: string;
   fallback_enabled: boolean;
+  /** 扣费套餐选择策略（逗号分隔有序枚举 key，见 PLAN_STRATEGIES） */
+  coding_plan_strategy: string;
   created_at: string;
   updated_at: string;
 }
+
+/** 扣费套餐选择策略 key（与后端枚举一一对应；勿用任意 string） */
+export type CodingPlanStrategyKey =
+  | 'largest_limit'
+  | 'smallest_limit'
+  | 'least_remaining'
+  | 'most_remaining'
+  | 'soonest_expiry'
+  | 'latest_expiry'
+  | 'oldest_first'
+  | 'newest_first';
 
 /** 用户 API Key（脱敏） */
 export interface UserApiKeyItem {
@@ -45,9 +58,9 @@ export interface PlanTemplate {
   id: string;
   name: string;
   plan_type: string;
-  hourly_5h_limit: number | null;
+  rolling_5h_limit: number | null;
   weekly_limit: number | null;
-  monthly_limit: number | null;
+  cycle_limit: number | null;
   token_limit: number | null;
   price: number;
   status: string;
