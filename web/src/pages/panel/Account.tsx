@@ -71,12 +71,15 @@ const GROUP_ORDER = ['到期', '限额', '剩余', '激活'];
 const metaOf = (key: CodingPlanStrategyKey) => STRATEGY_META.find((m) => m.key === key)!;
 /** 默认策略（与后端 CodingPlanStrategy::DEFAULT_LIST 一致） */
 const DEFAULT_ORDER: CodingPlanStrategyKey[] = ['soonest_expiry', 'smallest_limit', 'least_remaining', 'oldest_first'];
-/** 策略下拉菜单内容：按维度分组（组内两个方向）；已被其他槽位占用的置灰；filled 槽位提供移除 */
+/** 策略下拉菜单内容：按维度分组（组内两个方向）。
+ *  互斥按「维度」判断：其他槽位已占用该维度（无论哪个方向）即整组置灰；
+ *  当前槽位自己的维度仍可切换方向（如 限额小 ↔ 限额大）。 */
 function StrategyMenuContent({ excludeKeys, onSelect, onRemove }: {
   excludeKeys: CodingPlanStrategyKey[];
   onSelect: (key: CodingPlanStrategyKey) => void;
   onRemove?: () => void;
 }) {
+  const occupiedGroups = new Set(excludeKeys.map((k) => metaOf(k).group));
   return (
     <DropdownMenuContent align="start" className="w-72">
       {GROUP_ORDER.flatMap((group) => {
@@ -84,11 +87,11 @@ function StrategyMenuContent({ excludeKeys, onSelect, onRemove }: {
         return [
           <DropdownMenuLabel key={`g-${group}`} className="text-[11px] text-muted-foreground">按{group}</DropdownMenuLabel>,
           ...items.map((m) => {
-            const used = excludeKeys.includes(m.key);
+            const occupied = occupiedGroups.has(m.group);
             return (
-              <DropdownMenuItem key={m.key} disabled={used} onClick={() => onSelect(m.key)}>
+              <DropdownMenuItem key={m.key} disabled={occupied} onClick={() => onSelect(m.key)}>
                 <span className="flex min-w-0 flex-1 flex-col">
-                  <span className="text-sm">{m.label}{used ? '（已启用）' : ''}</span>
+                  <span className="text-sm">{m.label}{occupied ? '（该维度已占用）' : ''}</span>
                   <span className="text-xs text-muted-foreground">{m.hint}</span>
                 </span>
               </DropdownMenuItem>
