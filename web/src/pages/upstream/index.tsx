@@ -1,7 +1,9 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { AlertTriangle, CheckCircle2, ChevronRight, Copy, LayoutGrid, Pencil, Plus, Power, PowerOff, RefreshCw, Search, Settings2, Plug, Table as TableIcon } from 'lucide-react';
+import { AlertTriangle, Brain, CheckCircle2, ChevronRight, Copy, LayoutGrid, Pencil, Plus, Power, PowerOff, RefreshCw, Search, Settings2, Plug, Table as TableIcon } from 'lucide-react';
 import { CoinIcon, ToggleIconButton } from '@/components/ToggleIconButton';
+import { ThinkingConfigDialog, type ThinkingConfig } from '@/components/ThinkingConfigDialog';
+import { updateProviderThinkingConfigApi, updateModelThinkingConfigApi } from '@/api/dashboard';
 import { usePagedQuery } from '@/hooks/usePagedQuery';
 import { useUrlQueryState } from '@/hooks/useUrlQueryState';
 import { StatusBadge } from '@/components/StatusBadge';
@@ -100,6 +102,7 @@ function ProvidersTab() {
     { name: 'page', key: 'page', type: 'number', default: 1 },
     { name: 'size', key: 'size', type: 'number', default: 20 },
   ]);
+  const [thinkingProvider, setThinkingProvider] = useState<ProviderItem | null>(null);
   const { list, total, page, size, loading, error, params, reload, setPage, setFilters } =
     usePagedQuery(getProvidersApiLazy, { initial: { size: 20, sort: '-created_at', ...urlInit } as UpstreamQuery });
   useEffect(() => { write(params); }, [params]);
@@ -137,6 +140,22 @@ function ProvidersTab() {
         </button>
       ),
     },
+    {
+      id: 'action',
+      meta: { className: 'w-[50px] text-right' },
+      header: () => null,
+      cell: ({ row }) => (
+        <Button
+          variant="ghost"
+          size="icon"
+          className={`h-7 w-7 ${row.original.thinking ? 'text-primary' : ''}`}
+          title="思考配置（供应商级，模型/映射未配置时继承此处）"
+          onClick={() => setThinkingProvider(row.original)}
+        >
+          <Brain className="h-4 w-4" />
+        </Button>
+      ),
+    },
   ], []);
   return (
     <div className="space-y-3">
@@ -161,6 +180,19 @@ function ProvidersTab() {
       <Pager page={page} size={size} total={total} loading={loading} setPage={setPage} />
       <ProviderCreateDialog open={createOpen} onOpenChange={setCreateOpen} onCreated={reload} />
       <ProviderEndpointsDialog open={!!endpointsProvider} onOpenChange={(o) => !o && setEndpointsProvider(null)} providerId={endpointsProvider?.id ?? null} providerName={endpointsProvider?.name} />
+      <ThinkingConfigDialog
+        open={!!thinkingProvider}
+        onOpenChange={(o) => !o && setThinkingProvider(null)}
+        targetName={`供应商 · ${thinkingProvider?.display_name || thinkingProvider?.name || ''}`}
+        value={(thinkingProvider && (list.find((x) => x.id === thinkingProvider.id) ?? thinkingProvider).thinking) ?? null}
+        effective={null}
+        effectiveSourceLabel="executor 内置默认（low~max，默认 medium）"
+        onSave={async (config: ThinkingConfig | null) => {
+          if (!thinkingProvider) return;
+          await updateProviderThinkingConfigApi(thinkingProvider.id, config ?? {});
+          reload();
+        }}
+      />
     </div>
   );
 }
@@ -209,13 +241,14 @@ function formatPrice(price: number | null): string {
   return `¥${perMillion.toFixed(2)}/M`;
 }
 
-function ModelCard({ m, onEdit, onManageMappings, onPatch, toggling }: { m: AiModelItem; onEdit: () => void; onManageMappings: () => void; onPatch: (patch: { billing_mode?: string; status?: string }) => void; toggling: boolean }) {
+function ModelCard({ m, onEdit, onManageMappings, onPatch, toggling, onThinkingSaved }: { m: AiModelItem; onEdit: () => void; onManageMappings: () => void; onPatch: (patch: { billing_mode?: string; status?: string }) => void; toggling: boolean; onThinkingSaved: () => void }) {
   const [providerDialogOpen, setProviderDialogOpen] = useState(false);
   const [healthData, setHealthData] = useState<Record<string, number[]>>({});
   const [healthLoading, setHealthLoading] = useState(false);
   const [togglingId, setTogglingId] = useState<string | null>(null);
   const [pendingDisable, setPendingDisable] = useState<string | null>(null);
   const [pendingModelDisable, setPendingModelDisable] = useState(false);
+  const [thinkingOpen, setThinkingOpen] = useState(false);
   const doToggle = async (mappingId: string, next: 'active' | 'disabled') => {
     setTogglingId(mappingId);
     try {
@@ -309,6 +342,9 @@ function ModelCard({ m, onEdit, onManageMappings, onPatch, toggling }: { m: AiMo
                 className={m.billing_mode !== 'free_global' ? 'text-amber-600' : 'text-muted-foreground hover:text-amber-600'}
                 onClick={() => onPatch({ billing_mode: m.billing_mode !== 'free_global' ? 'free_global' : 'billable' })}
               />
+              <Button variant="ghost" size="icon" className={`h-7 w-7 ${m.thinking ? 'text-primary' : ''}`} title="思考配置（模型级，映射未配置时继承此处）" onClick={() => setThinkingOpen(true)}>
+                <Brain className="h-4 w-4" />
+              </Button>
               <Button variant="ghost" size="sm" className="h-7 px-2" onClick={onEdit}>
                 <Pencil className="h-3.5 w-3.5" />
               </Button>
@@ -465,6 +501,18 @@ function ModelCard({ m, onEdit, onManageMappings, onPatch, toggling }: { m: AiMo
         variant="destructive"
         onConfirm={() => onPatch({ status: 'disabled' })}
       />
+      <ThinkingConfigDialog
+        open={thinkingOpen}
+        onOpenChange={setThinkingOpen}
+        targetName={`模型 · ${m.display_name || m.name}`}
+        value={m.thinking ?? null}
+        effective={null}
+        effectiveSourceLabel="executor 内置默认（low~max，默认 medium）"
+        onSave={async (config: ThinkingConfig | null) => {
+          await updateModelThinkingConfigApi(m.id, config ?? {});
+          onThinkingSaved();
+        }}
+      />
     </>
   );
 }
@@ -485,6 +533,8 @@ function ModelsTab() {
   const [editOpen, setEditOpen] = useState(false);
   const [toggling, setToggling] = useState(false);
   const [pendingTableDisable, setPendingTableDisable] = useState<AiModelItem | null>(null);
+  const [thinkingModel, setThinkingModel] = useState<AiModelItem | null>(null);
+  const [thinkingOpen, setThinkingOpen] = useState(false);
   const [viewMode, setViewMode] = useState<'card' | 'table'>(() => (localStorage.getItem('dashboardModelsView') === 'table' ? 'table' : 'card'));
   const switchView = (mode: 'card' | 'table') => {
     setViewMode(mode);
@@ -625,6 +675,9 @@ function ModelsTab() {
                 patchModel(m, { status: 'active' });
               }}
             />
+            <Button variant="ghost" size="icon" className={`h-7 w-7 ${m.thinking ? 'text-primary' : ''}`} title="思考配置（模型级）" onClick={() => { setThinkingModel(m); setThinkingOpen(true); }}>
+              <Brain className="h-4 w-4" />
+            </Button>
             <Button variant="ghost" size="icon" className="h-7 w-7" title="编辑" onClick={() => { setEditModel(m); setEditOpen(true); }}>
               <Pencil className="h-3.5 w-3.5" />
             </Button>
@@ -635,7 +688,7 @@ function ModelsTab() {
         );
       },
     },
-  ], [navigate, toggling, patchModel, setPendingTableDisable]);
+  ], [navigate, toggling, patchModel, setPendingTableDisable, setThinkingModel, setThinkingOpen]);
   return (
     <div className="space-y-3">
       <Card><CardContent className="flex items-end gap-3 p-4">
@@ -681,12 +734,26 @@ function ModelsTab() {
                 onManageMappings={() => navigate(`/dashboard/upstream/models/${m.id}/mappings`, { state: { name: m.display_name || m.name } })}
                 onPatch={(patch) => patchModel(m, patch)}
                 toggling={toggling}
+                onThinkingSaved={reload}
               />
             ))}
           </div>
       )}
       <Pager page={page} size={size} total={total} loading={loading} setPage={setPage} />
       <ModelEditDialog open={editOpen} onOpenChange={setEditOpen} model={editModel} onSaved={reload} />
+      <ThinkingConfigDialog
+        open={thinkingOpen && !!thinkingModel}
+        onOpenChange={(o) => { setThinkingOpen(o); if (!o) setThinkingModel(null); }}
+        targetName={`模型 · ${thinkingModel?.display_name || thinkingModel?.name || ''}`}
+        value={(thinkingModel && (list.find((x) => x.id === thinkingModel.id) ?? thinkingModel).thinking) ?? null}
+        effective={null}
+        effectiveSourceLabel="executor 内置默认（low~max，默认 medium）"
+        onSave={async (config: ThinkingConfig | null) => {
+          if (!thinkingModel) return;
+          await updateModelThinkingConfigApi(thinkingModel.id, config ?? {});
+          reload();
+        }}
+      />
       <ConfirmDialog
         open={!!pendingTableDisable}
         onOpenChange={(o) => !o && setPendingTableDisable(null)}

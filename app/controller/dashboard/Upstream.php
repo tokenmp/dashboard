@@ -12,6 +12,7 @@ use app\model\UpstreamKeyVerification;
 use app\model\UpstreamModelMapping;
 use app\service\ModelKeyHealthService;
 use app\support\Pagination;
+use app\support\ThinkingConfig;
 use think\exception\HttpException;
 use think\facade\Db;
 use think\facade\Env;
@@ -76,8 +77,13 @@ class Upstream extends BaseController
             $p->key_count = $c['keys'];
             return $p;
         })->visible([
-            'id', 'name', 'display_name', 'base_url', 'status', 'endpoint_count', 'key_count', 'created_at', 'updated_at',
+            'id', 'name', 'display_name', 'base_url', 'status', 'endpoint_count', 'key_count', 'thinking_config', 'created_at', 'updated_at',
         ])->toArray();
+        foreach ($list as &$pv) {
+            $pv['thinking'] = ThinkingConfig::parse($pv['thinking_config'] ?? null);
+            unset($pv['thinking_config']);
+        }
+        unset($pv);
         return success(Pagination::wrap($list, $total, $page, $size));
     }
 
@@ -316,6 +322,21 @@ class Upstream extends BaseController
         Db::connect('pgsql')->execute(
             "INSERT INTO providers (id, name, display_name, base_url, status, created_at, updated_at) VALUES (?,?,?,?, 'active', NOW(), NOW())",
             [$id, $name, $displayName !== '' ? $displayName : null, $baseUrl]
+        );
+        return success(['id' => $id]);
+    }
+
+    /** PUT /api/v1/dashboard/upstream/providers/:id/thinking-config —— 供应商级思考配置 */
+    public function updateProviderThinkingConfig($id)
+    {
+        $exists = Provider::where('id', $id)->where('status', '<>', 'deleted')->find();
+        if ($exists === null) {
+            throw new HttpException(404, '供应商不存在');
+        }
+        $json = ThinkingConfig::fromRequest($this->request);
+        Db::connect('pgsql')->execute(
+            "UPDATE providers SET thinking_config = ?::jsonb, updated_at = NOW() WHERE id = ?",
+            [$json, $id]
         );
         return success(['id' => $id]);
     }

@@ -7,6 +7,7 @@ use app\BaseController;
 use app\model\AiModel;
 use app\model\UpstreamModelMapping;
 use app\support\Pagination;
+use app\support\ThinkingConfig;
 use think\exception\HttpException;
 use think\facade\Db;
 
@@ -61,6 +62,8 @@ class Model extends BaseController
         $data = $list->toArray();
         foreach ($data as &$m) {
             $m['capabilities'] = self::parsePgArray($m['capabilities'] ?? null);
+            $m['thinking'] = ThinkingConfig::parse($m['thinking_config'] ?? null);
+            unset($m['thinking_config']);
         }
         unset($m);
 
@@ -156,7 +159,24 @@ class Model extends BaseController
         }
         $arr = $model->toArray();
         $arr['capabilities'] = self::parsePgArray($arr['capabilities'] ?? null);
+        $arr['thinking'] = ThinkingConfig::parse($arr['thinking_config'] ?? null);
+        unset($arr['thinking_config']);
         return success($arr);
+    }
+
+    /** PUT /api/v1/dashboard/models/:id/thinking-config —— 模型级思考配置 */
+    public function updateThinkingConfig($id)
+    {
+        $model = AiModel::where('id', $id)->where('status', '<>', 'deleted')->find();
+        if ($model === null) {
+            throw new HttpException(404, '模型不存在');
+        }
+        $json = ThinkingConfig::fromRequest($this->request);
+        Db::connect('pgsql')->execute(
+            "UPDATE models SET thinking_config = ?::jsonb, updated_at = NOW() WHERE id = ?",
+            [$json, $id]
+        );
+        return success(['id' => $id]);
     }
 
     /** GET /api/v1/dashboard/models/:id/mappings —— 含 disabled，管理用 */
@@ -170,7 +190,8 @@ class Model extends BaseController
         $status = trim((string) $this->request->get('status', ''));
         $sql = "select umm.id, umm.upstream_key_id, umm.upstream_model_name, "
              . " umm.input_price_per_token, umm.output_price_per_token, umm.max_tokens, "
-             . " umm.context_window_tokens, "
+             . " umm.context_window_tokens, umm.thinking_config::text as thinking_config, "
+             . " m.thinking_config::text as model_thinking_config, p.thinking_config::text as provider_thinking_config, "
              . " umm.status, umm.provider_endpoint_id, umm.created_at, "
             . " uk.name as upstream_key_name, uk.status as upstream_key_status, "
             . " p.name as provider_name, p.display_name as provider_display_name, "
@@ -179,6 +200,7 @@ class Model extends BaseController
             . " from upstream_model_mappings umm"
             . " join upstream_keys uk on uk.id = umm.upstream_key_id"
             . " join providers p on p.id = uk.provider_id"
+            . " join models m on m.id = umm.model_id"
             . " left join provider_endpoints pe on pe.id = umm.provider_endpoint_id"
             . " where umm.model_id = ? and umm.status <> 'deleted'";
         $params = [$id];
@@ -194,6 +216,13 @@ class Model extends BaseController
         $sql .= " order by p.name, uk.name";
         $rows = Db::connect('pgsql')->query($sql, $params);
         $data = array_map(function ($r) {
+            $resolved = ThinkingConfig::resolve(
+                ThinkingConfig::parse($r['thinking_config'] ?? null),
+                ThinkingConfig::parse($r['model_thinking_config'] ?? null),
+                ThinkingConfig::parse($r['provider_thinking_config'] ?? null)
+            );
+            $eff = $resolved['config'];
+            $src = $resolved['source'];
             return [
                 'id'                     => $r['id'],
                 'upstream_key_id'        => $r['upstream_key_id'],
@@ -204,6 +233,9 @@ class Model extends BaseController
                 'output_price_per_token' => $r['output_price_per_token'] !== null ? (float) $r['output_price_per_token'] : null,
                 'max_tokens'             => $r['max_tokens'] !== null ? (int) $r['max_tokens'] : null,
                 'context_window_tokens'  => $r['context_window_tokens'] !== null ? (int) $r['context_window_tokens'] : null,
+                'thinking'               => ThinkingConfig::parse($r['thinking_config'] ?? null),
+                'thinking_effective'     => $eff,
+                'thinking_source'        => $src,
                 'status'                 => $r['status'],
                 'provider_endpoint_id'   => $r['provider_endpoint_id'],
                 'provider_name'          => $r['provider_name'],
@@ -239,11 +271,11 @@ class Model extends BaseController
         }
         Db::connect('pgsql')->execute(
             "INSERT INTO upstream_model_mappings (id, upstream_key_id, model_id, upstream_model_name, "
-            . " input_price_per_token, output_price_per_token, max_tokens, context_window_tokens, status, provider_endpoint_id, created_at, updated_at) "
-            . " VALUES (?,?,?,?,?,?,?,?,?::varchar,?,NOW(),NOW())",
+            . " input_price_per_token, output_price_per_token, max_tokens, context_window_tokens, thinking_config, status, provider_endpoint_id, created_at, updated_at) "
+            . " VALUES (?,?,?,?,?,?,?,?,?::jsonb,?::varchar,?,NOW(),NOW())",
             [$mid, $row['upstream_key_id'], $id, $row['upstream_model_name'],
              $row['input_price_per_token'], $row['output_price_per_token'], $row['max_tokens'],
-             $row['context_window_tokens'],
+             $row['context_window_tokens'], $row['thinking_config_json'],
              $row['status'], $row['provider_endpoint_id']]
         );
         // 默认加入 default 路由组（调用方未显式传 route_group_ids 时）
@@ -267,10 +299,10 @@ class Model extends BaseController
         Db::connect('pgsql')->execute(
             "UPDATE upstream_model_mappings SET upstream_key_id=?, upstream_model_name=?, "
             . " input_price_per_token=?, output_price_per_token=?, max_tokens=?, context_window_tokens=?, "
-            . " status=?, provider_endpoint_id=?, updated_at=NOW() WHERE id=? AND status <> 'deleted'",
+            . " thinking_config=?::jsonb, status=?, provider_endpoint_id=?, updated_at=NOW() WHERE id=? AND status <> 'deleted'",
             [$row['upstream_key_id'], $row['upstream_model_name'],
              $row['input_price_per_token'], $row['output_price_per_token'], $row['max_tokens'],
-             $row['context_window_tokens'],
+             $row['context_window_tokens'], $row['thinking_config_json'],
              $row['status'], $row['provider_endpoint_id'], $mid]
         );
         $routeGroupIds = $this->request->post('route_group_ids');
@@ -545,6 +577,10 @@ class Model extends BaseController
             'max_tokens'             => $this->nullableInt('max_tokens'),
             // 映射级上下文窗口：仅配置展示，路由过滤逻辑后续实现；NULL = 未声明，沿用模型级值
             'context_window_tokens'  => $this->nullableInt('context_window_tokens'),
+            'thinking_config_json'   => ThinkingConfig::build(
+                $this->request->post('supported_efforts'),
+                trim((string) $this->request->post('default_effort', ''))
+            ),
             'status'                 => $status,
             'provider_endpoint_id'   => $endpointId === '' ? null : $endpointId,
         ];

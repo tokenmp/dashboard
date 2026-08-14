@@ -11,6 +11,8 @@ export interface ProviderItem {
   status: string;
   endpoint_count: number;
   key_count: number;
+  /** 供应商级思考深度配置;null = 未配置 */
+  thinking: { supported_efforts?: string[] | null; default_effort?: string | null } | null;
   created_at: string;
   updated_at: string;
 }
@@ -148,6 +150,8 @@ export interface AiModelItem {
   context_window_tokens: number | null;
   /** 模型级最大输出；null/0 = 未声明，/v1/models 回退取活跃映射 MAX(max_tokens) */
   max_tokens: number | null;
+  /** 模型级思考深度配置；null = 未配置 */
+  thinking: { supported_efforts?: string[] | null; default_effort?: string | null } | null;
   billing_mode: string;
   metadata: Record<string, unknown>;
   status: string;
@@ -174,6 +178,12 @@ export interface ModelMappingItem {
   max_tokens: number | null;
   /** 映射级上下文窗口；null = 未声明，沿用模型级 context_window_tokens */
   context_window_tokens: number | null;
+  /** 映射级思考深度配置；null = 继承模型级/供应商级 */
+  thinking: { supported_efforts?: string[] | null; default_effort?: string | null } | null;
+  /** 继承链解析后的生效配置（映射→模型→供应商） */
+  thinking_effective: { supported_efforts?: string[] | null; default_effort?: string | null } | null;
+  /** 生效配置来源：mapping / model / provider / null(内置默认) */
+  thinking_source: string | null;
   status: string;
   provider_endpoint_id: string | null;
   provider_name: string;
