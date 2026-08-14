@@ -127,7 +127,7 @@ final class QuotaServiceTest extends IntegrationTestCase
         }
         $this->assertNotNull($monthWin);
         $this->assertSame(1000, $monthWin['limit']);
-        $this->assertSame(140, $monthWin['used']);
+        $this->assertSame(140.0, $monthWin['used']);
     }
 
     /* ----------------------------- legacyUsage ----------------------------- */
@@ -152,7 +152,7 @@ final class QuotaServiceTest extends IntegrationTestCase
         // coding 不展示余额,只展示已用请求(取负)
         $this->assertArrayHasKey('coding', $byPlan);
         $this->assertSame(0, $byPlan['coding']['tokenBalance']);
-        $this->assertSame(-25, $byPlan['coding']['requestBalance']);
+        $this->assertSame(-25.0, $byPlan['coding']['requestBalance']);
     }
 
     public function testMultipleCodingPlansEachGetOwnCard(): void
@@ -174,7 +174,7 @@ final class QuotaServiceTest extends IntegrationTestCase
         $this->assertSame('尝鲜版', $codingItems[0]['planName']);
         $this->assertSame('旗舰版', $codingItems[1]['planName']);
         // 各卡的周期窗用量按绑定隔离（顺序翻转后：尝鲜版 20、旗舰版 30）
-        $this->assertSame(20, $codingItems[0]['windows'][0]['used']);
-        $this->assertSame(30, $codingItems[1]['windows'][0]['used']);
+        $this->assertSame(20.0, $codingItems[0]['windows'][0]['used']);
+        $this->assertSame(30.0, $codingItems[1]['windows'][0]['used']);
     }
 }

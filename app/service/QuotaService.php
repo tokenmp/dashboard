@@ -78,7 +78,7 @@ class QuotaService
             $out[] = [
                 'billingPlan'    => $plan,
                 'tokenBalance'   => $plan === 'coding' ? 0 : (int) (($row['recharged'] ?? 0) - ($row['used_tokens'] ?? 0)),
-                'requestBalance' => $plan === 'coding' ? -(int) ($row['used_requests'] ?? 0) : 0,
+                'requestBalance' => $plan === 'coding' ? -(float) ($row['used_requests'] ?? 0) : 0,
             ];
         }
         return $out;
@@ -248,7 +248,7 @@ class QuotaService
      * usage_ledger 按 billing_plan 聚合：charge 已用（token / 请求）、recharge 充值。
      * token 已用为全量累计；此处不套窗口（窗口仅在 codingItem 内单独算）。
      *
-     * @return array<string,array{used_tokens:int,recharged:int,used_requests:int}>
+     * @return array<string,array{used_tokens:int,recharged:int,used_requests:float}>
      */
     private function ledgerTotals(string $userId): array
     {
@@ -265,7 +265,7 @@ class QuotaService
             $map[$r['billing_plan']] = [
                 'used_tokens'   => (int) $r['used_tokens'],
                 'recharged'     => (int) $r['recharged'],
-                'used_requests' => (int) $r['used_requests'],
+                'used_requests' => (float) $r['used_requests'],
             ];
         }
         return $map;
@@ -402,13 +402,13 @@ class QuotaService
                 . " and user_plan_id = ?::uuid",
                 [$act, $exp, $cycleDays, $act, $wra, $exp, $userId, $plan['bindingId']]
             )[0];
-            $monthUsed = (int) ($row['cycle_used'] ?? 0);
+            $monthUsed = (float) ($row['cycle_used'] ?? 0);
         }
 
         $label     = $this->cycleLabel($cycleDays);
-        $h5Used    = max(0, (int) ($row['h5_used'] ?? 0));
-        $weekUsed  = max(0, (int) ($row['week_used'] ?? 0));
-        $totalUsed = max(0, (int) ($row['total_used'] ?? 0));
+        $h5Used    = max(0, (float) ($row['h5_used'] ?? 0));
+        $weekUsed  = max(0, (float) ($row['week_used'] ?? 0));
+        $totalUsed = max(0, (float) ($row['total_used'] ?? 0));
 
         $windows = [];
         if ($totalLimit !== null && $totalLimit > 0) {
