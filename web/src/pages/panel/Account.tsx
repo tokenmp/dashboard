@@ -338,41 +338,73 @@ function PlanStrategyCard({ stored, onSaved }: { stored: string; onSaved: () => 
       <Dialog open={detailOpen} onOpenChange={setDetailOpen}>
         <DialogContent className="max-w-lg">
           <DialogHeader><DialogTitle>扣费套餐策略说明</DialogTitle></DialogHeader>
-          <div className="space-y-4 text-sm">
-            <section className="space-y-1">
-              <h4 className="text-xs font-semibold text-muted-foreground">这是什么</h4>
+          <div className="space-y-5 text-sm">
+            <section className="space-y-1.5">
+              <h4 className="text-xs font-semibold text-muted-foreground">一、这是什么</h4>
               <p className="leading-relaxed text-muted-foreground">
-                当你同时拥有多个编程套餐时，这里决定每次请求先从哪个套餐扣额度：按 1→4 的顺序依次尝试，排在前面的规则先决定，分不出先后才看下一条。
+                如果你只有一个编程套餐，这里不影响你——所有请求都从它扣额度。
+              </p>
+              <p className="leading-relaxed text-muted-foreground">
+                当你同时拥有<strong className="text-foreground">多个</strong>编程套餐时，每次请求需要决定从哪个套餐扣。这套规则就是做这件事的：<strong className="text-foreground">按 1→4 的顺序依次比较，排在前面的规则先说了算</strong>；只有前面的规则分不出先后（比如两个套餐同一天到期），才看下一条。
+              </p>
+              <p className="rounded-md bg-muted px-3 py-2 text-xs leading-relaxed text-muted-foreground">
+                举例：你的顺序是「先用快到期的 → 先用小额度的」。此时你有一个 3 天后到期的日套餐和一个包月套餐——因为“到期时间”能分出先后，每次请求都会先扣日套餐，直到它用完或过期，包月套餐才会被扣。
               </p>
             </section>
-            <section className="space-y-1">
-              <h4 className="text-xs font-semibold text-muted-foreground">当前扣费顺序</h4>
+            <section className="space-y-1.5">
+              <h4 className="text-xs font-semibold text-muted-foreground">二、你当前的扣费顺序</h4>
               <ol className="space-y-1">
                 {enabled.map((k, i) => (
                   <li key={k} className="flex gap-2">
                     <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-primary/10 text-[11px] font-semibold text-primary">{i + 1}</span>
-                    <span>{metaOf(k).label}<span className="ml-2 text-xs text-muted-foreground">{metaOf(k).hint}</span></span>
+                    <span><strong>{metaOf(k).label}</strong><span className="ml-2 text-xs text-muted-foreground">{metaOf(k).hint}</span></span>
                   </li>
                 ))}
                 {enabled.length === 0 && <li className="text-muted-foreground">未启用任何策略</li>}
               </ol>
             </section>
-            <section className="space-y-1">
-              <h4 className="text-xs font-semibold text-muted-foreground">如何修改</h4>
+            <section className="space-y-1.5">
+              <h4 className="text-xs font-semibold text-muted-foreground">三、如何修改</h4>
               <p className="leading-relaxed text-muted-foreground">
-                默认仅展示、不可操作；点击右上角「编辑」后可调整：⠿ 拖动调整顺序、点击卡片切换策略（每种规则只能使用一次）、✕ 移除、＋ 添加。修改后需点击「保存策略」生效。
+                当前为<strong className="text-foreground">仅展示</strong>状态，不能操作。点击右上角「<strong className="text-foreground">编辑</strong>」后可以调整：
+              </p>
+              <table className="w-full text-xs">
+                <tbody className="[&_td]:border-b [&_td]:py-1.5">
+                  <tr><td className="w-20 text-muted-foreground">调整顺序</td><td>按住卡片左侧 <strong className="text-foreground">⠿</strong> 拖动，拖到哪就排到哪</td></tr>
+                  <tr><td className="text-muted-foreground">更换规则</td><td><strong className="text-foreground">点击卡片</strong>，从弹出菜单里选一条新规则</td></tr>
+                  <tr><td className="text-muted-foreground">移除规则</td><td>点击卡片上的 <strong className="text-foreground">✕</strong></td></tr>
+                  <tr><td className="text-muted-foreground">增加规则</td><td>点击「<strong className="text-foreground">＋ 添加策略</strong>」虚线卡</td></tr>
+                </tbody>
+              </table>
+              <p className="leading-relaxed text-muted-foreground">
+                每种规则只能使用一次（比如选了“先用快到期的”，就不能再选“先用长期的”——它们是同一件事的两个方向）。调整完后点击「<strong className="text-foreground">保存策略</strong>」才会生效；「<strong className="text-foreground">取消编辑</strong>」会放弃所有改动。
               </p>
             </section>
-            <section className="space-y-1">
-              <h4 className="text-xs font-semibold text-muted-foreground">全部规则</h4>
-              <ul className="grid grid-cols-1 gap-1 sm:grid-cols-2">
-                {STRATEGY_META.map((m) => (
-                  <li key={m.key} className="rounded-md border px-2 py-1.5">
-                    <span className="text-sm">{m.label}</span>
-                    <span className="mt-0.5 block text-xs text-muted-foreground">{m.hint}</span>
-                  </li>
-                ))}
-              </ul>
+            <section className="space-y-1.5">
+              <h4 className="text-xs font-semibold text-muted-foreground">四、全部规则</h4>
+              <div className="space-y-2">
+                {GROUP_ORDER.map((group) => {
+                  const Icon = GROUP_ICON[group];
+                  return (
+                    <div key={group}>
+                      <p className="flex items-center gap-1 text-xs text-muted-foreground">
+                        {Icon && <Icon className="h-3.5 w-3.5" />}按{group}排序
+                      </p>
+                      <ul className="mt-1 grid grid-cols-1 gap-1 sm:grid-cols-2">
+                        {STRATEGY_META.filter((m) => m.group === group).map((m) => {
+                          const [pre, emph, post] = splitEmphasis(m.label, m.emph);
+                          return (
+                            <li key={m.key} className="rounded-md border px-2 py-1.5">
+                              <span className="text-sm">{pre}<strong className="text-primary">{emph}</strong>{post}</span>
+                              <span className="mt-0.5 block text-xs text-muted-foreground">{m.hint}</span>
+                            </li>
+                          );
+                        })}
+                      </ul>
+                    </div>
+                  );
+                })}
+              </div>
             </section>
           </div>
         </DialogContent>
