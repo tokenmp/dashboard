@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useNavigate, useParams, useLocation } from 'react-router-dom';
-import { Plus, Trash2, ArrowLeft, Search, Pencil } from 'lucide-react';
+import { Plus, Trash2, ArrowLeft, Search, Pencil, Brain } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { ConfirmDialog } from '@/components/ConfirmDialog';
 import { Button } from '@/components/ui/button';
@@ -11,6 +11,8 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
 import { SearchableSelect } from '@/components/ui/searchable-select';
+import { ThinkingConfigDialog } from '@/components/ThinkingConfigDialog';
+import { updateModelMappingApi as _updateMappingForThinking } from '@/api/dashboard';
 import { MultiSelect } from '@/components/ui/multi-select';
 import { EmptyState } from '@/components/EmptyState';
 import { DebouncedInput } from '@/components/DebouncedInput';
@@ -26,6 +28,7 @@ import { Switch } from '@/components/ui/switch';
 import { toast } from 'sonner';
 import type { AiModelItem, ModelMappingItem, RouteGroupOption, UpstreamKeyOption } from '@/types/upstream';
 
+
 export function MappingManagePage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
@@ -40,6 +43,7 @@ export function MappingManagePage() {
   const [statusFilter, setStatusFilter] = useState('all');
   const [pendingDelete, setPendingDelete] = useState<ModelMappingItem | null>(null);
   const [pendingDisable, setPendingDisable] = useState<ModelMappingItem | null>(null);
+  const [thinkingTarget, setThinkingTarget] = useState<ModelMappingItem | null>(null);
   const [togglingId, setTogglingId] = useState<string | null>(null);
 
   const doToggleStatus = async (mm: ModelMappingItem, next: 'active' | 'disabled') => {
@@ -119,6 +123,30 @@ export function MappingManagePage() {
       },
     },
     {
+      id: 'thinking',
+      meta: { className: 'w-[130px]' },
+      header: () => <span className="text-xs font-medium text-muted-foreground">思考</span>,
+      cell: ({ row }) => {
+        const t = row.original.thinking_effective;
+        const source = row.original.thinking_source;
+        if (!t || (!t.supported_efforts?.length && !t.default_effort)) {
+          return <span className="text-xs text-muted-foreground/50" title="未配置任何层级，沿用 executor 内置默认（low~max，默认 medium）">内置默认</span>;
+        }
+        const efforts = t.supported_efforts ?? [];
+        const sourceLabel = source === 'mapping' ? '映射' : source === 'model' ? '继承模型' : source === 'provider' ? '继承供应商' : '';
+        return (
+          <span
+            className={`text-xs ${source === 'mapping' ? '' : 'text-muted-foreground/70'}`}
+            title={`来源：${sourceLabel || '未知'}\n支持档位：${efforts.join(' / ') || '未限制'}${t.default_effort ? `\n默认：${t.default_effort}` : ''}`}
+          >
+            {efforts.length ? `${efforts[0]}~${efforts[efforts.length - 1]}` : '未限制'}
+            {t.default_effort ? ` · ${t.default_effort}` : ''}
+            {source && source !== 'mapping' && <span className="ml-1 text-[10px]">({sourceLabel})</span>}
+          </span>
+        );
+      },
+    },
+    {
       accessorKey: 'max_tokens',
       meta: { className: 'text-right' },
       header: ({ column }) => <DataTableColumnHeader column={column} title="最大输出" />,
@@ -158,6 +186,9 @@ export function MappingManagePage() {
               {row.original.status === 'active' ? '启用' : '禁用'}
             </span>
           </div>
+          <Button variant="ghost" size="icon" className={`h-7 w-7 ${row.original.thinking ? 'text-primary' : ''}`} title="思考配置" onClick={() => setThinkingTarget(row.original)}>
+            <Brain className="h-4 w-4" />
+          </Button>
           <Button variant="ghost" size="icon" className="h-7 w-7" title="编辑" onClick={() => setEditing(row.original)}>
             <Pencil className="h-3.5 w-3.5" />
           </Button>
@@ -238,6 +269,30 @@ export function MappingManagePage() {
           if (!pendingDelete) return;
           await deleteModelMappingApi(pendingDelete.id);
           setMappings((prev) => prev.filter((x) => x.id !== pendingDelete.id));
+        }}
+      />
+      <ThinkingConfigDialog
+        open={!!thinkingTarget}
+        onOpenChange={(o) => !o && setThinkingTarget(null)}
+        targetName={`映射 · ${thinkingTarget?.upstream_model_name ?? thinkingTarget?.upstream_key_name ?? ''}`}
+        value={(thinkingTarget && (mappings.find((x) => x.id === thinkingTarget.id) ?? thinkingTarget).thinking) ?? null}
+        effective={(thinkingTarget && (mappings.find((x) => x.id === thinkingTarget.id) ?? thinkingTarget).thinking_effective) ?? null}
+        effectiveSourceLabel={(() => { const t = thinkingTarget ? (mappings.find((x) => x.id === thinkingTarget.id) ?? thinkingTarget) : null; return t?.thinking_source === 'model' ? '继承自模型' : t?.thinking_source === 'provider' ? '继承自供应商' : 'executor 内置默认'; })()}
+        onSave={async (config) => {
+          if (!thinkingTarget) return;
+          await _updateMappingForThinking(thinkingTarget.id, {
+            upstream_key_id: thinkingTarget.upstream_key_id,
+            upstream_model_name: thinkingTarget.upstream_model_name,
+            input_price_per_token: thinkingTarget.input_price_per_token,
+            output_price_per_token: thinkingTarget.output_price_per_token,
+            max_tokens: thinkingTarget.max_tokens,
+            context_window_tokens: thinkingTarget.context_window_tokens,
+            supported_efforts: config?.supported_efforts ?? null,
+            default_effort: config?.default_effort ?? null,
+            status: thinkingTarget.status,
+            provider_endpoint_id: thinkingTarget.provider_endpoint_id,
+          });
+          reload();
         }}
       />
       <ConfirmDialog

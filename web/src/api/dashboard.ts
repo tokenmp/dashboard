@@ -245,6 +245,18 @@ export async function getModelMappingsApi(id: string, params?: { keyword?: strin
   const res = await client.get<ApiResponse<ModelMappingItem[]>>(`/dashboard/models/${id}/mappings`, { params });
   return res.data.data;
 }
+export interface ThinkingConfigPayload {
+  supported_efforts?: string[] | null;
+  default_effort?: string | null;
+}
+export async function updateProviderThinkingConfigApi(providerId: string, payload: ThinkingConfigPayload): Promise<{ id: string }> {
+  const res = await client.put<ApiResponse<{ id: string }>>(`/dashboard/upstream/providers/${providerId}/thinking-config`, payload);
+  return res.data.data;
+}
+export async function updateModelThinkingConfigApi(modelId: string, payload: ThinkingConfigPayload): Promise<{ id: string }> {
+  const res = await client.put<ApiResponse<{ id: string }>>(`/dashboard/models/${modelId}/thinking-config`, payload);
+  return res.data.data;
+}
 export async function getModelDetailApi(modelId: string): Promise<AiModelItem> {
   const res = await client.get<ApiResponse<AiModelItem>>(`/dashboard/models/${modelId}`);
   return res.data.data;
@@ -289,6 +301,8 @@ export interface MappingPayload {
   output_price_per_token: number | null;
   max_tokens: number | null;
   context_window_tokens?: number | null;
+  supported_efforts?: string[] | null;
+  default_effort?: string | null;
   status: string;
   provider_endpoint_id: string | null;
   route_group_ids?: string[];

@@ -4,6 +4,7 @@ declare(strict_types=1);
 namespace tests\integration;
 
 use app\controller\dashboard\Model;
+use think\exception\HttpException;
 
 /**
  * 平台模型 /v1/models 可见性诊断集成测试。
@@ -102,6 +103,109 @@ final class DashboardModelVisibilityTest extends IntegrationTestCase
 
         $this->assertFalse($item['v1_visible']);
         $this->assertSame('尚未配置任何上游映射', $item['v1_issues'][0]);
+    }
+
+    public function testMappingThinkingConfigPersisted(): void
+    {
+        // 映射级思考配置:supported_efforts + default_effort 持久化与回读
+        $mid = $this->seedVisibilityChain(['skip_mapping' => true]);
+        $keyId = $this->rows("select id from upstream_keys limit 1")[0]['id'];
+
+        $this->postRequest([
+            'upstream_key_id'    => $keyId,
+            'supported_efforts'  => ['minimal', 'low', 'medium', 'high'],
+            'default_effort'     => 'high',
+            'status'             => 'active',
+        ]);
+        $resp = (new Model(app()))->createMapping($mid);
+        $mapId = $this->body($resp)['data']['id'];
+
+        $this->getRequest([]);
+        $list = $this->body((new Model(app()))->mappings($mid));
+        $found = null;
+        foreach ($list['data'] as $m) {
+            if ($m['id'] === $mapId) { $found = $m; }
+        }
+        $this->assertNotNull($found);
+        $this->assertSame(['low', 'minimal', 'medium', 'high'], $found['thinking']['supported_efforts']);
+        $this->assertSame('high', $found['thinking']['default_effort']);
+    }
+
+    public function testMappingThinkingConfigRejectsInvalidDefault(): void
+    {
+        $mid = $this->seedVisibilityChain(['skip_mapping' => true]);
+        $keyId = $this->rows("select id from upstream_keys limit 1")[0]['id'];
+
+        $this->postRequest([
+            'upstream_key_id'    => $keyId,
+            'supported_efforts'  => ['low', 'medium'],
+            'default_effort'     => 'xhigh', // 不在 supported 内 → 400
+            'status'             => 'active',
+        ]);
+        try {
+            (new Model(app()))->createMapping($mid);
+            $this->fail('default_effort 不在 supported_efforts 内应抛 400');
+        } catch (HttpException $e) {
+            $this->assertSame(400, $e->getStatusCode());
+        }
+    }
+
+    public function testThinkingConfigInheritanceChain(): void
+    {
+        // 继承链:映射 → 模型 → 供应商,整体覆盖式
+        $mid = $this->seedVisibilityChain(['skip_mapping' => true]);
+        $keyId = $this->rows("select id from upstream_keys limit 1")[0]['id'];
+        $providerId = $this->rows("select id from providers limit 1")[0]['id'];
+
+        // 1) 全空 → source=null(内置默认)
+        $this->postRequest(['upstream_key_id' => $keyId, 'status' => 'active']);
+        $mapId = $this->body((new Model(app()))->createMapping($mid))['data']['id'];
+        $item = $this->findMapping($mapId, $mid);
+        $this->assertNull($item['thinking_source']);
+        $this->assertNull($item['thinking_effective']);
+
+        // 2) 配 provider → source=provider
+        $this->conn()->execute(
+            "update providers set thinking_config = ?::jsonb where id = ?",
+            [json_encode(['supported_efforts' => ['low', 'medium'], 'default_effort' => 'low']), $providerId]
+        );
+        $item = $this->findMapping($mapId, $mid);
+        $this->assertSame('provider', $item['thinking_source']);
+        $this->assertSame('low', $item['thinking_effective']['default_effort']);
+
+        // 3) 配 model → source=model(覆盖 provider)
+        $this->conn()->execute(
+            "update models set thinking_config = ?::jsonb where id = ?",
+            [json_encode(['supported_efforts' => ['medium', 'high'], 'default_effort' => 'medium']), $mid]
+        );
+        $item = $this->findMapping($mapId, $mid);
+        $this->assertSame('model', $item['thinking_source']);
+        $this->assertSame('medium', $item['thinking_effective']['default_effort']);
+
+        // 4) 配 mapping → source=mapping(最终优先)
+        $this->postRequest([
+            'upstream_key_id'    => $keyId,
+            'supported_efforts'  => ['high', 'xhigh'],
+            'default_effort'     => 'xhigh',
+            'status'             => 'active',
+        ]);
+        (new Model(app()))->updateMapping($mapId);
+        $item = $this->findMapping($mapId, $mid);
+        $this->assertSame('mapping', $item['thinking_source']);
+        $this->assertSame('xhigh', $item['thinking_effective']['default_effort']);
+    }
+
+    /** 从 mappings() 接口按 id 找映射条目。 */
+    private function findMapping(string $mapId, string $modelId): array
+    {
+        $this->getRequest([]);
+        $list = $this->body((new Model(app()))->mappings($modelId));
+        foreach ($list['data'] as $m) {
+            if ($m['id'] === $mapId) {
+                return $m;
+            }
+        }
+        $this->fail("mappings 响应中未找到映射 {$mapId}");
     }
 
     public function testMappingContextWindowPersisted(): void

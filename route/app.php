@@ -157,6 +157,7 @@ Route::group('api/v1', function () {
                     Route::get('providers', 'dashboard/Upstream/providers');
                     Route::post('providers', 'dashboard/Upstream/createProvider');
                     Route::group('providers', function () {
+                        Route::put(':id/thinking-config', 'dashboard/Upstream/updateProviderThinkingConfig')->pattern(['id' => '[\w\-]+']);
                         Route::get(':id/endpoints', 'dashboard/Upstream/endpoints')->pattern(['id' => '[\w\-]+']);
                         Route::post(':id/endpoints', 'dashboard/Upstream/createEndpoint')->pattern(['id' => '[\w\-]+']);
                         Route::post(':id/keys', 'dashboard/Upstream/createKey')->pattern(['id' => '[\w\-]+']);
@@ -181,6 +182,7 @@ Route::group('api/v1', function () {
                     });
                     Route::get(':id/mappings', 'dashboard/Model/mappings')->pattern(['id' => '[\w\-]+']);
                     Route::post(':id/mappings', 'dashboard/Model/createMapping')->pattern(['id' => '[\w\-]+']);
+                    Route::put(':id/thinking-config', 'dashboard/Model/updateThinkingConfig')->pattern(['id' => '[\w\-]+']);
                     Route::get(':id', 'dashboard/Model/detail')->pattern(['id' => '[\w\-]+']);
                     Route::put(':id', 'dashboard/Model/update')->pattern(['id' => '[\w\-]+']);
                 });
