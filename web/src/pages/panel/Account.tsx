@@ -250,7 +250,11 @@ function PlanStrategyCard({ stored, onSaved }: { stored: string; onSaved: () => 
           <Button size="sm" variant="ghost" onClick={() => setDetailOpen(true)}>
             <Info className="mr-1 h-3.5 w-3.5" />详情
           </Button>
-          {!editing && (
+          {editing ? (
+            <Button size="sm" variant="ghost" disabled={saving} onClick={() => { setEnabled(initial); setDirty(false); setEditing(false); }}>
+              取消编辑
+            </Button>
+          ) : (
             <Button size="sm" variant="outline" onClick={() => setEditing(true)}>
               <Pencil className="mr-1 h-3.5 w-3.5" />编辑
             </Button>
@@ -325,7 +329,6 @@ function PlanStrategyCard({ stored, onSaved }: { stored: string; onSaved: () => 
             >
               <RotateCcw className="mr-1 h-3.5 w-3.5" />还原默认
             </Button>
-            <Button size="sm" variant="outline" disabled={saving} onClick={() => { setEnabled(initial); setDirty(false); setEditing(false); }}>取消编辑</Button>
             {dirty && <span className="text-xs text-amber-600">有未保存的修改</span>}
           </div>
         )}
