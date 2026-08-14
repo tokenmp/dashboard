@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import type { ReactNode } from 'react';
-import { GripVertical, Plus, RefreshCw, X } from 'lucide-react';
+import { GripVertical, Plus, RefreshCw, RotateCcw, X } from 'lucide-react';
 import { toast } from 'sonner';
 import { DndContext, KeyboardSensor, PointerSensor, closestCenter, useSensor, useSensors } from '@dnd-kit/core';
 import type { DragEndEvent } from '@dnd-kit/core';
@@ -70,6 +70,8 @@ const STRATEGY_META: { key: CodingPlanStrategyKey; label: string; hint: string; 
 
 const ALL_KEYS = STRATEGY_META.map((m) => m.key);
 const metaOf = (key: CodingPlanStrategyKey) => STRATEGY_META.find((m) => m.key === key)!;
+/** 默认策略（与后端 CodingPlanStrategy::DEFAULT_LIST 一致） */
+const DEFAULT_ORDER: CodingPlanStrategyKey[] = ['soonest_expiry', 'smallest_limit', 'least_remaining', 'oldest_first'];
 
 /** 可拖拽的策略条目（dnd-kit useSortable：支持鼠标/触屏/键盘） */
 function SortableStrategyItem({ rank, meta, onRemove }: { rank: number; meta: (typeof STRATEGY_META)[number]; onRemove: () => void }) {
@@ -109,7 +111,7 @@ function PlanStrategyCard({ stored, onSaved }: { stored: string; onSaved: () => 
   const initial = useMemo(() => {
     const parts = (stored ?? '').split(',').map((k) => k.trim()).filter(Boolean);
     const valid = parts.filter((k): k is CodingPlanStrategyKey => (ALL_KEYS as string[]).includes(k));
-    return valid.length > 0 ? Array.from(new Set(valid)) : (['soonest_expiry', 'smallest_limit', 'least_remaining', 'oldest_first'] as CodingPlanStrategyKey[]);
+    return valid.length > 0 ? Array.from(new Set(valid)) : [...DEFAULT_ORDER];
   }, [stored]);
 
   const [enabled, setEnabled] = useState<CodingPlanStrategyKey[]>(initial);
@@ -221,6 +223,15 @@ function PlanStrategyCard({ stored, onSaved }: { stored: string; onSaved: () => 
 
         <div className="flex flex-wrap items-center gap-3 border-t pt-3">
           <Button size="sm" disabled={saving || !dirty || enabled.length === 0} onClick={save}>{saving ? '保存中…' : '保存策略'}</Button>
+          <Button
+            size="sm"
+            variant="ghost"
+            disabled={saving || (enabled.length === DEFAULT_ORDER.length && DEFAULT_ORDER.every((k, i) => enabled[i] === k))}
+            title="恢复为系统默认策略顺序"
+            onClick={() => { setDirty(true); setEnabled([...DEFAULT_ORDER]); }}
+          >
+            <RotateCcw className="mr-1 h-3.5 w-3.5" />还原默认
+          </Button>
           <span className="font-mono text-[11px] text-muted-foreground">当前顺序：{enabled.length > 0 ? enabled.map((k) => metaOf(k).label).join(' → ') : '—'}</span>
           {dirty && <span className="text-xs text-amber-600">有未保存的修改</span>}
         </div>
