@@ -100,6 +100,15 @@ class Model extends BaseController
         }
         unset($m);
 
+        // /v1/models 可见性诊断：按 executor ListExecutorModels 相同的 JOIN 链
+        // 批量检测每个模型为何（是否）会被 /v1/models 加载
+        $visibility = $this->v1Visibility($modelIds);
+        foreach ($data as &$m) {
+            $m['v1_visible'] = $visibility[$m['id']]['visible'] ?? false;
+            $m['v1_issues']  = $visibility[$m['id']]['issues'] ?? [];
+        }
+        unset($m);
+
         return success(Pagination::wrap($data, $total, $page, $size));
     }
 
@@ -112,10 +121,10 @@ class Model extends BaseController
         $capsLiteral = '{' . implode(',', $caps) . '}';
         Db::connect('pgsql')->execute(
             "INSERT INTO models (id, name, display_name, description, status, capabilities, "
-            . "context_window_tokens, billing_mode, metadata, created_at, updated_at) "
-            . "VALUES (?,?,?,?,?,?::text[],?,?,?::jsonb,NOW(),NOW())",
+            . "context_window_tokens, max_tokens, billing_mode, metadata, created_at, updated_at) "
+            . "VALUES (?,?,?,?,?,?::text[],?,?,?,?::jsonb,NOW(),NOW())",
             [$id, $row['name'], $row['display_name'], $row['description'], $row['status'],
-             $capsLiteral, $row['context_window_tokens'], $row['billing_mode'], '{}']
+             $capsLiteral, $row['context_window_tokens'], $row['max_tokens'], $row['billing_mode'], '{}']
         );
         return success($this->findModel($id));
     }
@@ -131,11 +140,23 @@ class Model extends BaseController
         $capsLiteral = '{' . implode(',', $row['capabilities']) . '}';
         Db::connect('pgsql')->execute(
             "UPDATE models SET name=?, display_name=?, description=?, status=?, capabilities=?::text[], "
-            . "context_window_tokens=?, billing_mode=?, updated_at=NOW() WHERE id=? AND status <> 'deleted'",
+            . "context_window_tokens=?, max_tokens=?, billing_mode=?, updated_at=NOW() WHERE id=? AND status <> 'deleted'",
             [$row['name'], $row['display_name'], $row['description'], $row['status'],
-             $capsLiteral, $row['context_window_tokens'], $row['billing_mode'], $id]
+             $capsLiteral, $row['context_window_tokens'], $row['max_tokens'], $row['billing_mode'], $id]
         );
         return success($this->findModel($id));
+    }
+
+    /** GET /api/v1/dashboard/models/:id —— 单模型详情（映射管理等页面取模型级兜底值用） */
+    public function detail($id)
+    {
+        $model = AiModel::where('id', $id)->where('status', '<>', 'deleted')->find();
+        if ($model === null) {
+            throw new HttpException(404, '模型不存在');
+        }
+        $arr = $model->toArray();
+        $arr['capabilities'] = self::parsePgArray($arr['capabilities'] ?? null);
+        return success($arr);
     }
 
     /** GET /api/v1/dashboard/models/:id/mappings —— 含 disabled，管理用 */
@@ -148,8 +169,9 @@ class Model extends BaseController
         $keyword = trim((string) $this->request->get('keyword', ''));
         $status = trim((string) $this->request->get('status', ''));
         $sql = "select umm.id, umm.upstream_key_id, umm.upstream_model_name, "
-            . " umm.input_price_per_token, umm.output_price_per_token, umm.max_tokens, "
-            . " umm.status, umm.provider_endpoint_id, umm.created_at, "
+             . " umm.input_price_per_token, umm.output_price_per_token, umm.max_tokens, "
+             . " umm.context_window_tokens, "
+             . " umm.status, umm.provider_endpoint_id, umm.created_at, "
             . " uk.name as upstream_key_name, uk.status as upstream_key_status, "
             . " p.name as provider_name, p.display_name as provider_display_name, "
             . " pe.protocol, pe.path as endpoint_path, "
@@ -181,6 +203,7 @@ class Model extends BaseController
                 'input_price_per_token'  => $r['input_price_per_token'] !== null ? (float) $r['input_price_per_token'] : null,
                 'output_price_per_token' => $r['output_price_per_token'] !== null ? (float) $r['output_price_per_token'] : null,
                 'max_tokens'             => $r['max_tokens'] !== null ? (int) $r['max_tokens'] : null,
+                'context_window_tokens'  => $r['context_window_tokens'] !== null ? (int) $r['context_window_tokens'] : null,
                 'status'                 => $r['status'],
                 'provider_endpoint_id'   => $r['provider_endpoint_id'],
                 'provider_name'          => $r['provider_name'],
@@ -216,10 +239,11 @@ class Model extends BaseController
         }
         Db::connect('pgsql')->execute(
             "INSERT INTO upstream_model_mappings (id, upstream_key_id, model_id, upstream_model_name, "
-            . " input_price_per_token, output_price_per_token, max_tokens, status, provider_endpoint_id, created_at, updated_at) "
-            . " VALUES (?,?,?,?,?,?,?,?::varchar,?,NOW(),NOW())",
+            . " input_price_per_token, output_price_per_token, max_tokens, context_window_tokens, status, provider_endpoint_id, created_at, updated_at) "
+            . " VALUES (?,?,?,?,?,?,?,?,?::varchar,?,NOW(),NOW())",
             [$mid, $row['upstream_key_id'], $id, $row['upstream_model_name'],
              $row['input_price_per_token'], $row['output_price_per_token'], $row['max_tokens'],
+             $row['context_window_tokens'],
              $row['status'], $row['provider_endpoint_id']]
         );
         // 默认加入 default 路由组（调用方未显式传 route_group_ids 时）
@@ -242,10 +266,11 @@ class Model extends BaseController
         $row = $this->mappingInput();
         Db::connect('pgsql')->execute(
             "UPDATE upstream_model_mappings SET upstream_key_id=?, upstream_model_name=?, "
-            . " input_price_per_token=?, output_price_per_token=?, max_tokens=?, status=?, "
-            . " provider_endpoint_id=?, updated_at=NOW() WHERE id=? AND status <> 'deleted'",
+            . " input_price_per_token=?, output_price_per_token=?, max_tokens=?, context_window_tokens=?, "
+            . " status=?, provider_endpoint_id=?, updated_at=NOW() WHERE id=? AND status <> 'deleted'",
             [$row['upstream_key_id'], $row['upstream_model_name'],
              $row['input_price_per_token'], $row['output_price_per_token'], $row['max_tokens'],
+             $row['context_window_tokens'],
              $row['status'], $row['provider_endpoint_id'], $mid]
         );
         $routeGroupIds = $this->request->post('route_group_ids');
@@ -343,6 +368,113 @@ class Model extends BaseController
 
     // ─────────────────────────── 内部 ───────────────────────────
 
+    /** executor /v1/models 认可的 provider_endpoints 协议白名单（与 ListExecutorModels 保持一致） */
+    private const V1_ENDPOINT_PROTOCOLS = ['openai', 'anthropic', 'openai_chat', 'openai_responses',
+        'anthropic_messages', 'image_generation', 'tokenmp_gateway', 'custom'];
+
+    /**
+     * /v1/models 可见性诊断
+     *
+     * 与 executor 的 ListExecutorModels 查询同构：模型需整条链路 active 才会被加载——
+     * models(active) → upstream_model_mappings(active) → upstream_keys(active)
+     * → providers(active) → provider_endpoints(active 且协议在白名单内，
+     * mapping 未指定端点时任选该 provider 的活跃端点)。
+     * 返回 [model_id => ['visible' => bool, 'issues' => string[]]]
+     */
+    private function v1Visibility(array $modelIds): array
+    {
+        if (empty($modelIds)) {
+            return [];
+        }
+        $protocols = "'" . implode("','", self::V1_ENDPOINT_PROTOCOLS) . "'";
+        $placeholders = implode(',', array_fill(0, count($modelIds), '?'));
+        $rows = Db::connect('pgsql')->query(
+            "select m.id, (m.status = 'active') as model_active,"
+            . " count(distinct umm.id) as mapping_total,"
+            . " count(distinct case when umm.status = 'active' then umm.id end) as mapping_active,"
+            . " count(distinct case when umm.status = 'active' and uk.status = 'active' then umm.id end) as key_active,"
+            . " count(distinct case when umm.status = 'active' and uk.status = 'active' and p.status = 'active' then umm.id end) as provider_active,"
+            . " count(distinct case when umm.status = 'active' and uk.status = 'active' and p.status = 'active'"
+            . "   and pe.id is not null then umm.id end) as chain_active"
+            . " from models m"
+            . " left join upstream_model_mappings umm on umm.model_id = m.id and umm.status <> 'deleted'"
+            . " left join upstream_keys uk on uk.id = umm.upstream_key_id"
+            . " left join providers p on p.id = uk.provider_id"
+            . " left join provider_endpoints pe on pe.provider_id = p.id"
+            . "   and (umm.provider_endpoint_id is null or pe.id = umm.provider_endpoint_id)"
+            . "   and pe.status = 'active' and pe.protocol in ($protocols)"
+            . " where m.id in ($placeholders)"
+            . " group by m.id, m.status",
+            $modelIds
+        );
+
+        $result = [];
+        $endpointIssueIds = [];
+        foreach ($rows as $r) {
+            $issues = [];
+            $modelActive  = self::pgBool($r['model_active'] ?? false);
+            $mappingTotal = (int) ($r['mapping_total'] ?? 0);
+            $mappingActive = (int) ($r['mapping_active'] ?? 0);
+            $keyActive    = (int) ($r['key_active'] ?? 0);
+            $providerActive = (int) ($r['provider_active'] ?? 0);
+            $chainActive  = (int) ($r['chain_active'] ?? 0);
+
+            if (!$modelActive) {
+                $issues[] = '模型未启用（status 非 active）';
+            } elseif ($mappingTotal === 0) {
+                $issues[] = '尚未配置任何上游映射';
+            } elseif ($mappingActive === 0) {
+                $issues[] = '所有上游映射均被禁用';
+            } elseif ($keyActive === 0) {
+                $issues[] = '映射对应的上游 Key 均不可用（被禁用或删除）';
+            } elseif ($providerActive === 0) {
+                $issues[] = '上游供应商被禁用';
+            } elseif ($chainActive === 0) {
+                $issues[] = '__ENDPOINT__'; // 占位，稍后补充供应商名
+                $endpointIssueIds[] = (string) $r['id'];
+            }
+            $result[(string) $r['id']] = ['visible' => empty($issues), 'issues' => $issues];
+        }
+
+        // 为缺端点的模型补充具体供应商名，提示更可操作
+        if (!empty($endpointIssueIds)) {
+            $epPlaceholders = implode(',', array_fill(0, count($endpointIssueIds), '?'));
+            $nameRows = Db::connect('pgsql')->query(
+                "select distinct m.id as model_id, p.name as provider_name"
+                . " from models m"
+                . " join upstream_model_mappings umm on umm.model_id = m.id and umm.status = 'active'"
+                . " join upstream_keys uk on uk.id = umm.upstream_key_id and uk.status = 'active'"
+                . " join providers p on p.id = uk.provider_id and p.status = 'active'"
+                . " where m.id in ($epPlaceholders)"
+                . " and not exists ("
+                . "   select 1 from provider_endpoints pe"
+                . "   where pe.provider_id = p.id"
+                . "     and (umm.provider_endpoint_id is null or pe.id = umm.provider_endpoint_id)"
+                . "     and pe.status = 'active' and pe.protocol in ($protocols)"
+                . " )",
+                $endpointIssueIds
+            );
+            $namesByModel = [];
+            foreach ($nameRows as $nr) {
+                $namesByModel[(string) $nr['model_id']][] = $nr['provider_name'];
+            }
+            foreach ($endpointIssueIds as $mid) {
+                $names = $namesByModel[$mid] ?? [];
+                $suffix = $names === [] ? '' : '（' . implode('、', $names) . '）';
+                $result[$mid]['issues'] = [
+                    '供应商缺少可用的活跃端点' . $suffix . '：请在「供应商 → 端点」为其添加 status=active 且协议兼容的 provider endpoint',
+                ];
+            }
+        }
+        return $result;
+    }
+
+    /** PG 布尔字段兼容解析（PDO 可能返回 t/f、true/false、1/0） */
+    private static function pgBool($value): bool
+    {
+        return in_array($value, [true, 't', 'true', '1', 1], true);
+    }
+
     /** 读取并校验模型字段 */
     private function modelInput(bool $isCreate): array
     {
@@ -387,6 +519,8 @@ class Model extends BaseController
             'status'                => $status,
             'capabilities'          => $capsArr,
             'context_window_tokens' => $this->nullableInt('context_window_tokens'),
+            // 模型级最大输出：NULL/0 = 未声明，/v1/models 回退取活跃映射 MAX(max_tokens)
+            'max_tokens'            => $this->nullableInt('max_tokens'),
             'billing_mode'          => $billingMode,
         ];
     }
@@ -409,6 +543,8 @@ class Model extends BaseController
             'input_price_per_token'  => $this->nullableFloat('input_price_per_token'),
             'output_price_per_token' => $this->nullableFloat('output_price_per_token'),
             'max_tokens'             => $this->nullableInt('max_tokens'),
+            // 映射级上下文窗口：仅配置展示，路由过滤逻辑后续实现；NULL = 未声明，沿用模型级值
+            'context_window_tokens'  => $this->nullableInt('context_window_tokens'),
             'status'                 => $status,
             'provider_endpoint_id'   => $endpointId === '' ? null : $endpointId,
         ];
