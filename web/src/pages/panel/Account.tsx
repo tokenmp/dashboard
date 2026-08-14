@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import type { ReactNode } from 'react';
-import { ChevronDown, Plus, RefreshCw, RotateCcw } from 'lucide-react';
+import { ChevronDown, ChevronLeft, ChevronRight, Plus, RefreshCw, RotateCcw } from 'lucide-react';
 import { toast } from 'sonner';
 import { getPanelProfileApi, updatePanelPlanStrategyApi } from '@/api/panel';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
@@ -71,32 +71,27 @@ const GROUP_ORDER = ['到期', '限额', '剩余', '激活'];
 const metaOf = (key: CodingPlanStrategyKey) => STRATEGY_META.find((m) => m.key === key)!;
 /** 默认策略（与后端 CodingPlanStrategy::DEFAULT_LIST 一致） */
 const DEFAULT_ORDER: CodingPlanStrategyKey[] = ['soonest_expiry', 'smallest_limit', 'least_remaining', 'oldest_first'];
-/** 策略下拉菜单内容：按维度分组（组内两个方向）。
- *  互斥按「维度」判断：其他槽位已占用该维度（无论哪个方向）即整组置灰；
- *  当前槽位自己的维度仍可切换方向（如 限额小 ↔ 限额大）。 */
-function StrategyMenuContent({ excludeKeys, onSelect, onRemove }: {
-  excludeKeys: CodingPlanStrategyKey[];
+/** 策略下拉菜单内容：只展示「本槽位维度 + 未被占用的维度」，
+ *  已被其他槽位占用的维度整组隐藏（不占菜单空间）。 */
+function StrategyMenuContent({ visibleGroups, onSelect, onRemove }: {
+  visibleGroups: string[];
   onSelect: (key: CodingPlanStrategyKey) => void;
   onRemove?: () => void;
 }) {
-  const occupiedGroups = new Set(excludeKeys.map((k) => metaOf(k).group));
   return (
     <DropdownMenuContent align="start" className="w-72">
-      {GROUP_ORDER.flatMap((group) => {
+      {visibleGroups.flatMap((group) => {
         const items = STRATEGY_META.filter((m) => m.group === group);
         return [
           <DropdownMenuLabel key={`g-${group}`} className="text-[11px] text-muted-foreground">按{group}</DropdownMenuLabel>,
-          ...items.map((m) => {
-            const occupied = occupiedGroups.has(m.group);
-            return (
-              <DropdownMenuItem key={m.key} disabled={occupied} onClick={() => onSelect(m.key)}>
-                <span className="flex min-w-0 flex-1 flex-col">
-                  <span className="text-sm">{m.label}{occupied ? '（该维度已占用）' : ''}</span>
-                  <span className="text-xs text-muted-foreground">{m.hint}</span>
-                </span>
-              </DropdownMenuItem>
-            );
-          }),
+          ...items.map((m) => (
+            <DropdownMenuItem key={m.key} onClick={() => onSelect(m.key)}>
+              <span className="flex min-w-0 flex-1 flex-col">
+                <span className="text-sm">{m.label}</span>
+                <span className="text-xs text-muted-foreground">{m.hint}</span>
+              </span>
+            </DropdownMenuItem>
+          )),
         ];
       })}
       {onRemove && (
@@ -133,6 +128,21 @@ function PlanStrategyCard({ stored, onSaved }: { stored: string; onSaved: () => 
     setDirty(true);
     setEnabled((prev) => prev.filter((_, i) => i !== index));
   };
+  /** 左右移动槽位调序（与相邻槽位交换） */
+  const moveSlot = (index: number, dir: -1 | 1) => {
+    const target = index + dir;
+    if (target < 0 || target >= enabled.length) return;
+    setDirty(true);
+    setEnabled((prev) => prev.map((k, i) => (i === index ? prev[target] : i === target ? prev[index] : k)));
+  };
+  /** 其他槽位已占用的维度集合 */
+  const occupiedGroups = (exceptIndex?: number) =>
+    new Set(enabled.filter((_, i) => i !== exceptIndex).map((k) => metaOf(k).group));
+  /** 菜单可见分组 = 未被占用的维度（编辑已有槽位时额外包含自己的维度，用于切换方向） */
+  const freeGroupsFor = (exceptIndex?: number) => {
+    const occupied = occupiedGroups(exceptIndex);
+    return GROUP_ORDER.filter((g) => !occupied.has(g));
+  };
 
   const save = async () => {
     if (enabled.length === 0) return toast.error('至少启用一个策略');
@@ -161,7 +171,7 @@ function PlanStrategyCard({ stored, onSaved }: { stored: string; onSaved: () => 
       <CardHeader className="pb-3">
         <CardTitle className="text-sm">扣费套餐策略</CardTitle>
         <p className="text-xs text-muted-foreground">
-          多个编程套餐共存时，按 1→4 的顺序依次决定先扣哪个套餐（前者持平再比后者）。点击槽位可切换策略，同一维度只能出现一次。
+          多个编程套餐共存时，按 1→4 的顺序依次决定先扣哪个套餐（前者持平再比后者）。点击槽位切换策略（同一维度只能出现一次，已占用的维度不再列出）；‹ › 调整顺序。
         </p>
       </CardHeader>
       <CardContent className="space-y-4">
@@ -171,6 +181,8 @@ function PlanStrategyCard({ stored, onSaved }: { stored: string; onSaved: () => 
               return <div key={`empty-${i}`} className="h-11 rounded-lg border border-dashed opacity-40" />;
             }
             if (slot.kind === 'add') {
+              const free = freeGroupsFor();
+              if (free.length === 0) return <div key="add-none" className="h-11 rounded-lg border border-dashed opacity-40" />;
               return (
                 <DropdownMenu key="add">
                   <DropdownMenuTrigger asChild>
@@ -178,26 +190,36 @@ function PlanStrategyCard({ stored, onSaved }: { stored: string; onSaved: () => 
                       <Plus className="h-4 w-4" />添加策略
                     </button>
                   </DropdownMenuTrigger>
-                  <StrategyMenuContent excludeKeys={enabled} onSelect={addSlot} />
+                  <StrategyMenuContent visibleGroups={free} onSelect={addSlot} />
                 </DropdownMenu>
               );
             }
             const meta = metaOf(slot.key);
+            const ownFirst = freeGroupsFor(slot.index).includes(meta.group);
+            const visibleGroups = ownFirst
+              ? [meta.group, ...freeGroupsFor(slot.index).filter((g) => g !== meta.group)]
+              : freeGroupsFor(slot.index);
             return (
-              <DropdownMenu key={slot.key}>
-                <DropdownMenuTrigger asChild>
-                  <button type="button" className="flex h-11 items-center gap-2 rounded-lg border border-primary/50 bg-primary/5 px-3 text-left shadow-sm transition-colors hover:border-primary">
-                    <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-primary text-[11px] font-semibold text-primary-foreground">{slot.index + 1}</span>
-                    <span className="min-w-0 flex-1 truncate text-sm font-medium">{meta.dim} · {meta.dir}</span>
-                    <ChevronDown className="h-4 w-4 shrink-0 text-muted-foreground" />
-                  </button>
-                </DropdownMenuTrigger>
-                <StrategyMenuContent
-                  excludeKeys={enabled.filter((_, idx) => idx !== slot.index)}
-                  onSelect={(key) => setSlot(slot.index, key)}
-                  onRemove={() => removeSlot(slot.index)}
-                />
-              </DropdownMenu>
+              <div key={slot.key} className="flex items-center gap-1">
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <button type="button" className="flex h-11 min-w-0 flex-1 items-center gap-2 rounded-lg border border-primary/50 bg-primary/5 px-2.5 text-left shadow-sm transition-colors hover:border-primary">
+                      <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-primary text-[11px] font-semibold text-primary-foreground">{slot.index + 1}</span>
+                      <span className="min-w-0 flex-1 truncate text-sm font-medium">{meta.dim} · {meta.dir}</span>
+                      <ChevronDown className="h-4 w-4 shrink-0 text-muted-foreground" />
+                    </button>
+                  </DropdownMenuTrigger>
+                  <StrategyMenuContent
+                    visibleGroups={visibleGroups}
+                    onSelect={(key) => setSlot(slot.index, key)}
+                    onRemove={() => removeSlot(slot.index)}
+                  />
+                </DropdownMenu>
+                <span className="flex shrink-0 flex-col">
+                  <button type="button" className="flex h-5 w-5 items-center justify-center rounded text-muted-foreground/60 hover:bg-muted hover:text-foreground disabled:opacity-20" disabled={slot.index === 0} title="前移" onClick={() => moveSlot(slot.index, -1)}><ChevronLeft className="h-3.5 w-3.5" /></button>
+                  <button type="button" className="flex h-5 w-5 items-center justify-center rounded text-muted-foreground/60 hover:bg-muted hover:text-foreground disabled:opacity-20" disabled={slot.index === enabled.length - 1} title="后移" onClick={() => moveSlot(slot.index, 1)}><ChevronRight className="h-3.5 w-3.5" /></button>
+                </span>
+              </div>
             );
           })}
         </div>
