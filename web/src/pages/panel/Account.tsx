@@ -52,42 +52,49 @@ function Account() {
 
 /* --------------------------- 扣费套餐策略 --------------------------- */
 
-/** 策略元数据（与后端枚举一一对应；key 为 CodingPlanStrategyKey 联合类型，禁止任意 string） */
-const STRATEGY_META: { key: CodingPlanStrategyKey; label: string; hint: string; group: string }[] = [
-  { key: 'soonest_expiry', label: '最近到期优先', hint: '快过期的先用，避免浪费', group: '到期' },
-  { key: 'latest_expiry', label: '最晚到期优先', hint: '长期套餐先垫着用', group: '到期' },
-  { key: 'smallest_limit', label: '限额小优先', hint: '先消耗小套餐', group: '限额' },
-  { key: 'largest_limit', label: '限额大优先', hint: '先扣限额大的套餐', group: '限额' },
-  { key: 'least_remaining', label: '剩余最少优先', hint: '把快用完的打满再换新', group: '剩余' },
-  { key: 'most_remaining', label: '剩余最多优先', hint: '先用富余的套餐', group: '剩余' },
-  { key: 'oldest_first', label: '先激活先用', hint: 'FIFO，把已开通的用完', group: '激活' },
-  { key: 'newest_first', label: '最新激活先用', hint: '优先新套餐', group: '激活' },
+/** 策略元数据（与后端枚举一一对应；key 为 CodingPlanStrategyKey 联合类型，禁止任意 string）
+ *  dim/dir：槽位按钮上的短标签（维度 · 方向）；label/hint：完整名称与说明（菜单里展示） */
+const STRATEGY_META: { key: CodingPlanStrategyKey; label: string; hint: string; group: string; dim: string; dir: string }[] = [
+  { key: 'soonest_expiry', label: '最近到期优先', hint: '快过期的先用，避免浪费', group: '到期', dim: '到期', dir: '最近' },
+  { key: 'latest_expiry', label: '最晚到期优先', hint: '长期套餐先垫着用', group: '到期', dim: '到期', dir: '最晚' },
+  { key: 'smallest_limit', label: '限额小优先', hint: '先消耗小套餐', group: '限额', dim: '限额', dir: '小' },
+  { key: 'largest_limit', label: '限额大优先', hint: '先扣限额大的套餐', group: '限额', dim: '限额', dir: '大' },
+  { key: 'least_remaining', label: '剩余最少优先', hint: '把快用完的打满再换新', group: '剩余', dim: '剩余', dir: '最少' },
+  { key: 'most_remaining', label: '剩余最多优先', hint: '先用富余的套餐', group: '剩余', dim: '剩余', dir: '最多' },
+  { key: 'oldest_first', label: '先激活先用', hint: 'FIFO，把已开通的用完', group: '激活', dim: '激活', dir: '先' },
+  { key: 'newest_first', label: '最新激活先用', hint: '优先新套餐', group: '激活', dim: '激活', dir: '新' },
 ];
 
 const ALL_KEYS = STRATEGY_META.map((m) => m.key);
+/** 菜单分组顺序（同组两条目相邻展示） */
+const GROUP_ORDER = ['到期', '限额', '剩余', '激活'];
 const metaOf = (key: CodingPlanStrategyKey) => STRATEGY_META.find((m) => m.key === key)!;
 /** 默认策略（与后端 CodingPlanStrategy::DEFAULT_LIST 一致） */
 const DEFAULT_ORDER: CodingPlanStrategyKey[] = ['soonest_expiry', 'smallest_limit', 'least_remaining', 'oldest_first'];
-/** 策略下拉菜单内容：可切换为任一未被其他槽位占用的策略；filled 槽位额外提供移除 */
+/** 策略下拉菜单内容：按维度分组（组内两个方向）；已被其他槽位占用的置灰；filled 槽位提供移除 */
 function StrategyMenuContent({ excludeKeys, onSelect, onRemove }: {
   excludeKeys: CodingPlanStrategyKey[];
   onSelect: (key: CodingPlanStrategyKey) => void;
   onRemove?: () => void;
 }) {
   return (
-    <DropdownMenuContent align="start" className="w-64">
-      <DropdownMenuLabel>选择策略</DropdownMenuLabel>
-      {STRATEGY_META.map((m) => {
-        const used = excludeKeys.includes(m.key);
-        return (
-          <DropdownMenuItem key={m.key} disabled={used} onClick={() => onSelect(m.key)}>
-            <span className="flex min-w-0 flex-1 flex-col">
-              <span className="text-sm">{m.label}{used ? '（已启用）' : ''}</span>
-              <span className="text-xs text-muted-foreground">{m.hint}</span>
-            </span>
-            <span className="ml-2 shrink-0 rounded border px-1.5 py-0.5 text-[10px] text-muted-foreground">{m.group}</span>
-          </DropdownMenuItem>
-        );
+    <DropdownMenuContent align="start" className="w-72">
+      {GROUP_ORDER.flatMap((group) => {
+        const items = STRATEGY_META.filter((m) => m.group === group);
+        return [
+          <DropdownMenuLabel key={`g-${group}`} className="text-[11px] text-muted-foreground">按{group}</DropdownMenuLabel>,
+          ...items.map((m) => {
+            const used = excludeKeys.includes(m.key);
+            return (
+              <DropdownMenuItem key={m.key} disabled={used} onClick={() => onSelect(m.key)}>
+                <span className="flex min-w-0 flex-1 flex-col">
+                  <span className="text-sm">{m.label}{used ? '（已启用）' : ''}</span>
+                  <span className="text-xs text-muted-foreground">{m.hint}</span>
+                </span>
+              </DropdownMenuItem>
+            );
+          }),
+        ];
       })}
       {onRemove && (
         <>
@@ -151,22 +158,21 @@ function PlanStrategyCard({ stored, onSaved }: { stored: string; onSaved: () => 
       <CardHeader className="pb-3">
         <CardTitle className="text-sm">扣费套餐策略</CardTitle>
         <p className="text-xs text-muted-foreground">
-          多个编程套餐共存时，按 1→4 的顺序依次决定先扣哪个套餐（前者持平再比后者）。点击卡片可切换该位置的策略。
+          多个编程套餐共存时，按 1→4 的顺序依次决定先扣哪个套餐（前者持平再比后者）。点击槽位可切换策略，同一维度只能出现一次。
         </p>
       </CardHeader>
       <CardContent className="space-y-4">
         <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
           {slots.map((slot, i) => {
             if (slot.kind === 'empty') {
-              return <div key={`empty-${i}`} className="min-h-[7.5rem] rounded-lg border border-dashed opacity-40" />;
+              return <div key={`empty-${i}`} className="h-11 rounded-lg border border-dashed opacity-40" />;
             }
             if (slot.kind === 'add') {
               return (
                 <DropdownMenu key="add">
                   <DropdownMenuTrigger asChild>
-                    <button type="button" className="flex min-h-[7.5rem] flex-col items-center justify-center gap-1.5 rounded-lg border border-dashed p-3 text-muted-foreground transition-colors hover:border-primary/50 hover:bg-primary/5">
-                      <span className="flex h-7 w-7 items-center justify-center rounded-md bg-muted"><Plus className="h-4 w-4" /></span>
-                      <span className="text-xs">添加策略</span>
+                    <button type="button" className="flex h-11 items-center justify-center gap-1.5 rounded-lg border border-dashed text-sm text-muted-foreground transition-colors hover:border-primary/50 hover:bg-primary/5">
+                      <Plus className="h-4 w-4" />添加策略
                     </button>
                   </DropdownMenuTrigger>
                   <StrategyMenuContent excludeKeys={enabled} onSelect={addSlot} />
@@ -177,13 +183,10 @@ function PlanStrategyCard({ stored, onSaved }: { stored: string; onSaved: () => 
             return (
               <DropdownMenu key={slot.key}>
                 <DropdownMenuTrigger asChild>
-                  <button type="button" className="flex min-h-[7.5rem] flex-col items-start gap-1 rounded-lg border border-primary/50 bg-primary/5 p-3 text-left shadow-sm transition-colors hover:border-primary">
-                    <span className="flex w-full items-center justify-between">
-                      <span className="flex h-6 w-6 items-center justify-center rounded-full bg-primary text-[11px] font-semibold text-primary-foreground">{slot.index + 1}</span>
-                      <ChevronDown className="h-4 w-4 text-muted-foreground" />
-                    </span>
-                    <span className="text-sm font-medium">{meta.label}</span>
-                    <span className="text-xs leading-snug text-muted-foreground">{meta.hint}</span>
+                  <button type="button" className="flex h-11 items-center gap-2 rounded-lg border border-primary/50 bg-primary/5 px-3 text-left shadow-sm transition-colors hover:border-primary">
+                    <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-primary text-[11px] font-semibold text-primary-foreground">{slot.index + 1}</span>
+                    <span className="min-w-0 flex-1 truncate text-sm font-medium">{meta.dim} · {meta.dir}</span>
+                    <ChevronDown className="h-4 w-4 shrink-0 text-muted-foreground" />
                   </button>
                 </DropdownMenuTrigger>
                 <StrategyMenuContent
