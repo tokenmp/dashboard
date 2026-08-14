@@ -29,11 +29,11 @@ enum CodingPlanStrategy: string
     /** 最新激活先用（历史 tie-break 行为） */
     case NewestFirst = 'newest_first';
 
-    /** 默认策略（依序）：最近到期 → 限额小 → 剩余少 → 先激活 */
+    /** 默认策略（依序）：最近到期 → 剩余少 → 限额小 → 先激活 */
     public const DEFAULT_LIST = [
         self::SoonestExpiry,
-        self::SmallestLimit,
         self::LeastRemaining,
+        self::SmallestLimit,
         self::OldestFirst,
     ];
 

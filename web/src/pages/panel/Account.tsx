@@ -83,7 +83,7 @@ const GROUP_ICON: Record<string, typeof CalendarClock> = {
 };
 const metaOf = (key: CodingPlanStrategyKey) => STRATEGY_META.find((m) => m.key === key)!;
 /** 默认策略（与后端 CodingPlanStrategy::DEFAULT_LIST 一致） */
-const DEFAULT_ORDER: CodingPlanStrategyKey[] = ['soonest_expiry', 'smallest_limit', 'least_remaining', 'oldest_first'];
+const DEFAULT_ORDER: CodingPlanStrategyKey[] = ['soonest_expiry', 'least_remaining', 'smallest_limit', 'oldest_first'];
 /** 把 label 按 emph 关键词切成三段，供加重渲染 */
 function splitEmphasis(label: string, emph: string): [string, string, string] {
   const i = label.indexOf(emph);
