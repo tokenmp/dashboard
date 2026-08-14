@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import type { ReactNode } from 'react';
-import { BatteryMedium, CalendarClock, ChevronDown, Gauge, GripVertical, History, Info, Pencil, Plus, RefreshCw, RotateCcw, X } from 'lucide-react';
+import { BatteryMedium, BookOpen, CalendarClock, ChevronDown, Gauge, GripVertical, History, Info, Pencil, Plus, RefreshCw, RotateCcw, X } from 'lucide-react';
 import { toast } from 'sonner';
 import { DndContext, KeyboardSensor, PointerSensor, closestCenter, useSensor, useSensors } from '@dnd-kit/core';
 import type { DragEndEvent } from '@dnd-kit/core';
@@ -186,6 +186,7 @@ function PlanStrategyCard({ stored, onSaved }: { stored: string; onSaved: () => 
   // 先决条件：默认只读，点击「编辑」后才开放操作（避免误触，确保用户先理解再操作）
   const [editing, setEditing] = useState(false);
   const [detailOpen, setDetailOpen] = useState(false);
+  const [rulesOpen, setRulesOpen] = useState(false);
 
   const setSlot = (index: number, key: CodingPlanStrategyKey) => {
     setDirty(true);
@@ -380,32 +381,44 @@ function PlanStrategyCard({ stored, onSaved }: { stored: string; onSaved: () => 
                 每种规则只能使用一次（比如选了“先用快到期的”，就不能再选“先用长期的”——它们是同一件事的两个方向）。调整完后点击「<strong className="text-foreground">保存策略</strong>」才会生效；「<strong className="text-foreground">取消编辑</strong>」会放弃所有改动。
               </p>
             </section>
-            <section className="space-y-1.5">
-              <h4 className="text-xs font-semibold text-muted-foreground">四、全部规则</h4>
-              <div className="space-y-2">
-                {GROUP_ORDER.map((group) => {
-                  const Icon = GROUP_ICON[group];
-                  return (
-                    <div key={group}>
-                      <p className="flex items-center gap-1 text-xs text-muted-foreground">
-                        {Icon && <Icon className="h-3.5 w-3.5" />}按{group}排序
-                      </p>
-                      <ul className="mt-1 grid grid-cols-1 gap-1 sm:grid-cols-2">
-                        {STRATEGY_META.filter((m) => m.group === group).map((m) => {
-                          const [pre, emph, post] = splitEmphasis(m.label, m.emph);
-                          return (
-                            <li key={m.key} className="rounded-md border px-2 py-1.5">
-                              <span className="text-sm">{pre}<strong className="text-primary">{emph}</strong>{post}</span>
-                              <span className="mt-0.5 block text-xs text-muted-foreground">{m.hint}</span>
-                            </li>
-                          );
-                        })}
-                      </ul>
-                    </div>
-                  );
-                })}
-              </div>
-            </section>
+            <div className="border-t pt-3">
+              <button type="button" className="flex items-center gap-1 text-xs text-primary hover:underline" onClick={() => setRulesOpen(true)}>
+                不确定某条规则的含义？查看全部 8 条规则<BookOpen className="h-3.5 w-3.5" />
+              </button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* 二级弹窗：全部规则词典 */}
+      <Dialog open={rulesOpen} onOpenChange={setRulesOpen}>
+        <DialogContent className="max-h-[85vh] max-w-lg overflow-y-auto">
+          <DialogHeader><DialogTitle>全部规则</DialogTitle></DialogHeader>
+          <p className="text-xs leading-relaxed text-muted-foreground">
+            每种维度提供两个方向，选其一即可；同一维度在顺序里只能出现一次。
+          </p>
+          <div className="space-y-3">
+            {GROUP_ORDER.map((group) => {
+              const Icon = GROUP_ICON[group];
+              return (
+                <div key={group}>
+                  <p className="flex items-center gap-1 text-xs font-semibold text-muted-foreground">
+                    {Icon && <Icon className="h-3.5 w-3.5" />}按{group}排序
+                  </p>
+                  <ul className="mt-1 grid grid-cols-1 gap-1 sm:grid-cols-2">
+                    {STRATEGY_META.filter((m) => m.group === group).map((m) => {
+                      const [pre, emph, post] = splitEmphasis(m.label, m.emph);
+                      return (
+                        <li key={m.key} className="rounded-md border px-2 py-1.5">
+                          <span className="text-sm">{pre}<strong className="text-primary">{emph}</strong>{post}</span>
+                          <span className="mt-0.5 block text-xs text-muted-foreground">{m.hint}</span>
+                        </li>
+                      );
+                    })}
+                  </ul>
+                </div>
+              );
+            })}
           </div>
         </DialogContent>
       </Dialog>
