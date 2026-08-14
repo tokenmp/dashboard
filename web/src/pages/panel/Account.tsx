@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import type { ReactNode } from 'react';
-import { BatteryMedium, CalendarClock, ChevronDown, Gauge, GripVertical, History, Pencil, Plus, RefreshCw, RotateCcw, X } from 'lucide-react';
+import { BatteryMedium, CalendarClock, ChevronDown, Gauge, GripVertical, History, Info, Pencil, Plus, RefreshCw, RotateCcw, X } from 'lucide-react';
 import { toast } from 'sonner';
 import { DndContext, KeyboardSensor, PointerSensor, closestCenter, useSensor, useSensors } from '@dnd-kit/core';
 import type { DragEndEvent } from '@dnd-kit/core';
@@ -9,6 +9,7 @@ import { CSS } from '@dnd-kit/utilities';
 import { getPanelProfileApi, updatePanelPlanStrategyApi } from '@/api/panel';
 import { cn } from '@/lib/utils';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { useAsync } from '@/hooks/useAsync';
 import { StatusBadge } from '@/components/StatusBadge';
 import { Badge } from '@/components/ui/badge';
@@ -184,6 +185,7 @@ function PlanStrategyCard({ stored, onSaved }: { stored: string; onSaved: () => 
   const [dirty, setDirty] = useState(false);
   // 先决条件：默认只读，点击「编辑」后才开放操作（避免误触，确保用户先理解再操作）
   const [editing, setEditing] = useState(false);
+  const [detailOpen, setDetailOpen] = useState(false);
 
   const setSlot = (index: number, key: CodingPlanStrategyKey) => {
     setDirty(true);
@@ -242,11 +244,18 @@ function PlanStrategyCard({ stored, onSaved }: { stored: string; onSaved: () => 
 
   return (
     <Card>
-      <CardHeader className="pb-3">
+      <CardHeader className="flex-row items-center justify-between space-y-0 pb-3">
         <CardTitle className="text-sm">扣费套餐策略</CardTitle>
-        <p className="text-xs leading-relaxed text-muted-foreground">
-          当你同时拥有多个编程套餐时，这里决定每次请求先从哪个套餐扣额度：按 1→4 的顺序依次尝试，排在前面的规则先决定，分不出先后才看下一条。点击卡片可换规则（每种规则只能用一次）；按住 ⠿ 拖动可调整先后。
-        </p>
+        <div className="flex items-center gap-1.5">
+          <Button size="sm" variant="ghost" onClick={() => setDetailOpen(true)}>
+            <Info className="mr-1 h-3.5 w-3.5" />详情
+          </Button>
+          {!editing && (
+            <Button size="sm" variant="outline" onClick={() => setEditing(true)}>
+              <Pencil className="mr-1 h-3.5 w-3.5" />编辑
+            </Button>
+          )}
+        </div>
       </CardHeader>
       <CardContent className="space-y-4">
         {editing ? (
@@ -304,33 +313,67 @@ function PlanStrategyCard({ stored, onSaved }: { stored: string; onSaved: () => 
           </div>
         )}
 
-        <div className="flex flex-wrap items-center gap-3 border-t pt-3">
-          {editing ? (
-            <>
-              <Button size="sm" disabled={saving || !dirty || enabled.length === 0} onClick={save}>{saving ? '保存中…' : '保存策略'}</Button>
-              <Button
-                size="sm"
-                variant="ghost"
-                disabled={saving || (enabled.length === DEFAULT_ORDER.length && DEFAULT_ORDER.every((k, i) => enabled[i] === k))}
-                title="恢复为系统默认策略顺序"
-                onClick={() => { setDirty(true); setEnabled([...DEFAULT_ORDER]); }}
-              >
-                <RotateCcw className="mr-1 h-3.5 w-3.5" />还原默认
-              </Button>
-              <Button size="sm" variant="outline" disabled={saving} onClick={() => { setEnabled(initial); setDirty(false); setEditing(false); }}>取消编辑</Button>
-            </>
-          ) : (
-            <>
-              <Button size="sm" variant="outline" onClick={() => setEditing(true)}>
-                <Pencil className="mr-1 h-3.5 w-3.5" />编辑
-              </Button>
-              <span className="text-[11px] text-muted-foreground">默认仅展示，不可操作；点击「编辑」后可调整策略与扣费顺序</span>
-            </>
-          )}
-          <span className="text-[11px] text-muted-foreground">扣费顺序：{enabled.length > 0 ? enabled.map((k, i) => `${i + 1}. ${metaOf(k).label}`).join('；') : '—'}</span>
-          {editing && dirty && <span className="text-xs text-amber-600">有未保存的修改</span>}
-        </div>
+        {editing && (
+          <div className="flex flex-wrap items-center gap-3 border-t pt-3">
+            <Button size="sm" disabled={saving || !dirty || enabled.length === 0} onClick={save}>{saving ? '保存中…' : '保存策略'}</Button>
+            <Button
+              size="sm"
+              variant="ghost"
+              disabled={saving || (enabled.length === DEFAULT_ORDER.length && DEFAULT_ORDER.every((k, i) => enabled[i] === k))}
+              title="恢复为系统默认策略顺序"
+              onClick={() => { setDirty(true); setEnabled([...DEFAULT_ORDER]); }}
+            >
+              <RotateCcw className="mr-1 h-3.5 w-3.5" />还原默认
+            </Button>
+            <Button size="sm" variant="outline" disabled={saving} onClick={() => { setEnabled(initial); setDirty(false); setEditing(false); }}>取消编辑</Button>
+            {dirty && <span className="text-xs text-amber-600">有未保存的修改</span>}
+          </div>
+        )}
       </CardContent>
+
+      {/* 详情弹窗：作用说明、当前顺序、修改方式与规则词典 */}
+      <Dialog open={detailOpen} onOpenChange={setDetailOpen}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader><DialogTitle>扣费套餐策略说明</DialogTitle></DialogHeader>
+          <div className="space-y-4 text-sm">
+            <section className="space-y-1">
+              <h4 className="text-xs font-semibold text-muted-foreground">这是什么</h4>
+              <p className="leading-relaxed text-muted-foreground">
+                当你同时拥有多个编程套餐时，这里决定每次请求先从哪个套餐扣额度：按 1→4 的顺序依次尝试，排在前面的规则先决定，分不出先后才看下一条。
+              </p>
+            </section>
+            <section className="space-y-1">
+              <h4 className="text-xs font-semibold text-muted-foreground">当前扣费顺序</h4>
+              <ol className="space-y-1">
+                {enabled.map((k, i) => (
+                  <li key={k} className="flex gap-2">
+                    <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-primary/10 text-[11px] font-semibold text-primary">{i + 1}</span>
+                    <span>{metaOf(k).label}<span className="ml-2 text-xs text-muted-foreground">{metaOf(k).hint}</span></span>
+                  </li>
+                ))}
+                {enabled.length === 0 && <li className="text-muted-foreground">未启用任何策略</li>}
+              </ol>
+            </section>
+            <section className="space-y-1">
+              <h4 className="text-xs font-semibold text-muted-foreground">如何修改</h4>
+              <p className="leading-relaxed text-muted-foreground">
+                默认仅展示、不可操作；点击右上角「编辑」后可调整：⠿ 拖动调整顺序、点击卡片切换策略（每种规则只能使用一次）、✕ 移除、＋ 添加。修改后需点击「保存策略」生效。
+              </p>
+            </section>
+            <section className="space-y-1">
+              <h4 className="text-xs font-semibold text-muted-foreground">全部规则</h4>
+              <ul className="grid grid-cols-1 gap-1 sm:grid-cols-2">
+                {STRATEGY_META.map((m) => (
+                  <li key={m.key} className="rounded-md border px-2 py-1.5">
+                    <span className="text-sm">{m.label}</span>
+                    <span className="mt-0.5 block text-xs text-muted-foreground">{m.hint}</span>
+                  </li>
+                ))}
+              </ul>
+            </section>
+          </div>
+        </DialogContent>
+      </Dialog>
     </Card>
   );
 }
