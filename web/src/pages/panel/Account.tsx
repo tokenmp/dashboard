@@ -60,14 +60,14 @@ function Account() {
 /** 策略元数据（与后端枚举一一对应；key 为 CodingPlanStrategyKey 联合类型，禁止任意 string）
  *  dim/dir：槽位按钮上的短标签（维度 · 方向）；label/hint：完整名称与说明（菜单里展示） */
 const STRATEGY_META: { key: CodingPlanStrategyKey; label: string; hint: string; group: string; dim: string; dir: string }[] = [
-  { key: 'soonest_expiry', label: '最近到期优先', hint: '快过期的先用，避免浪费', group: '到期', dim: '到期', dir: '最近' },
-  { key: 'latest_expiry', label: '最晚到期优先', hint: '长期套餐先垫着用', group: '到期', dim: '到期', dir: '最晚' },
-  { key: 'smallest_limit', label: '限额小优先', hint: '先消耗小套餐', group: '限额', dim: '限额', dir: '小' },
-  { key: 'largest_limit', label: '限额大优先', hint: '先扣限额大的套餐', group: '限额', dim: '限额', dir: '大' },
-  { key: 'least_remaining', label: '剩余最少优先', hint: '把快用完的打满再换新', group: '剩余', dim: '剩余', dir: '最少' },
-  { key: 'most_remaining', label: '剩余最多优先', hint: '先用富余的套餐', group: '剩余', dim: '剩余', dir: '最多' },
-  { key: 'oldest_first', label: '先激活先用', hint: 'FIFO，把已开通的用完', group: '激活', dim: '激活', dir: '先' },
-  { key: 'newest_first', label: '最新激活先用', hint: '优先新套餐', group: '激活', dim: '激活', dir: '新' },
+  { key: 'soonest_expiry', label: '先用快到期的套餐', hint: '即将过期的额度先花掉，避免到期作废', group: '到期', dim: '到期', dir: '最近' },
+  { key: 'latest_expiry', label: '先用长期的套餐', hint: '先消耗有效期长的，短期套餐留着后面用', group: '到期', dim: '到期', dir: '最晚' },
+  { key: 'smallest_limit', label: '先用小额度的套餐', hint: '先把小额度套餐用完，大额度留着以后慢慢用', group: '限额', dim: '限额', dir: '小' },
+  { key: 'largest_limit', label: '先用大额度的套餐', hint: '优先消耗大额度套餐，小额度当备用', group: '限额', dim: '限额', dir: '大' },
+  { key: 'least_remaining', label: '先用快用完的套餐', hint: '先把剩得最少的套餐用光，再换下一个', group: '剩余', dim: '剩余', dir: '最少' },
+  { key: 'most_remaining', label: '先用额度充裕的套餐', hint: '优先消耗剩余最多的套餐', group: '剩余', dim: '剩余', dir: '最多' },
+  { key: 'oldest_first', label: '先用最早开通的套餐', hint: '按开通顺序排队，先开通的先用完', group: '激活', dim: '激活', dir: '先' },
+  { key: 'newest_first', label: '先用最新开通的套餐', hint: '新拿到的套餐先用，旧的留着', group: '激活', dim: '激活', dir: '新' },
 ];
 
 const ALL_KEYS = STRATEGY_META.map((m) => m.key);
@@ -105,7 +105,7 @@ function SortableStrategySlot({ rank, meta, visibleGroups, onSet, onRemove }: {
         <DropdownMenuTrigger asChild>
           <button type="button" className="flex h-11 min-w-0 flex-1 items-center gap-2 rounded-lg text-left">
             <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-primary text-[11px] font-semibold text-primary-foreground">{rank}</span>
-            <span className="min-w-0 flex-1 truncate text-sm font-medium">{meta.dim} · {meta.dir}</span>
+            <span className="min-w-0 flex-1 truncate text-sm font-medium" title={meta.hint}>{meta.label}</span>
             <ChevronDown className="h-4 w-4 shrink-0 text-muted-foreground" />
           </button>
         </DropdownMenuTrigger>
@@ -131,7 +131,7 @@ function StrategyMenuContent({ visibleGroups, onSelect, onRemove }: {
       {visibleGroups.flatMap((group) => {
         const items = STRATEGY_META.filter((m) => m.group === group);
         return [
-          <DropdownMenuLabel key={`g-${group}`} className="text-[11px] text-muted-foreground">按{group}</DropdownMenuLabel>,
+          <DropdownMenuLabel key={`g-${group}`} className="text-[11px] text-muted-foreground">按{group}排序</DropdownMenuLabel>,
           ...items.map((m) => (
             <DropdownMenuItem key={m.key} onClick={() => onSelect(m.key)}>
               <span className="flex min-w-0 flex-1 flex-col">
@@ -222,8 +222,8 @@ function PlanStrategyCard({ stored, onSaved }: { stored: string; onSaved: () => 
     <Card>
       <CardHeader className="pb-3">
         <CardTitle className="text-sm">扣费套餐策略</CardTitle>
-        <p className="text-xs text-muted-foreground">
-          多个编程套餐共存时，按 1→4 的顺序依次决定先扣哪个套餐（前者持平再比后者）。点击卡片切换策略（同一维度只能出现一次，已占用的维度不再列出）；按住 ⠿ 拖动调整顺序。
+        <p className="text-xs leading-relaxed text-muted-foreground">
+          当你同时拥有多个编程套餐时，这里决定每次请求先从哪个套餐扣额度：按 1→4 的顺序依次尝试，排在前面的规则先决定，分不出先后才看下一条。点击卡片可换规则（每种规则只能用一次）；按住 ⠿ 拖动可调整先后。
         </p>
       </CardHeader>
       <CardContent className="space-y-4">
@@ -279,7 +279,7 @@ function PlanStrategyCard({ stored, onSaved }: { stored: string; onSaved: () => 
           >
             <RotateCcw className="mr-1 h-3.5 w-3.5" />还原默认
           </Button>
-          <span className="font-mono text-[11px] text-muted-foreground">当前顺序：{enabled.length > 0 ? enabled.map((k) => metaOf(k).label).join(' → ') : '—'}</span>
+          <span className="text-[11px] text-muted-foreground">扣费顺序：{enabled.length > 0 ? enabled.map((k, i) => `${i + 1}. ${metaOf(k).label}`).join('；') : '—'}</span>
           {dirty && <span className="text-xs text-amber-600">有未保存的修改</span>}
         </div>
       </CardContent>
