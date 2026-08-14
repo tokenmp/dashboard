@@ -36,6 +36,8 @@ export interface UsageByModelItem {
 /** 额度项（平台/用户共用） */
 export interface QuotaItem {
   billingPlan: string;
+  /** 套餐名；coding 多套餐时用于区分各卡（与 key 生成相关） */
+  planName?: string | null;
   unit: string;
   balance: number;
   reserved: number;

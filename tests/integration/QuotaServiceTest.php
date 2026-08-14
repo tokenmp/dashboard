@@ -105,10 +105,11 @@ final class QuotaServiceTest extends IntegrationTestCase
     public function testCodingMonthlyWindowAggregatesUsed(): void
     {
         $user = $this->uuid();
-        $plan = $this->seedPlan(['plan_type' => 'coding', 'monthly_limit' => 1000]);
-        $this->seedUserPlan($user, $plan, ['plan_type' => 'coding', 'activated_at' => date('Y-m-d H:i:s', strtotime('-10 days'))]);
-        $this->seedLedger($user, ['ledger_type' => 'charge', 'billing_plan' => 'coding', 'request_delta' => -100]);
-        $this->seedLedger($user, ['ledger_type' => 'charge', 'billing_plan' => 'coding', 'request_delta' => -40]);
+        $plan = $this->seedPlan(['plan_type' => 'coding', 'cycle_limit' => 1000]);
+        $binding = $this->seedUserPlan($user, $plan, ['plan_type' => 'coding', 'activated_at' => date('Y-m-d H:i:s', strtotime('-10 days'))]);
+        // coding 扣费按绑定隔离（对齐执行器 per-plan 容量），seed 需带 user_plan_id
+        $this->seedLedger($user, ['ledger_type' => 'charge', 'billing_plan' => 'coding', 'request_delta' => -100, 'user_plan_id' => $binding]);
+        $this->seedLedger($user, ['ledger_type' => 'charge', 'billing_plan' => 'coding', 'request_delta' => -40, 'user_plan_id' => $binding]);
 
         $item = $this->findItem($this->service->summary($user), 'coding');
 
@@ -152,5 +153,28 @@ final class QuotaServiceTest extends IntegrationTestCase
         $this->assertArrayHasKey('coding', $byPlan);
         $this->assertSame(0, $byPlan['coding']['tokenBalance']);
         $this->assertSame(-25, $byPlan['coding']['requestBalance']);
+    }
+
+    public function testMultipleCodingPlansEachGetOwnCard(): void
+    {
+        $user = $this->uuid();
+        $big = $this->seedPlan(['plan_type' => 'coding', 'name' => '旗舰版', 'cycle_limit' => 500, 'cycle_days' => 1]);
+        $small = $this->seedPlan(['plan_type' => 'coding', 'name' => '尝鲜版', 'cycle_limit' => 100, 'cycle_days' => 1]);
+        $bigB = $this->seedUserPlan($user, $big, ['plan_type' => 'coding', 'activated_at' => date('Y-m-d H:i:s', strtotime('-2 days'))]);
+        $smallB = $this->seedUserPlan($user, $small, ['plan_type' => 'coding', 'activated_at' => date('Y-m-d H:i:s', strtotime('-1 days'))]);
+        // 各扣各的：旗舰 30、尝鲜 20
+        $this->seedLedger($user, ['ledger_type' => 'charge', 'billing_plan' => 'coding', 'request_delta' => -30, 'user_plan_id' => $bigB]);
+        $this->seedLedger($user, ['ledger_type' => 'charge', 'billing_plan' => 'coding', 'request_delta' => -20, 'user_plan_id' => $smallB]);
+
+        $items = $this->service->summary($user);
+        $codingItems = array_values(array_filter($items, fn ($i) => $i['billingPlan'] === 'coding'));
+
+        $this->assertCount(2, $codingItems, '两个 active coding 套餐应各出一张卡');
+        // 排序=默认扣费策略（限额小优先）：cycle_limit 低的在前
+        $this->assertSame('尝鲜版', $codingItems[0]['planName']);
+        $this->assertSame('旗舰版', $codingItems[1]['planName']);
+        // 各卡的周期窗用量按绑定隔离（顺序翻转后：尝鲜版 20、旗舰版 30）
+        $this->assertSame(20, $codingItems[0]['windows'][0]['used']);
+        $this->assertSame(30, $codingItems[1]['windows'][0]['used']);
     }
 }

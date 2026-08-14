@@ -150,9 +150,9 @@ abstract class IntegrationTestCase extends TestCase
             'price'                => 0,
             'status'               => 'active',
             'token_limit'          => null,
-            'monthly_limit'        => null,
+            'cycle_limit'        => null,
             'weekly_limit'         => null,
-            'hourly_5h_limit'      => null,
+            'rolling_5h_limit'      => null,
             'cycle_days'           => null,
             'default_duration_days'=> null,
             'total_limit'          => 0,
@@ -196,6 +196,7 @@ abstract class IntegrationTestCase extends TestCase
             'token_delta'   => $o['token_delta'] ?? 0,
             'request_delta' => $o['request_delta'] ?? 0,
             'reason'        => $o['reason'] ?? 'test',
+            'user_plan_id'  => $o['user_plan_id'] ?? null,
         ];
         if (isset($o['created_at'])) {
             $row['created_at'] = $o['created_at'];

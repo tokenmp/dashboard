@@ -7,9 +7,9 @@ export interface PlanItem {
   id: string;
   name: string;
   plan_type: 'coding' | 'token' | 'image';
-  hourly_5h_limit: number | null;
+  rolling_5h_limit: number | null;
   weekly_limit: number | null;
-  monthly_limit: number | null;
+  cycle_limit: number | null;
   cycle_days: number | null;
   total_limit: number | null;
   token_limit: number | null;
@@ -36,9 +36,9 @@ export interface PlanListQuery {
 export interface PlanPayload {
   name: string;
   plan_type: 'coding' | 'token' | 'image';
-  hourly_5h_limit: number | null;
+  rolling_5h_limit: number | null;
   weekly_limit: number | null;
-  monthly_limit: number | null;
+  cycle_limit: number | null;
   cycle_days: number | null;
   total_limit: number | null;
   token_limit: number | null;

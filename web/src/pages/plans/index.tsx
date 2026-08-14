@@ -112,7 +112,7 @@ function Plans() {
       header: () => <span className="text-xs font-medium text-muted-foreground">5h/周/月</span>,
       cell: ({ row }) => {
         const p = row.original;
-        return <span className="block text-right font-mono text-xs">{p.plan_type === 'coding' ? `${p.hourly_5h_limit ?? '-'}/${p.weekly_limit ?? '-'}/${p.monthly_limit ?? '-'}` : '-'}</span>;
+        return <span className="block text-right font-mono text-xs">{p.plan_type === 'coding' ? `${p.rolling_5h_limit ?? '-'}/${p.weekly_limit ?? '-'}/${p.cycle_limit ?? '-'}` : '-'}</span>;
       },
     },
     {
@@ -281,9 +281,9 @@ function PlanDialog({ plan, open, submitting, onClose, onSubmit }: {
     if (!visible) return;
     setName(plan?.name ?? '');
     setPlanType(plan?.plan_type ?? 'coding');
-    setH5h(plan?.hourly_5h_limit?.toString() ?? '');
+    setH5h(plan?.rolling_5h_limit?.toString() ?? '');
     setWeek(plan?.weekly_limit?.toString() ?? '');
-    setMonth(plan?.monthly_limit?.toString() ?? '');
+    setMonth(plan?.cycle_limit?.toString() ?? '');
     setToken(plan?.token_limit?.toString() ?? '');
     setPrice(plan?.price?.toString() ?? '0');
     setDuration(plan?.default_duration_days?.toString() ?? '');
@@ -311,9 +311,9 @@ function PlanDialog({ plan, open, submitting, onClose, onSubmit }: {
     const body: PlanPayload = {
       name: name.trim(),
       plan_type: planType,
-      hourly_5h_limit: h5h === '' ? null : Number(h5h),
+      rolling_5h_limit: h5h === '' ? null : Number(h5h),
       weekly_limit: week === '' ? null : Number(week),
-      monthly_limit: month === '' ? null : Number(month),
+      cycle_limit: month === '' ? null : Number(month),
       cycle_days: cycle === '' ? null : Number(cycle),
       total_limit: total === '' ? null : Number(total),
       token_limit: token === '' ? null : Number(token),
@@ -382,7 +382,7 @@ function PlanDialog({ plan, open, submitting, onClose, onSubmit }: {
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1.5"><Label>5h 限额</Label><Input type="number" value={h5h} onChange={(e) => setH5h(e.target.value)} placeholder="不限" /></div>
               <div className="space-y-1.5"><Label>周限额</Label><Input type="number" value={week} onChange={(e) => setWeek(e.target.value)} placeholder="不限" /></div>
-              <div className="space-y-1.5"><Label>周期限额（月）</Label><Input type="number" value={month} onChange={(e) => setMonth(e.target.value)} placeholder="每个计费周期上限" /></div>
+              <div className="space-y-1.5"><Label>周期限额</Label><Input type="number" value={month} onChange={(e) => setMonth(e.target.value)} placeholder="每个计费周期上限" /></div>
               <div className="space-y-1.5"><Label>总限额（不刷新）</Label><Input type="number" value={total} onChange={(e) => setTotal(e.target.value)} placeholder="生命周期总量" /></div>
             </div>
           )}

@@ -357,7 +357,7 @@ function UserQuotaView({ data }: { data: UserQuota }) {
       <CardContent>
         {data.plans.length === 0 ? <EmptyState title="暂无额度数据" /> : (
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            {data.plans.map((q) => <QuotaCard key={q.billingPlan} q={q} />)}
+            {data.plans.map((q) => <QuotaCard key={`${q.billingPlan}-${q.planName ?? ''}`} q={q} />)}
           </div>
         )}
       </CardContent>

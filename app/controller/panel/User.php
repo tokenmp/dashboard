@@ -7,6 +7,7 @@ use app\BaseController;
 use app\model\BotKey;
 use app\model\User as UserModel;
 use app\model\UserApiKey;
+use app\enums\CodingPlanStrategy;
 use app\model\UserPlan;
 use app\service\ApiKeyHasher;
 use app\service\DataScope;
@@ -30,11 +31,31 @@ class User extends BaseController
     public function profile()
     {
         $ctx  = DataScope::forSelf(app('user'));
-        $user = UserModel::field(['id', 'email', 'role', 'status', 'preferred_billing', 'fallback_enabled', 'created_at', 'updated_at'])
+        $user = UserModel::field(['id', 'email', 'role', 'status', 'preferred_billing', 'fallback_enabled', 'coding_plan_strategy', 'created_at', 'updated_at'])
             ->where('id', $ctx->userId())
             ->find();
 
         return success($user);
+    }
+
+    /** PUT /api/v1/panel/user/plan-strategy —— 配置扣费套餐选择策略（有序枚举列表） */
+    public function updatePlanStrategy()
+    {
+        $ctx = DataScope::forSelf(app('user'));
+        // put() 仅在 PUT 方法下安全（内部数组按方法惰性解析），其余场景回退 post
+        $raw   = $this->request->isPut() ? (string) $this->request->put('strategy', '') : '';
+        $input = trim($raw !== '' ? $raw : (string) $this->request->post('strategy', ''));
+        try {
+            $list = CodingPlanStrategy::parseList($input);
+        } catch (\ValueError|\InvalidArgumentException $e) {
+            throw new HttpException(400, 'strategy 非法：' . $e->getMessage());
+        }
+        $stored = CodingPlanStrategy::format($list);
+        Db::connect('pgsql')->execute(
+            'UPDATE users SET coding_plan_strategy = ?, updated_at = NOW() WHERE id = ?',
+            [$stored, $ctx->userId()],
+        );
+        return success(['coding_plan_strategy' => $stored]);
     }
 
     /** GET /api/v1/panel/user/keys */

@@ -113,6 +113,21 @@ class UserPlan extends BaseController
         return success(UserPlanModel::where('id', $planId)->where('user_id', $userId)->with(['plan'])->find());
     }
 
+    /** POST /api/v1/dashboard/users/:userId/plans/:planId/reset-windows */
+    public function resetWindows($userId, $planId)
+    {
+        // 仅 coding 有 5h/周短期窗；周期/总量不受本操作影响（仍按 activated_at 累计）
+        $affected = Db::connect('pgsql')->execute(
+            "UPDATE user_plans SET windows_reset_at = NOW()
+             WHERE id = ? AND user_id = ? AND status = 'active' AND plan_type = 'coding'",
+            [$planId, $userId]
+        );
+        if ($affected === 0) {
+            throw new HttpException(404, '用户套餐绑定不存在、非 active 或非 coding 类型');
+        }
+        return success(UserPlanModel::where('id', $planId)->where('user_id', $userId)->with(['plan'])->find());
+    }
+
     /** PUT /api/v1/dashboard/users/:userId/plans/:planId/disable */
     public function disable($userId, $planId)
     {

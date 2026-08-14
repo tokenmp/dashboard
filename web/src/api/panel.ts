@@ -71,6 +71,11 @@ export async function getPanelProfileApi(): Promise<UserBasic> {
   const res = await client.get<ApiResponse<UserBasic>>('/panel/user');
   return res.data.data;
 }
+export async function updatePanelPlanStrategyApi(strategy: string): Promise<{ coding_plan_strategy: string }> {
+  const res = await client.put<ApiResponse<{ coding_plan_strategy: string }>>('/panel/user/plan-strategy', { strategy });
+  return res.data.data;
+}
+
 export async function getPanelKeysApi(): Promise<UserApiKeyItem[]> {
   const res = await client.get<ApiResponse<UserApiKeyItem[]>>('/panel/user/keys');
   return res.data.data;

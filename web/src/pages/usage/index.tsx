@@ -180,7 +180,7 @@ function AdminQuotaView({ data }: { data: import('@/types/usage').AdminQuota }) 
         <CardHeader className="pb-2"><CardTitle className="text-sm">全平台额度池</CardTitle></CardHeader>
         <CardContent>
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            {data.platform.map((q) => <QuotaCard key={q.billingPlan} q={q} />)}
+            {data.platform.map((q) => <QuotaCard key={`${q.billingPlan}-${q.planName ?? ''}`} q={q} />)}
           </div>
         </CardContent>
       </Card>
@@ -201,7 +201,7 @@ function UserQuotaView({ data }: { data: import('@/types/usage').UserQuota }) {
       <CardContent>
         {data.plans.length === 0 ? <EmptyState title="暂无额度数据" /> : (
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            {data.plans.map((q) => <QuotaCard key={q.billingPlan} q={q} />)}
+            {data.plans.map((q) => <QuotaCard key={`${q.billingPlan}-${q.planName ?? ''}`} q={q} />)}
           </div>
         )}
       </CardContent>

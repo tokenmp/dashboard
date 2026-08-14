@@ -337,24 +337,27 @@ export async function getDashboardPriceRulesApi(
   return res.data.data;
 }
 
-export async function createDashboardPriceRuleApi(payload: {
+/** 价格倍率规则载荷。时间窗字段说明见 price-rules 页面：start/end 为规则时区的墙上时间（纯字符串透传），生效区间为绝对时刻（ISO 8601）。 */
+export interface PriceRulePayload {
   side: 'upstream' | 'user';
   provider_id: string;
   model_id?: string | null;
   multiplier: number;
   priority?: number;
-}) {
+  timezone?: string;
+  days_of_week?: number[];
+  start_time?: string;
+  end_time?: string;
+  effective_from?: string | null;
+  effective_until?: string | null;
+}
+
+export async function createDashboardPriceRuleApi(payload: PriceRulePayload) {
   const res = await client.post<ApiResponse<PriceRuleItem>>('/dashboard/price/rules', payload);
   return res.data.data;
 }
 
-export async function updateDashboardPriceRuleApi(id: string, payload: {
-  side: 'upstream' | 'user';
-  provider_id: string;
-  model_id?: string | null;
-  multiplier: number;
-  priority?: number;
-}) {
+export async function updateDashboardPriceRuleApi(id: string, payload: PriceRulePayload) {
   const res = await client.put<ApiResponse<PriceRuleItem>>(`/dashboard/price/rules/${id}`, payload);
   return res.data.data;
 }
@@ -523,6 +526,14 @@ export async function grantDashboardUserPlanApi(
   body: GrantUserPlanPayload,
 ): Promise<UserPlanItem> {
   const res = await client.post<ApiResponse<UserPlanItem>>(`/dashboard/users/${userId}/plans`, body);
+  return res.data.data;
+}
+/** 重置 coding 套餐的 5h/周短期窗口（不影响周期/总量累计） */
+export async function resetWindowsDashboardUserPlanApi(userId: string, planId: string): Promise<UserPlanItem> {
+  const res = await client.post<ApiResponse<UserPlanItem>>(
+    `/dashboard/users/${userId}/plans/${planId}/reset-windows`,
+    {},
+  );
   return res.data.data;
 }
 export async function renewDashboardUserPlanApi(

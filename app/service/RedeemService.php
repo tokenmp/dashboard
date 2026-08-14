@@ -16,7 +16,7 @@ use think\facade\Db;
  *  5. 落 redeem_code_redemptions（含码明文快照）+ redeemed_count + 1
  *
  * 套餐发放规则（对齐执行器）：
- *  - coding：按 monthly/weekly/hourly/price 比较 → new(新建) / upgrade(替换) / renew(续期) / downgrade(拒绝)
+ *  - coding：按 cycle/weekly/5h/price 比较 → new(新建) / upgrade(替换) / renew(续期) / downgrade(拒绝)
  *  - token：override_mode=replace 停旧建新；upgrade_only 仅当无现有时新建
  *  - image：永远 replace（停旧建新）
  */
@@ -204,7 +204,7 @@ class RedeemService
     }
 
     /**
-     * coding 套餐：按 monthly/weekly/hourly/price 比较当前生效套餐。
+     * coding 套餐：按 cycle/weekly/5h/price 比较当前生效套餐。
      * - new：无现有 → 新建
      * - upgrade：奖励更高 → 停旧建新
      * - renew：同档 → 在当前到期时间上续期（duration_days 天）
@@ -214,9 +214,9 @@ class RedeemService
     {
         $reward = Db::connect('pgsql')->query(
             "SELECT id, default_duration_days,"
-            . " COALESCE(monthly_limit,0) AS monthly_limit,"
+            . " COALESCE(cycle_limit,0) AS cycle_limit,"
             . " COALESCE(weekly_limit,0) AS weekly_limit,"
-            . " COALESCE(hourly_5h_limit,0) AS hourly_5h_limit,"
+            . " COALESCE(rolling_5h_limit,0) AS rolling_5h_limit,"
             . " COALESCE(price,0) AS price"
             . " FROM plans WHERE id = ? AND plan_type = 'coding' AND status = 'active'",
             [$planId]
@@ -224,15 +224,15 @@ class RedeemService
 
         $current = Db::connect('pgsql')->query(
             "SELECT up.id AS user_plan_id, up.expires_at, up.activated_at,
-                    COALESCE(p.monthly_limit,0) AS monthly_limit,
+                    COALESCE(p.cycle_limit,0) AS cycle_limit,
                     COALESCE(p.weekly_limit,0) AS weekly_limit,
-                    COALESCE(p.hourly_5h_limit,0) AS hourly_5h_limit,
+                    COALESCE(p.rolling_5h_limit,0) AS rolling_5h_limit,
                     COALESCE(p.price,0) AS price
              FROM user_plans up JOIN plans p ON p.id = up.plan_id
              WHERE up.user_id = ? AND up.plan_type = 'coding' AND up.status = 'active'
                AND p.status = 'active' AND (up.expires_at IS NULL OR up.expires_at > now())
-             ORDER BY COALESCE(p.monthly_limit,0) DESC, COALESCE(p.weekly_limit,0) DESC,
-                      COALESCE(p.hourly_5h_limit,0) DESC, COALESCE(p.price,0) DESC, up.activated_at DESC
+             ORDER BY COALESCE(p.cycle_limit,0) DESC, COALESCE(p.weekly_limit,0) DESC,
+                      COALESCE(p.rolling_5h_limit,0) DESC, COALESCE(p.price,0) DESC, up.activated_at DESC
              LIMIT 1",
             [$userId]
         );
@@ -242,9 +242,9 @@ class RedeemService
         $action = 'new';
         if ($current !== null) {
             $currentRank = $this->codingRank([
-                'monthly_limit'    => $current['monthly_limit'],
+                'cycle_limit'    => $current['cycle_limit'],
                 'weekly_limit'     => $current['weekly_limit'],
-                'hourly_5h_limit'  => $current['hourly_5h_limit'],
+                'rolling_5h_limit'  => $current['rolling_5h_limit'],
                 'price'            => $current['price'],
             ]);
             if ($rewardRank > $currentRank) {
@@ -288,13 +288,13 @@ class RedeemService
         return $current !== null ? 'plan_upgrade' : 'plan_grant';
     }
 
-    /** coding 套餐等级排序权重（monthly>weekly>hourly>price，高的更强）。 */
+    /** coding 套餐等级排序权重（cycle>weekly>5h>price，高的更强）。 */
     private function codingRank(array $p): string
     {
         return sprintf('%020d_%020d_%020d_%020d',
-            (int) ($p['monthly_limit'] ?? 0),
+            (int) ($p['cycle_limit'] ?? 0),
             (int) ($p['weekly_limit'] ?? 0),
-            (int) ($p['hourly_5h_limit'] ?? 0),
+            (int) ($p['rolling_5h_limit'] ?? 0),
             (int) ($p['price'] ?? 0)
         );
     }

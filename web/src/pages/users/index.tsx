@@ -10,6 +10,7 @@ import {
   grantDashboardUserPlanApi,
   renewDashboardUserPlanApi,
   disableDashboardUserPlanApi,
+  resetWindowsDashboardUserPlanApi,
 } from '@/api/dashboard';
 import { usePagedQuery } from '@/hooks/usePagedQuery';
 import { useUrlQueryState } from '@/hooks/useUrlQueryState';
@@ -390,6 +391,20 @@ function previewExpires(days: number): string {
   return `${yy}-${mm}-${dd} 23:59:59（北京时间）`;
 }
 
+/** 发放套餐的重置后果提示（发放=新建绑定并重置 activated_at，与「续期」只延长 expires_at 不同） */
+function grantWarning(planType: string | undefined): string {
+  switch (planType) {
+    case 'coding':
+      return '⚠ 发放将新建绑定并重置该套餐的全部用量窗口（5h/周/周期/总量），等同于全新额度。只想延长时间请改用「续期」。';
+    case 'token':
+      return '⚠ 发放将互斥替换旧的 token 套餐：旧剩余额度作废、历史消耗不再计入（等同余额回满）。只想延长时间请改用「续期」。';
+    case 'image':
+      return '发放的 image 套餐与现有套餐叠加共存，额度求和，不重置已有用量。';
+    default:
+      return '发放将新建套餐绑定（激活时间从现在起算）。';
+  }
+}
+
 /** 续期预计到期：基点=max(原到期,今天)，未过期顺延/已过期从今天，+N 天 23:59:59 北京 */
 function previewRenew(currentExpiresAt: string | null, days: number): string {
   const todayBeijing = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Shanghai', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date());
@@ -548,6 +563,11 @@ function GrantPlanButton({ userId, onDone }: { userId: string; onDone?: () => vo
                 </SelectContent>
               </Select>
             </div>
+            {planId && (
+              <div className="rounded-md border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-xs leading-relaxed text-amber-700 dark:text-amber-400">
+                {grantWarning(options.find((o) => o.id === planId)?.plan_type)}
+              </div>
+            )}
             <div className="space-y-1.5">
               <Label>有效期</Label>
               <Select value={mode} onValueChange={(v) => setMode(v as typeof mode)}>
@@ -586,7 +606,9 @@ function DetailDrawer({ id, onClose }: { id: string | null; onClose: () => void 
   );
   const [renewTarget, setRenewTarget] = useState<{ planId: string; name: string; expiresAt: string | null } | null>(null);
   const [disablePlanTarget, setDisablePlanTarget] = useState<{ planId: string; name: string } | null>(null);
+  const [resetWindowsTarget, setResetWindowsTarget] = useState<{ planId: string; name: string } | null>(null);
   const [disabling, setDisabling] = useState(false);
+  const [resettingWindows, setResettingWindows] = useState(false);
   const todayBeijing = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Shanghai', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date());
   const activePlans = (data?.plans ?? []).filter((p) => p.status === 'active');
   const isPlanExpired = (expiresAt: string | null) => (expiresAt ? todayBeijing > expiresAt.slice(0, 10) : false);
@@ -658,6 +680,9 @@ function DetailDrawer({ id, onClose }: { id: string | null; onClose: () => void 
                             <DropdownMenuTrigger asChild><Button variant="ghost" size="icon" className="h-7 w-7"><MoreVertical className="h-4 w-4" /></Button></DropdownMenuTrigger>
                             <DropdownMenuContent align="end">
                               <DropdownMenuItem onClick={() => setRenewTarget({ planId: p.id, name: p.plan?.name ?? '—', expiresAt: p.expires_at })}>续期…</DropdownMenuItem>
+                              {p.plan_type === 'coding' && !expired && (
+                                <DropdownMenuItem onClick={() => setResetWindowsTarget({ planId: p.id, name: p.plan?.name ?? '—' })}>重置 5h/周窗口…</DropdownMenuItem>
+                              )}
                               <DropdownMenuItem
                                 className="text-destructive focus:text-destructive"
                                 onClick={() => setDisablePlanTarget({ planId: p.id, name: p.plan?.name ?? '—' })}
@@ -701,6 +726,37 @@ function DetailDrawer({ id, onClose }: { id: string | null; onClose: () => void 
                       }
                     }}
                   >停用</AlertDialogAction>
+                </AlertDialogFooter>
+              </AlertDialogContent>
+            </AlertDialog>
+            <AlertDialog open={resetWindowsTarget !== null} onOpenChange={(o) => !o && setResetWindowsTarget(null)}>
+              <AlertDialogContent>
+                <AlertDialogHeader>
+                  <AlertDialogTitle>重置 5h/周短期窗口</AlertDialogTitle>
+                  <AlertDialogDescription>
+                    确定要重置「{resetWindowsTarget?.name}」的 5 小时与周窗口用量吗？重置后这两个短期窗口立即清零；
+                    周期限额与总限额的累计不受影响。
+                  </AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                  <AlertDialogCancel>取消</AlertDialogCancel>
+                  <AlertDialogAction
+                    disabled={resettingWindows}
+                    onClick={async () => {
+                      if (!resetWindowsTarget) return;
+                      setResettingWindows(true);
+                      try {
+                        await resetWindowsDashboardUserPlanApi(id, resetWindowsTarget.planId);
+                        reload();
+                        toast.success('已重置 5h/周窗口');
+                        setResetWindowsTarget(null);
+                      } catch (e) {
+                        toast.error(getApiError(e));
+                      } finally {
+                        setResettingWindows(false);
+                      }
+                    }}
+                  >重置</AlertDialogAction>
                 </AlertDialogFooter>
               </AlertDialogContent>
             </AlertDialog>
