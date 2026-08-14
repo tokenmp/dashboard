@@ -4,7 +4,6 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
-import { Switch } from '@/components/ui/switch';
 import { CAPABILITY_META } from '@/components/CapabilityBadge';
 import { createModelApi, updateModelApi, type ModelPayload } from '@/api/dashboard';
 import type { AiModelItem } from '@/types/upstream';
@@ -24,12 +23,15 @@ export function ModelEditDialog({ open, onOpenChange, model, onSaved }: Props) {
   const [name, setName] = useState('');
   const [displayName, setDisplayName] = useState('');
   const [description, setDescription] = useState('');
-  const [billingMode, setBillingMode] = useState<'billable' | 'free_global'>('billable');
   const [contextWindow, setContextWindow] = useState('');
+  const [maxTokens, setMaxTokens] = useState('');
   const [caps, setCaps] = useState<string[]>(['text']);
-  const [status, setStatus] = useState<'active' | 'disabled'>('active');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
+
+  // 状态与计费模式在卡片上 toggle,编辑弹窗不再修改;此处沿用原值(新建取默认)
+  const billingMode = model?.billing_mode === 'free_global' ? 'free_global' : 'billable';
+  const status = model?.status === 'disabled' ? 'disabled' : 'active';
 
   useEffect(() => {
     if (!open) return;
@@ -37,13 +39,12 @@ export function ModelEditDialog({ open, onOpenChange, model, onSaved }: Props) {
       setName(model.name);
       setDisplayName(model.display_name ?? '');
       setDescription(model.description ?? '');
-      setBillingMode(model.billing_mode === 'free_global' ? 'free_global' : 'billable');
       setContextWindow(model.context_window_tokens != null ? String(model.context_window_tokens) : '');
+      setMaxTokens(model.max_tokens != null ? String(model.max_tokens) : '');
       setCaps(model.capabilities?.length ? model.capabilities : ['text']);
-      setStatus(model.status === 'disabled' ? 'disabled' : 'active');
     } else {
       setName(''); setDisplayName(''); setDescription('');
-      setBillingMode('billable'); setContextWindow(''); setCaps(['text']); setStatus('active');
+      setContextWindow(''); setMaxTokens(''); setCaps(['text']);
     }
     setError('');
   }, [open, model]);
@@ -63,6 +64,7 @@ export function ModelEditDialog({ open, onOpenChange, model, onSaved }: Props) {
       status,
       capabilities: caps.length ? caps : ['text'],
       context_window_tokens: contextWindow.trim() === '' ? null : Number(contextWindow),
+      max_tokens: maxTokens.trim() === '' ? null : Number(maxTokens),
     };
     setSaving(true);
     try {
@@ -96,24 +98,20 @@ export function ModelEditDialog({ open, onOpenChange, model, onSaved }: Props) {
             <Label>描述</Label>
             <Textarea value={description} onChange={(e) => setDescription(e.target.value)} rows={2} />
           </div>
-          <div className="grid grid-cols-2 gap-3">
-            <div className="space-y-1">
-              <Label>计费模式</Label>
-              <div className="flex items-center gap-2 pt-1">
-                <Switch
-                  checked={billingMode === 'free_global'}
-                  onCheckedChange={(v) => setBillingMode(v ? 'free_global' : 'billable')}
-                />
-                <span className="text-sm">{billingMode === 'free_global' ? '不计费' : '计费'}</span>
-              </div>
-            </div>
-            <div className="space-y-1">
-              <Label>上下文窗口 (tokens)</Label>
+          <div className="space-y-1">
+            <Label>上下文与最大输出</Label>
+            <div className="grid grid-cols-2 gap-3">
               <Input
                 type="number"
                 value={contextWindow}
                 onChange={(e) => setContextWindow(e.target.value)}
-                placeholder="如 128000"
+                placeholder="上下文 tokens"
+              />
+              <Input
+                type="number"
+                value={maxTokens}
+                onChange={(e) => setMaxTokens(e.target.value)}
+                placeholder="最大输出 tokens"
               />
             </div>
           </div>
@@ -132,15 +130,6 @@ export function ModelEditDialog({ open, onOpenChange, model, onSaved }: Props) {
               ))}
             </div>
           </div>
-          {isEdit && (
-            <div className="space-y-1">
-              <Label>状态</Label>
-              <div className="flex items-center gap-2 pt-1">
-                <Switch checked={status === 'disabled'} onCheckedChange={(v) => setStatus(v ? 'disabled' : 'active')} />
-                <span className="text-sm">{status === 'disabled' ? '已禁用' : '正常'}</span>
-              </div>
-            </div>
-          )}
           {error && <p className="text-sm text-destructive">{error}</p>}
         </div>
         <DialogFooter>

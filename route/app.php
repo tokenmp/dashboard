@@ -181,6 +181,7 @@ Route::group('api/v1', function () {
                     });
                     Route::get(':id/mappings', 'dashboard/Model/mappings')->pattern(['id' => '[\w\-]+']);
                     Route::post(':id/mappings', 'dashboard/Model/createMapping')->pattern(['id' => '[\w\-]+']);
+                    Route::get(':id', 'dashboard/Model/detail')->pattern(['id' => '[\w\-]+']);
                     Route::put(':id', 'dashboard/Model/update')->pattern(['id' => '[\w\-]+']);
                 });
 

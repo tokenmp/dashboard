@@ -245,6 +245,10 @@ export async function getModelMappingsApi(id: string, params?: { keyword?: strin
   const res = await client.get<ApiResponse<ModelMappingItem[]>>(`/dashboard/models/${id}/mappings`, { params });
   return res.data.data;
 }
+export async function getModelDetailApi(modelId: string): Promise<AiModelItem> {
+  const res = await client.get<ApiResponse<AiModelItem>>(`/dashboard/models/${modelId}`);
+  return res.data.data;
+}
 export async function createModelMappingApi(modelId: string, payload: MappingPayload): Promise<{ id: string }> {
   const res = await client.post<ApiResponse<{ id: string }>>(`/dashboard/models/${modelId}/mappings`, payload);
   return res.data.data;
@@ -276,6 +280,7 @@ export interface ModelPayload {
   status: string;
   capabilities: string[];
   context_window_tokens: number | null;
+  max_tokens?: number | null;
 }
 export interface MappingPayload {
   upstream_key_id: string;
@@ -283,6 +288,7 @@ export interface MappingPayload {
   input_price_per_token: number | null;
   output_price_per_token: number | null;
   max_tokens: number | null;
+  context_window_tokens?: number | null;
   status: string;
   provider_endpoint_id: string | null;
   route_group_ids?: string[];

@@ -20,9 +20,11 @@ import { DataTable } from '@/components/ui/data-table';
 import { DataTableColumnHeader } from '@/components/ui/data-table-column-header';
 import {
   getModelMappingsApi, createModelMappingApi, updateModelMappingApi, deleteModelMappingApi,
-  getModelKeyOptionsApi, getRouteGroupsApi, type MappingPayload,
+  getModelKeyOptionsApi, getRouteGroupsApi, getModelDetailApi, updateMappingStatusApi, type MappingPayload,
 } from '@/api/dashboard';
-import type { ModelMappingItem, RouteGroupOption, UpstreamKeyOption } from '@/types/upstream';
+import { Switch } from '@/components/ui/switch';
+import { toast } from 'sonner';
+import type { AiModelItem, ModelMappingItem, RouteGroupOption, UpstreamKeyOption } from '@/types/upstream';
 
 export function MappingManagePage() {
   const { id } = useParams<{ id: string }>();
@@ -30,12 +32,28 @@ export function MappingManagePage() {
   const location = useLocation();
   const modelName = (location.state as { name?: string } | null)?.name ?? id ?? '模型';
   const [mappings, setMappings] = useState<ModelMappingItem[]>([]);
+  const [model, setModel] = useState<AiModelItem | null>(null);
   const [loading, setLoading] = useState(false);
   const [editing, setEditing] = useState<ModelMappingItem | null | 'new'>(null);
   const [routeGroups, setRouteGroups] = useState<RouteGroupOption[]>([]);
   const [keyword, setKeyword] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
   const [pendingDelete, setPendingDelete] = useState<ModelMappingItem | null>(null);
+  const [pendingDisable, setPendingDisable] = useState<ModelMappingItem | null>(null);
+  const [togglingId, setTogglingId] = useState<string | null>(null);
+
+  const doToggleStatus = async (mm: ModelMappingItem, next: 'active' | 'disabled') => {
+    setTogglingId(mm.id);
+    try {
+      await updateMappingStatusApi(mm.id, next);
+      toast.success(next === 'active' ? '已启用' : '已禁用');
+      reload();
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : '操作失败');
+    } finally {
+      setTogglingId(null);
+    }
+  };
 
   const reload = useCallback(() => {
     if (!id) return;
@@ -44,6 +62,7 @@ export function MappingManagePage() {
   }, [id, keyword, statusFilter]);
 
   useEffect(() => { getRouteGroupsApi().then(setRouteGroups).catch(() => {}); }, []);
+  useEffect(() => { if (id) getModelDetailApi(id).then(setModel).catch(() => {}); }, [id]);
   useEffect(() => { reload(); }, [reload]);
   // 新建映射后刷新
   useEffect(() => {
@@ -82,10 +101,40 @@ export function MappingManagePage() {
       ),
     },
     {
+      accessorKey: 'context_window_tokens',
+      meta: { className: 'text-right' },
+      header: ({ column }) => <DataTableColumnHeader column={column} title="上下文窗口" />,
+      cell: ({ row }) => {
+        const own = row.original.context_window_tokens;
+        const inherited = model?.context_window_tokens ?? null;
+        const value = own ?? inherited;
+        return (
+          <span
+            className={`block text-right text-xs tabular-nums ${own ? '' : 'text-muted-foreground/50'}`}
+            title={own ? '映射级配置' : inherited ? `继承模型级 ${inherited}` : '未配置'}
+          >
+            {value ? formatCompact(value) : '—'}
+          </span>
+        );
+      },
+    },
+    {
       accessorKey: 'max_tokens',
       meta: { className: 'text-right' },
       header: ({ column }) => <DataTableColumnHeader column={column} title="最大输出" />,
-      cell: ({ row }) => <span className="block text-right text-xs tabular-nums">{row.original.max_tokens ? formatCompact(row.original.max_tokens) : '—'}</span>,
+      cell: ({ row }) => {
+        const own = row.original.max_tokens;
+        const inherited = model?.max_tokens ?? null;
+        const value = own ?? inherited;
+        return (
+          <span
+            className={`block text-right text-xs tabular-nums ${own ? '' : 'text-muted-foreground/50'}`}
+            title={own ? '映射级配置' : inherited ? `继承模型级 ${inherited}` : '未配置'}
+          >
+            {value ? formatCompact(value) : '—'}
+          </span>
+        );
+      },
     },
     {
       id: 'price',
@@ -94,22 +143,21 @@ export function MappingManagePage() {
       cell: ({ row }) => <span className="block text-right text-xs tabular-nums">{fmtPrice(row.original.input_price_per_token)} / {fmtPrice(row.original.output_price_per_token)}</span>,
     },
     {
-      id: 'status',
-      meta: { className: 'w-[90px]' },
-      header: () => <span className="text-xs font-medium text-muted-foreground">状态</span>,
-      cell: ({ row }) => (
-        <span className="inline-flex items-center gap-1 text-xs">
-          <span className={row.original.status === 'active' ? 'text-emerald-600' : 'text-red-500'}>●</span>
-          {row.original.status}
-        </span>
-      ),
-    },
-    {
       id: 'action',
-      meta: { className: 'w-[90px]' },
+      meta: { className: 'w-[130px]' },
       header: () => null,
       cell: ({ row }) => (
-        <div className="flex items-center justify-end gap-1">
+        <div className="flex items-center justify-end gap-2">
+          <div className="flex items-center gap-1.5" title={row.original.status === 'active' ? '点击禁用该映射' : '点击启用该映射'}>
+            <Switch
+              checked={row.original.status === 'active'}
+              disabled={togglingId === row.original.id}
+              onCheckedChange={(v) => (v ? doToggleStatus(row.original, 'active') : setPendingDisable(row.original))}
+            />
+            <span className={`text-[11px] ${row.original.status === 'active' ? 'text-emerald-600' : 'text-red-500'}`}>
+              {row.original.status === 'active' ? '启用' : '禁用'}
+            </span>
+          </div>
           <Button variant="ghost" size="icon" className="h-7 w-7" title="编辑" onClick={() => setEditing(row.original)}>
             <Pencil className="h-3.5 w-3.5" />
           </Button>
@@ -119,7 +167,7 @@ export function MappingManagePage() {
         </div>
       ),
     },
-  ], [routeGroups, setEditing, setPendingDelete]);
+  ], [routeGroups, model, togglingId, setEditing, setPendingDelete]);
 
   return (
     <div className="space-y-4">
@@ -170,6 +218,7 @@ export function MappingManagePage() {
             <MappingEditForm
               mapping={editing === 'new' ? null : editing}
               modelId={id ?? ''}
+              modelDetail={model}
               routeGroups={routeGroups}
               existingKeyIds={mappings.filter((x) => x.id !== (editing === 'new' ? '' : editing?.id)).map((mm) => mm.upstream_key_id)}
               onClose={() => setEditing(null)}
@@ -191,6 +240,15 @@ export function MappingManagePage() {
           setMappings((prev) => prev.filter((x) => x.id !== pendingDelete.id));
         }}
       />
+      <ConfirmDialog
+        open={!!pendingDisable}
+        onOpenChange={(o) => !o && setPendingDisable(null)}
+        title="禁用映射"
+        description="确定禁用此映射？禁用后该映射不再被调用（可随时重新启用）。"
+        confirmText="禁用"
+        variant="destructive"
+        onConfirm={() => { if (pendingDisable) doToggleStatus(pendingDisable, 'disabled'); }}
+      />
     </div>
   );
 }
@@ -203,20 +261,25 @@ function fmtPrice(v: number | null): string {
 interface MappingEditFormProps {
   mapping: ModelMappingItem | null;
   modelId: string;
+  modelDetail: AiModelItem | null;
   routeGroups: RouteGroupOption[];
   existingKeyIds: string[];
   onClose: () => void;
   onSaved: () => void;
 }
 
-function MappingEditForm({ mapping, modelId, routeGroups, existingKeyIds, onClose, onSaved }: MappingEditFormProps) {
+function MappingEditForm({ mapping, modelId, modelDetail, routeGroups, existingKeyIds, onClose, onSaved }: MappingEditFormProps) {
   const isEdit = !!mapping;
   const [keyId, setKeyId] = useState(mapping?.upstream_key_id ?? '');
   const [upstreamModelName, setUpstreamModelName] = useState(mapping?.upstream_model_name ?? '');
   const [inputPrice, setInputPrice] = useState(mapping?.input_price_per_token != null ? (mapping.input_price_per_token * 1_000_000).toString() : '');
   const [outputPrice, setOutputPrice] = useState(mapping?.output_price_per_token != null ? (mapping.output_price_per_token * 1_000_000).toString() : '');
   const [maxTokens, setMaxTokens] = useState(mapping?.max_tokens?.toString() ?? '');
-  const [active, setActive] = useState(mapping?.status !== 'disabled');
+  const [contextWindow, setContextWindow] = useState(mapping?.context_window_tokens?.toString() ?? '');
+  const modelContextHint = modelDetail?.context_window_tokens ? `留空继承 ${formatCompact(modelDetail.context_window_tokens)}` : '留空继承模型级';
+  const modelMaxHint = modelDetail?.max_tokens ? `留空继承 ${formatCompact(modelDetail.max_tokens)}` : '留空继承模型级';
+  // 状态在行操作里 toggle,表单不再修改;沿用原值(新建默认 active)
+  const status = mapping?.status === 'disabled' ? 'disabled' : 'active';
   const [keyOptions, setKeyOptions] = useState<UpstreamKeyOption[]>([]);
   const [routeGroupIds, setRouteGroupIds] = useState<string[]>(mapping?.route_group_ids ?? []);
   const [saving, setSaving] = useState(false);
@@ -243,7 +306,8 @@ function MappingEditForm({ mapping, modelId, routeGroups, existingKeyIds, onClos
       input_price_per_token: inputPrice.trim() === '' ? null : Number(inputPrice) / 1_000_000,
       output_price_per_token: outputPrice.trim() === '' ? null : Number(outputPrice) / 1_000_000,
       max_tokens: maxTokens.trim() === '' ? null : Number(maxTokens),
-      status: active ? 'active' : 'disabled',
+      context_window_tokens: contextWindow.trim() === '' ? null : Number(contextWindow),
+      status,
       provider_endpoint_id: null,
       route_group_ids: routeGroupIds,
     };
@@ -291,17 +355,11 @@ function MappingEditForm({ mapping, modelId, routeGroups, existingKeyIds, onClos
         </div>
         <div className="space-y-1">
           <Label>最大输出 (tokens)</Label>
-          <Input type="number" value={maxTokens} onChange={(e) => setMaxTokens(e.target.value)} placeholder="如 202752" />
+          <Input type="number" value={maxTokens} onChange={(e) => setMaxTokens(e.target.value)} placeholder={modelMaxHint} />
         </div>
         <div className="space-y-1">
-          <Label>状态</Label>
-          <Select value={active ? 'active' : 'disabled'} onValueChange={(v) => setActive(v === 'active')}>
-            <SelectTrigger><SelectValue /></SelectTrigger>
-            <SelectContent>
-              <SelectItem value="active">active</SelectItem>
-              <SelectItem value="disabled">disabled</SelectItem>
-            </SelectContent>
-          </Select>
+          <Label>上下文窗口 (tokens)</Label>
+          <Input type="number" value={contextWindow} onChange={(e) => setContextWindow(e.target.value)} placeholder={modelContextHint} />
         </div>
       </div>
       <div className="space-y-1">

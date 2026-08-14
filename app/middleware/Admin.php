@@ -21,9 +21,11 @@ class Admin
 {
     public function handle(Request $request, Closure $next)
     {
-        $user = app('user');
+        // 正常情况下 Auth 必先于本中间件执行并已绑定 app('user')；
+        // 防御性兜底：未绑定（误挂到 Auth 之前）时 app() 会抛 ClassNotFoundException，
+        // 用 bound() 先判定，确保任何「无有效管理员身份」的情形都干净地落到 403。
+        $user = app()->bound('user') ? app('user') : null;
 
-        // 正常情况下 Auth 必先于本中间件执行；防御性兜底
         if (!$user || $user->role !== 'admin') {
             throw new HttpException(403, '无权访问');
         }
