@@ -213,7 +213,12 @@ class RedeemService
     private function grantCodingPlan(string $userId, string $planId, ?int $durationDays, array &$userPlanIds): string
     {
         $reward = Db::connect('pgsql')->query(
-            "SELECT id, default_duration_days FROM plans WHERE id = ? AND plan_type = 'coding' AND status = 'active'",
+            "SELECT id, default_duration_days,"
+            . " COALESCE(monthly_limit,0) AS monthly_limit,"
+            . " COALESCE(weekly_limit,0) AS weekly_limit,"
+            . " COALESCE(hourly_5h_limit,0) AS hourly_5h_limit,"
+            . " COALESCE(price,0) AS price"
+            . " FROM plans WHERE id = ? AND plan_type = 'coding' AND status = 'active'",
             [$planId]
         )[0] ?? null;
 

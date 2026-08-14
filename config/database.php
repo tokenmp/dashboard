@@ -63,6 +63,11 @@ return [
         'pgsql' => [
             // 数据库类型
             'type'            => 'pgsql',
+            // 会话时区：显式与 app.default_timezone 对齐（think-orm 连接时执行 SET timezone）。
+            // ⚠️ 不设则跟随 PG server 默认（常为 UTC），与 PHP 时区不一致时，
+            //    「今日/趋势」类查询（current_date / PHP date() 混用）会出现边界错位、
+            //    当天数据漏计。SET 仅影响本连接会话，不影响共享此库的 executor。
+            'timezone'        => env('PG_TIMEZONE', 'Asia/Shanghai'),
             // 服务器地址
             'hostname'        => env('PG_HOST', '127.0.0.1'),
             // 数据库名

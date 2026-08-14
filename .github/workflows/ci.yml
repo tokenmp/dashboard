@@ -37,7 +37,7 @@ jobs:
         run: npm run build
 
   backend:
-    name: Backend (composer + smoke)
+    name: Backend (composer + tests)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -55,3 +55,6 @@ jobs:
 
       - name: Smoke test (app boots & routes resolve)
         run: php think route:list
+
+      - name: PHPUnit (unit suite)
+        run: composer test:unit

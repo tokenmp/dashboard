@@ -29,7 +29,8 @@
     },
     "require-dev": {
         "topthink/think-dumper": "^1.0",
-        "topthink/think-trace": "^2.0"
+        "topthink/think-trace": "^2.0",
+        "phpunit/phpunit": "^12.5"
     },
     "autoload": {
         "psr-4": {
@@ -39,6 +40,11 @@
             "": "extend/"
         }
     },
+    "autoload-dev": {
+        "psr-4": {
+            "tests\\": "tests"
+        }
+    },
     "config": {
         "preferred-install": "dist"
     },
@@ -46,6 +52,14 @@
         "post-autoload-dump": [
             "@php think service:discover",
             "@php think vendor:publish"
-        ]
+        ],
+        "test": "phpunit",
+        "test:unit": "phpunit --testsuite unit",
+        "test:integration": "phpunit --testsuite integration"
+    },
+    "scripts-descriptions": {
+        "test": "运行全部测试(unit + integration;integration 需可达的 PG 测试库 + 全量 schema,不可达时自动跳过)",
+        "test:unit": "仅运行单元测试(无需数据库)",
+        "test:integration": "运行集成测试(需 PG + 全量 schema,见 tests/bootstrap.php)"
     }
 }

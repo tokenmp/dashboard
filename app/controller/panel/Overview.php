@@ -24,11 +24,10 @@ class Overview extends BaseController
      */
     public function overview()
     {
-        $ctx        = DataScope::forSelf(app('user'));
-        $userId     = $ctx->userId();
-        $todayStart = date('Y-m-d 00:00:00');
+        $ctx    = DataScope::forSelf(app('user'));
+        $userId = $ctx->userId();
 
-        $today = $this->todayStats($userId, $todayStart);
+        $today = $this->todayStats($userId);
         $total = $this->totalStats($userId);
         $trend = $this->trend30($userId);
         $quota = $this->userQuota($userId);
@@ -49,15 +48,19 @@ class Overview extends BaseController
 
     /**
      * 今日请求统计：总数 / 成功数 / token 消耗 / 成功率
+     *
+     * 「今日」口径以数据库会话时区为准（current_date），与 trend30 一致，
+     * 避免依赖 PHP date()（PHP 默认时区 Asia/Shanghai 与 PG 会话时区不一致时
+     * 会导致「今天」边界错位、漏计当天数据）。
      */
-    private function todayStats(string $userId, string $todayStart): array
+    private function todayStats(string $userId): array
     {
         $row = Db::connect('pgsql')->query(
             'select count(*) as total,'
             . " count(*) filter (where success is true) as success_count,"
             . ' coalesce(sum(total_tokens),0) as tokens'
-            . ' from request_logs where created_at >= ? and user_id = ?',
-            [$todayStart, $userId]
+            . ' from request_logs where created_at >= current_date and user_id = ?',
+            [$userId]
         )[0];
         $total        = (int) ($row['total'] ?? 0);
         $successCount = (int) ($row['success_count'] ?? 0);
@@ -86,32 +89,30 @@ class Overview extends BaseController
     }
 
     /**
-     * 近 30 天每日趋势（请求/token/成功），用 generate_series 补齐缺失日
+     * 近 30 天每日趋势（请求/token/成功）。
+     *
+     * 用 generate_series 在 DB 侧生成 30 天骨架(以会话时区的 current_date 为准),
+     * 左连 request_logs 按天分组——避免「DB 会话时区分组 + PHP date() 拼 key」两套
+     * 时区口径不一致导致当天数据落空。
      */
     private function trend30(string $userId): array
     {
-        // 只查有数据的天（user_id + created_at 走索引），PHP 侧补全 30 天零值。
-        $sql = "select to_char(date_trunc('day', created_at), 'YYYY-MM-DD') as day,"
-             . ' count(id) as requests,'
-             . ' coalesce(sum(total_tokens),0) as tokens,'
-             . " count(*) filter (where success is true) as successes"
-             . " from request_logs where created_at >= current_date - interval '29 day' and user_id = ?"
-             . ' group by 1 order by 1';
+        $sql = "select to_char(d.day, 'YYYY-MM-DD') as day,"
+             . ' coalesce(count(rl.id),0) as requests,'
+             . ' coalesce(sum(rl.total_tokens),0) as tokens,'
+             . " count(*) filter (where rl.success is true) as successes"
+             . " from generate_series(current_date - interval '29 day', current_date, interval '1 day') as d(day)"
+             . ' left join request_logs rl on date_trunc(\'day\', rl.created_at) = d.day and rl.user_id = ?'
+             . ' group by d.day order by d.day';
 
         $rows = Db::connect('pgsql')->query($sql, [$userId]);
-        $map = [];
-        foreach ($rows as $r) {
-            $map[$r['day']] = $r;
-        }
         $out = [];
-        for ($i = 29; $i >= 0; $i--) {
-            $day = date('Y-m-d', strtotime("-{$i} days"));
-            $r = $map[$day] ?? null;
+        foreach ($rows as $r) {
             $out[] = [
-                'day'       => $day,
-                'requests'  => (int) ($r['requests'] ?? 0),
-                'tokens'    => (int) ($r['tokens'] ?? 0),
-                'successes' => (int) ($r['successes'] ?? 0),
+                'day'       => $r['day'],
+                'requests'  => (int) $r['requests'],
+                'tokens'    => (int) $r['tokens'],
+                'successes' => (int) $r['successes'],
             ];
         }
         return $out;
