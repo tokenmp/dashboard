@@ -23,11 +23,6 @@
 		header /docs/assets/* Cache-Control "public, max-age=31536000, immutable"
 		try_files {path} {path}.html
 		file_server
-		# 未命中渲染 VitePress 404 页（保留 404 状态码）
-		handle_errors {
-			rewrite * /docs/404.html
-			file_server
-		}
 	}
 
 	# 其余前端路由：真实文件直接返回，否则回退 SPA index.html（支持深层路由刷新）
@@ -37,6 +32,12 @@
 		# 入口 HTML 必须每次回源校验，否则发新版后浏览器走启发式缓存继续用旧 bundle
 		header /static/index.html Cache-Control "no-cache"
 		try_files {path} /static/index.html
+		file_server
+	}
+
+	# 未命中静态文件渲染 VitePress 404 页（保留状态码；SPA handle 有兜底，实际仅 /docs/* 会走到）
+	handle_errors {
+		rewrite * /docs/404.html
 		file_server
 	}
 }
