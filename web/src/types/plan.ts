@@ -18,6 +18,8 @@ export interface PlanItem {
   default_duration_days: number | null;
   allowed_model_names: string[];
   category: string | null;
+  /** 是否在公开套餐列表（landing）展示 */
+  public_visible: boolean;
   created_at: string;
   updated_at: string;
 }
@@ -47,6 +49,8 @@ export interface PlanPayload {
   default_duration_days: number | null;
   allowed_model_names: string[];
   category: string | null;
+  /** 是否在公开套餐列表（landing）展示 */
+  public_visible: boolean;
 }
 
 /** 状态变更 */

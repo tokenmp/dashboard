@@ -148,7 +148,8 @@ class Upstream extends BaseController
             $providerRows = Db::connect('pgsql')->query(
                 "select umm.id as mapping_id, umm.model_id, umm.upstream_key_id, umm.upstream_model_name,"
                 . " umm.input_price_per_token, umm.output_price_per_token, umm.max_tokens, umm.status,"
-                . " uk.name as upstream_key_name, p.id as provider_id, p.name as provider_name, p.display_name as provider_display_name"
+                . " uk.name as upstream_key_name, p.id as provider_id, p.name as provider_name, p.display_name as provider_display_name,"
+                . " p.logo_url as provider_logo_url, p.logo_svg as provider_logo_svg"
                 . " from upstream_model_mappings umm"
                 . " join upstream_keys uk on uk.id = umm.upstream_key_id"
                 . " join providers p on p.id = uk.provider_id"
@@ -192,8 +193,11 @@ class Upstream extends BaseController
             $byModel[$providerRow['model_id']][] = [
                 'effective_multiplier'  => $eff,
                 'mapping_id'             => $providerRow['mapping_id'],
+                'provider_id'            => $providerRow['provider_id'],
                 'provider_name'          => $providerRow['provider_name'],
                 'provider_display_name'  => $providerRow['provider_display_name'],
+                'provider_logo_url'      => $providerRow['provider_logo_url'],
+                'provider_logo_svg'      => $providerRow['provider_logo_svg'],
                 'upstream_key_name'      => $providerRow['upstream_key_name'],
                 'upstream_key_id'        => $providerRow['upstream_key_id'],
                 'upstream_model_name'    => $providerRow['upstream_model_name'],

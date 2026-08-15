@@ -21,6 +21,8 @@ import { DataTable } from '@/components/ui/data-table';
 import { DataTableColumnHeader } from '@/components/ui/data-table-column-header';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { ProviderLogo } from '@/components/ProviderLogo';
+import ModelIcon from '@/components/ModelIcon';
 import { ConfirmDialog } from '@/components/ConfirmDialog';
 import { EmptyState } from '@/components/EmptyState';
 
@@ -190,12 +192,29 @@ export default function PriceRules() {
     {
       id: 'provider',
       header: () => <span className="text-xs font-medium text-muted-foreground">供应商</span>,
-      cell: ({ row }) => <span className="text-sm">{providerName(row.original.provider_id)}</span>,
+      cell: ({ row }) => {
+        const p = providers?.find((x) => x.id === row.original.provider_id);
+        return (
+          <span className="flex items-center gap-1.5 text-sm">
+            {p && <ProviderLogo provider={p} size={16} />}
+            {providerName(row.original.provider_id)}
+          </span>
+        );
+      },
     },
     {
       id: 'model',
       header: () => <span className="text-xs font-medium text-muted-foreground">模型</span>,
-      cell: ({ row }) => <span className="text-sm">{row.original.model_id ? modelName(row.original.model_id) : <span className="text-muted-foreground">全部</span>}</span>,
+      cell: ({ row }) => {
+        if (!row.original.model_id) return <span className="text-sm text-muted-foreground">全部</span>;
+        const m = models?.find((x) => x.id === row.original.model_id);
+        return (
+          <span className="flex items-center gap-1.5 text-sm">
+            {m && <ModelIcon id={m.name} displayName={m.display_name ?? undefined} size={16} />}
+            {modelName(row.original.model_id)}
+          </span>
+        );
+      },
     },
     {
       accessorKey: 'multiplier',
@@ -335,7 +354,11 @@ export default function PriceRules() {
                 <Select value={edit.provider_id} onValueChange={(v) => setEdit({ ...edit, provider_id: v, model_id: '' })}>
                   <SelectTrigger><SelectValue placeholder="选择供应商" /></SelectTrigger>
                   <SelectContent>
-                    {(providers ?? []).map((p) => <SelectItem key={p.id} value={p.id}>{p.display_name || p.name}</SelectItem>)}
+                    {(providers ?? []).map((p) => (
+                      <SelectItem key={p.id} value={p.id}>
+                        <span className="flex items-center gap-1.5"><ProviderLogo provider={p} size={16} />{p.display_name || p.name}</span>
+                      </SelectItem>
+                    ))}
                   </SelectContent>
                 </Select>
               </div>
@@ -345,7 +368,11 @@ export default function PriceRules() {
                   <SelectTrigger><SelectValue placeholder="全部模型" /></SelectTrigger>
                   <SelectContent>
                     <SelectItem value="__all__">全部模型</SelectItem>
-                    {(models ?? []).map((m) => <SelectItem key={m.id} value={m.id}>{m.display_name || m.name}</SelectItem>)}
+                    {(models ?? []).map((m) => (
+                      <SelectItem key={m.id} value={m.id}>
+                        <span className="flex items-center gap-1.5"><ModelIcon id={m.name} displayName={m.display_name ?? undefined} size={16} />{m.display_name || m.name}</span>
+                      </SelectItem>
+                    ))}
                   </SelectContent>
                 </Select>
               </div>

@@ -75,7 +75,8 @@ class Model extends BaseController
             $providerRows = Db::connect('pgsql')->query(
                 "select umm.id as mapping_id, umm.model_id, umm.upstream_key_id, umm.upstream_model_name,"
                 . " umm.input_price_per_token, umm.output_price_per_token, umm.max_tokens, umm.status,"
-                . " uk.name as upstream_key_name, p.name as provider_name, p.display_name as provider_display_name"
+                . " uk.name as upstream_key_name, p.id as provider_id, p.name as provider_name, p.display_name as provider_display_name,"
+                . " p.logo_url, p.logo_svg"
                 . " from upstream_model_mappings umm"
                 . " join upstream_keys uk on uk.id = umm.upstream_key_id"
                 . " join providers p on p.id = uk.provider_id"
@@ -86,7 +87,10 @@ class Model extends BaseController
             foreach ($providerRows as $pr) {
                 $byModel[$pr['model_id']][] = [
                     'mapping_id'              => $pr['mapping_id'],
+                    'provider_id'             => $pr['provider_id'],
                     'provider_name'           => $pr['provider_name'],
+                    'provider_logo_url'       => $pr['logo_url'],
+                    'provider_logo_svg'       => $pr['logo_svg'],
                     'provider_display_name'   => $pr['provider_display_name'],
                     'upstream_key_name'       => $pr['upstream_key_name'],
                     'upstream_key_id'         => $pr['upstream_key_id'],
@@ -194,7 +198,8 @@ class Model extends BaseController
              . " m.thinking_config::text as model_thinking_config, p.thinking_config::text as provider_thinking_config, "
              . " umm.status, umm.provider_endpoint_id, umm.created_at, "
             . " uk.name as upstream_key_name, uk.status as upstream_key_status, "
-            . " p.name as provider_name, p.display_name as provider_display_name, "
+            . " p.id as provider_id, p.name as provider_name, p.display_name as provider_display_name, "
+            . " p.logo_url as provider_logo_url, p.logo_svg as provider_logo_svg, "
             . " pe.protocol, pe.path as endpoint_path, "
             . " coalesce((select jsonb_agg(urgm.route_group_id) from upstream_route_group_memberships urgm where urgm.upstream_model_mapping_id = umm.id and urgm.status <> 'deleted'), '[]'::jsonb) as route_group_ids "
             . " from upstream_model_mappings umm"
@@ -240,6 +245,9 @@ class Model extends BaseController
                 'provider_endpoint_id'   => $r['provider_endpoint_id'],
                 'provider_name'          => $r['provider_name'],
                 'provider_display_name'  => $r['provider_display_name'],
+                'provider_id'            => $r['provider_id'],
+                'provider_logo_url'      => $r['provider_logo_url'],
+                'provider_logo_svg'      => $r['provider_logo_svg'],
                 'protocol'               => $r['protocol'],
                 'endpoint_path'          => $r['endpoint_path'],
                 'route_group_ids'        => isset($r['route_group_ids']) ? json_decode((string) $r['route_group_ids'], true) ?: [] : [],
@@ -384,7 +392,8 @@ class Model extends BaseController
     public function keyOptions()
     {
         $keyword = trim((string) $this->request->get('keyword', ''));
-        $sql = "select uk.id, uk.name, uk.status, p.name as provider_name, p.display_name as provider_display_name"
+        $sql = "select uk.id, uk.name, uk.status, p.id as provider_id, p.name as provider_name, p.display_name as provider_display_name,"
+            . " p.logo_url, p.logo_svg"
             . " from upstream_keys uk join providers p on p.id = uk.provider_id"
             . " where uk.status <> 'deleted'";
         $params = [];

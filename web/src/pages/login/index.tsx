@@ -97,9 +97,14 @@ function Login() {
             <Button type="submit" className="w-full" disabled={loading}>
               {loading ? '登录中…' : '登录'}
             </Button>
-            <Link to="/forgot-password" className="text-sm text-muted-foreground hover:underline">
-              忘记密码？
-            </Link>
+            <div className="flex w-full items-center justify-between text-sm">
+              <Link to="/forgot-password" className="text-muted-foreground hover:underline">
+                忘记密码？
+              </Link>
+              <Link to="/register" className="text-muted-foreground hover:underline">
+                没有账号？免费注册
+              </Link>
+            </div>
           </CardFooter>
         </form>
       </Card>

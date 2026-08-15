@@ -9,6 +9,10 @@ export interface ProviderItem {
   display_name: string | null;
   base_url: string;
   status: string;
+  /** 品牌 Logo 外链（优先） */
+  logo_url: string | null;
+  /** 品牌 Logo 的 SVG 源码（上传） */
+  logo_svg: string | null;
   endpoint_count: number;
   key_count: number;
   /** 供应商级思考深度配置;null = 未配置 */
@@ -58,7 +62,7 @@ export interface UpstreamKeyItem {
   total_success_attempts: number | string;
   created_at: string;
   updated_at: string;
-  provider?: { id: string; name: string; display_name: string | null } | null;
+  provider?: { id: string; name: string; display_name: string | null; logo_url?: string | null; logo_svg?: string | null } | null;
   ownerUser?: { id: string; email: string } | null;
 }
 
@@ -116,8 +120,11 @@ export interface RouteGroupItem {
 /** 平台模型的供应商映射 */
 export interface AiModelProvider {
   mapping_id: string;
+  provider_id?: string;
   provider_name: string;
   provider_display_name: string | null;
+  provider_logo_url?: string | null;
+  provider_logo_svg?: string | null;
   upstream_key_name: string;
   upstream_key_id: string;
   upstream_model_name: string | null;
@@ -186,8 +193,11 @@ export interface ModelMappingItem {
   thinking_source: string | null;
   status: string;
   provider_endpoint_id: string | null;
+  provider_id?: string;
   provider_name: string;
   provider_display_name: string | null;
+  provider_logo_url?: string | null;
+  provider_logo_svg?: string | null;
   protocol: string | null;
   endpoint_path: string | null;
   route_group_ids: string[];
@@ -207,8 +217,11 @@ export interface UpstreamKeyOption {
   id: string;
   name: string;
   status: string;
+  provider_id?: string;
   provider_name: string;
   provider_display_name: string | null;
+  logo_url?: string | null;
+  logo_svg?: string | null;
 }
 
 /** 通用列表查询 */

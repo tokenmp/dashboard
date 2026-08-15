@@ -77,7 +77,7 @@ class Upstream extends BaseController
             $p->key_count = $c['keys'];
             return $p;
         })->visible([
-            'id', 'name', 'display_name', 'base_url', 'status', 'endpoint_count', 'key_count', 'thinking_config', 'created_at', 'updated_at',
+            'id', 'name', 'display_name', 'base_url', 'status', 'logo_url', 'logo_svg', 'endpoint_count', 'key_count', 'thinking_config', 'created_at', 'updated_at',
         ])->toArray();
         foreach ($list as &$pv) {
             $pv['thinking'] = ThinkingConfig::parse($pv['thinking_config'] ?? null);
@@ -318,12 +318,58 @@ class Upstream extends BaseController
         }
         $displayName = trim((string) $this->request->post('display_name', ''));
         $baseUrl = trim((string) $this->request->post('base_url', ''));
+        [$logoUrl, $logoSvg] = $this->logoInput();
         $id = $this->genUuid();
         Db::connect('pgsql')->execute(
-            "INSERT INTO providers (id, name, display_name, base_url, status, created_at, updated_at) VALUES (?,?,?,?, 'active', NOW(), NOW())",
-            [$id, $name, $displayName !== '' ? $displayName : null, $baseUrl]
+            "INSERT INTO providers (id, name, display_name, base_url, status, logo_url, logo_svg, created_at, updated_at) VALUES (?,?,?,?, 'active', ?, ?, NOW(), NOW())",
+            [$id, $name, $displayName !== '' ? $displayName : null, $baseUrl, $logoUrl, $logoSvg]
         );
         return success(['id' => $id]);
+    }
+
+    /** PUT /api/v1/dashboard/upstream/providers/:id —— 目前支持编辑品牌 Logo（外链 / 上传 SVG） */
+    public function updateProvider($id)
+    {
+        $exists = Provider::where('id', $id)->where('status', '<>', 'deleted')->find();
+        if ($exists === null) {
+            throw new HttpException(404, '供应商不存在');
+        }
+        [$logoUrl, $logoSvg] = $this->logoInput();
+        Db::connect('pgsql')->execute(
+            'UPDATE providers SET logo_url = ?, logo_svg = ?, updated_at = NOW() WHERE id = ?',
+            [$logoUrl, $logoSvg, $id]
+        );
+        return success(['id' => $id]);
+    }
+
+    /**
+     * 读取并校验 Logo 入参（create/update 共用）：[logo_url, logo_svg]
+     * - logo_url：空 → null；必须是 http(s):// 外链
+     * - logo_svg：空 → null；≤64KB、须为 <svg 或 <?xml 开头、拒绝含脚本（<script / javascript:）
+     * 两者可同时为 null（清除 Logo）；同时提供时 logo_url 优先展示
+     */
+    private function logoInput(): array
+    {
+        $logoUrl = trim((string) $this->request->post('logo_url', ''));
+        if ($logoUrl !== '' && !preg_match('#^https?://#i', $logoUrl)) {
+            throw new HttpException(400, 'logo_url 必须是 http(s):// 开头的外链地址');
+        }
+
+        $logoSvg = trim((string) $this->request->post('logo_svg', ''));
+        if ($logoSvg !== '') {
+            if (strlen($logoSvg) > 65536) {
+                throw new HttpException(400, 'logo SVG 不能超过 64KB');
+            }
+            $head = strtolower(substr($logoSvg, 0, 256));
+            if (!str_starts_with($head, '<svg') && !str_starts_with($head, '<?xml')) {
+                throw new HttpException(400, 'logo 内容必须是 SVG 文件');
+            }
+            if (stripos($logoSvg, '<script') !== false || stripos($logoSvg, 'javascript:') !== false) {
+                throw new HttpException(400, 'logo SVG 不允许包含脚本');
+            }
+        }
+
+        return [$logoUrl !== '' ? $logoUrl : null, $logoSvg !== '' ? $logoSvg : null];
     }
 
     /** PUT /api/v1/dashboard/upstream/providers/:id/thinking-config —— 供应商级思考配置 */

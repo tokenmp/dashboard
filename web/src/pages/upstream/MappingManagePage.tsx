@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { ProviderLogo } from '@/components/ProviderLogo';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -80,7 +81,18 @@ export function MappingManagePage() {
       id: 'provider',
       accessorFn: (mm) => mm.provider_display_name || mm.provider_name,
       header: ({ column }) => <DataTableColumnHeader column={column} title="供应商" />,
-      cell: ({ row }) => <span className="text-xs">{row.original.provider_display_name || row.original.provider_name}</span>,
+      cell: ({ row }) => {
+        const mm = row.original;
+        return (
+          <span className="flex items-center gap-1.5 text-xs">
+            <ProviderLogo
+              provider={{ id: mm.provider_id, name: mm.provider_name, display_name: mm.provider_display_name, logo_url: mm.provider_logo_url, logo_svg: mm.provider_logo_svg }}
+              size={16}
+            />
+            {mm.provider_display_name || mm.provider_name}
+          </span>
+        );
+      },
     },
     {
       id: 'upstream_key',
@@ -389,7 +401,17 @@ function MappingEditForm({ mapping, modelId, modelDetail, routeGroups, existingK
         <div className="space-y-1">
           <Label>上游 Key *</Label>
           <SearchableSelect
-            options={keyOptions.map((k) => ({ value: k.id, label: k.name, hint: k.provider_display_name || k.provider_name }))}
+            options={keyOptions.map((k) => ({
+                value: k.id,
+                label: k.name,
+                hint: k.provider_display_name || k.provider_name,
+                icon: (
+                  <ProviderLogo
+                    provider={{ id: k.provider_id, name: k.provider_name, display_name: k.provider_display_name, logo_url: k.logo_url, logo_svg: k.logo_svg }}
+                    size={16}
+                  />
+                ),
+              }))}
             value={keyId}
             onChange={setKeyId}
             placeholder="选择 Key"

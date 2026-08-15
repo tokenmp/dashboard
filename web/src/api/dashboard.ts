@@ -201,6 +201,14 @@ export async function createDashboardProviderApi(body: { name: string; display_n
   const res = await client.post<ApiResponse<{ id: string }>>('/dashboard/upstream/providers', body);
   return res.data.data;
 }
+/** 编辑供应商品牌 Logo（外链 / 上传 SVG，两者传 null 即清除） */
+export async function updateDashboardProviderApi(
+  id: string,
+  body: { logo_url: string | null; logo_svg: string | null },
+): Promise<{ id: string }> {
+  const res = await client.put<ApiResponse<{ id: string }>>(`/dashboard/upstream/providers/${id}`, body);
+  return res.data.data;
+}
 export async function getProviderEndpointsApi(id: string): Promise<ProviderEndpointItem[]> {
   const res = await client.get<ApiResponse<ProviderEndpointItem[]>>(`/dashboard/upstream/providers/${id}/endpoints`);
   return res.data.data;

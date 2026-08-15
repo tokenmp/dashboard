@@ -61,6 +61,31 @@ export async function getUserApi(): Promise<UserInfo> {
 }
 
 /**
+ * 注册：加密密码后提交，成功直接返回 token（注册即登录）。
+ * 加密凭证失效（HTTP 410 / code:2）时自动重取 key 重试一次，与登录一致。
+ */
+export async function registerApi(email: string, password: string): Promise<LoginResult> {
+  const submit = async () => {
+    const { keyId, ciphertext } = await encryptSecret(password);
+    return client.post<ApiResponse<LoginResult>>('/auth/register', {
+      username: email,
+      password: ciphertext,
+      keyId,
+    });
+  };
+
+  try {
+    return (await submit()).data.data;
+  } catch (e) {
+    const err = e as { response?: { status?: number; data?: { code?: number } } };
+    if (err?.response?.status === 410 && err?.response?.data?.code === 2) {
+      return (await submit()).data.data;
+    }
+    throw e;
+  }
+}
+
+/**
  * 发送密码重置验证码：POST /auth/password/send-code（公开，防枚举始终返回 sent）
  */
 export async function sendResetCodeApi(email: string): Promise<void> {

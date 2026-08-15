@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { RefreshCw, Search, Plus, MoreVertical, Pencil, Power, Trash2 } from 'lucide-react';
+import { Switch } from '@/components/ui/switch';
 import {
   getDashboardPlansApi,
   createDashboardPlanApi,
@@ -132,6 +133,17 @@ function Plans() {
       meta: { className: 'w-[80px]' },
       header: () => <span className="text-xs font-medium text-muted-foreground">有效期</span>,
       cell: ({ row }) => <span className="text-xs">{row.original.default_duration_days ? `${row.original.default_duration_days}天` : '永久'}</span>,
+    },
+    {
+      id: 'public',
+      meta: { className: 'w-[70px]' },
+      header: () => <span className="text-xs font-medium text-muted-foreground">公开</span>,
+      cell: ({ row }) =>
+        row.original.public_visible === false ? (
+          <Badge variant="outline" className="text-[10px] text-muted-foreground">隐藏</Badge>
+        ) : (
+          <Badge variant="secondary" className="text-[10px]">展示</Badge>
+        ),
     },
     {
       id: 'status',
@@ -277,6 +289,7 @@ function PlanDialog({ plan, open, submitting, onClose, onSubmit }: {
   const [total, setTotal] = useState('');
   const [category, setCategory] = useState('');
   const [models, setModels] = useState('');
+  const [publicVisible, setPublicVisible] = useState(true);
   useEffect(() => {
     if (!visible) return;
     setName(plan?.name ?? '');
@@ -291,6 +304,7 @@ function PlanDialog({ plan, open, submitting, onClose, onSubmit }: {
     setTotal(plan?.total_limit?.toString() ?? '');
     setCategory(plan?.category ?? '');
     setModels((plan?.allowed_model_names ?? []).join(','));
+    setPublicVisible(plan?.public_visible !== false);
   }, [visible, plan]);
 
   /** 选择计费模式 → 预填周期与限额（仍可手动微调） */
@@ -324,6 +338,7 @@ function PlanDialog({ plan, open, submitting, onClose, onSubmit }: {
         ? models.split(',').map((s) => s.trim()).filter(Boolean)
         : [],
       category: category.trim() === '' ? null : category.trim(),
+      public_visible: publicVisible,
     };
     onSubmit(body);
   };
@@ -398,6 +413,13 @@ function PlanDialog({ plan, open, submitting, onClose, onSubmit }: {
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1.5"><Label>价格 (¥)</Label><Input type="number" step="0.01" value={price} onChange={(e) => setPrice(e.target.value)} /></div>
             <div className="space-y-1.5"><Label>默认有效天数</Label><Input type="number" value={duration} onChange={(e) => setDuration(e.target.value)} placeholder="留空=永久" /></div>
+          </div>
+          <div className="flex items-center justify-between rounded-lg border px-4 py-3">
+            <div>
+              <Label className="text-sm">公开展示</Label>
+              <p className="mt-0.5 text-xs text-muted-foreground">关闭后不出现在前台套餐页，但不影响发放与续期</p>
+            </div>
+            <Switch checked={publicVisible} onCheckedChange={setPublicVisible} />
           </div>
 
           <DialogFooter>

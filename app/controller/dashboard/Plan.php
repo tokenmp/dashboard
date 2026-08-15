@@ -153,6 +153,7 @@ class Plan extends BaseController
             'default_duration_days' => $this->nullableInt('default_duration_days'),
             'allowed_model_names'   => $allowedModels,
             'category'              => ($c = trim((string) $this->request->post('category', ''))) === '' ? null : $c,
+            'public_visible'        => filter_var($this->request->post('public_visible', true), FILTER_VALIDATE_BOOLEAN),
         ];
     }
 
@@ -173,26 +174,28 @@ class Plan extends BaseController
     private function rawUpsert(array $row, ?string $id): void
     {
         $json = json_encode(is_array($row['allowed_model_names']) ? $row['allowed_model_names'] : [], JSON_UNESCAPED_UNICODE);
+        // PDO 位置绑定会把 PHP false 转成空串（boolean 列报 invalid input syntax），须显式传 'true'/'false'
+        $publicVisible = $row['public_visible'] ? 'true' : 'false';
         $db = Db::connect('pgsql');
         if ($id === null) {
             $db->execute(
                 "INSERT INTO plans (id, name, plan_type, rolling_5h_limit, weekly_limit, cycle_limit, cycle_days, total_limit, "
-                . "token_limit, price, status, default_duration_days, allowed_model_names, category, created_at, updated_at) "
-                . "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?::jsonb,?,?,?)",
+                . "token_limit, price, status, default_duration_days, allowed_model_names, category, public_visible, created_at, updated_at) "
+                . "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?::jsonb,?,?,?,?)",
                 [$row['id'], $row['name'], $row['plan_type'], $row['rolling_5h_limit'],
                  $row['weekly_limit'], $row['cycle_limit'], $row['cycle_days'], $row['total_limit'],
                  $row['token_limit'], $row['price'],
                  $row['status'], $row['default_duration_days'], $json, $row['category'],
-                 $row['created_at'], $row['updated_at']]
+                 $publicVisible, $row['created_at'], $row['updated_at']]
             );
         } else {
             $db->execute(
                 "UPDATE plans SET name=?, plan_type=?, rolling_5h_limit=?, weekly_limit=?, cycle_limit=?, cycle_days=?, total_limit=?, "
                 . "token_limit=?, price=?, status=?, default_duration_days=?, allowed_model_names=?::jsonb, "
-                . "category=?, updated_at=NOW() WHERE id=? AND status <> 'deleted'",
+                . "category=?, public_visible=?, updated_at=NOW() WHERE id=? AND status <> 'deleted'",
                 [$row['name'], $row['plan_type'], $row['rolling_5h_limit'], $row['weekly_limit'],
                  $row['cycle_limit'], $row['cycle_days'], $row['total_limit'], $row['token_limit'], $row['price'], $row['status'],
-                 $row['default_duration_days'], $json, $row['category'], $id]
+                 $row['default_duration_days'], $json, $row['category'], $publicVisible, $id]
             );
         }
     }

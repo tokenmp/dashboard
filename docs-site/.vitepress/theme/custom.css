@@ -1,0 +1,186 @@
+/* 对齐平台（landing/控制台）视觉：shadcn slate 色板 + 单一蓝 #2563eb + 8px 圆角 + 系统字体 */
+/* token 来源：dashboard/web/src/styles/globals.css + LandingLayout(max-w-6xl) */
+
+/* ========== 色板（浅色） ========== */
+:root {
+  /* 品牌色：单一蓝 #2563eb（平台强调色） */
+  --vp-c-brand-1: #2563eb;
+  --vp-c-brand-2: #1d4ed8;
+  --vp-c-brand-3: #3b82f6;
+  --vp-c-brand-soft: rgba(37, 99, 235, 0.14);
+
+  /* 背景/文字/边框：shadcn light（hsl 222.2/214.3/210 系） */
+  --vp-c-bg: #ffffff;
+  --vp-c-bg-alt: #f1f5f9;   /* --muted: 210 40% 96.1% */
+  --vp-c-bg-soft: #f1f5f9;
+  --vp-c-text-1: #020617;   /* --foreground: 222.2 84% 4.9% */
+  --vp-c-text-2: #64748b;   /* --muted-foreground: 215.4 16.3% 46.9% */
+  --vp-c-text-3: #94a3b8;
+  --vp-c-border: #e2e8f0;   /* --border: 214.3 31.8% 91.4% */
+  --vp-c-divider: #e2e8f0;
+  --vp-c-gutter: #e2e8f0;
+
+  /* 控件/代码 */
+  --vp-c-control: #f1f5f9;
+  --vp-c-control-hover: #e2e8f0;
+  --vp-c-code-bg: #f1f5f9;
+  --vp-c-code-title-bg: #e2e8f0;
+
+  /* 圆角与按钮（平台 --radius: 0.5rem） */
+  --vp-border-radius: 8px;
+  --vp-button-radius: 8px;
+  --vp-button-brand-bg: #2563eb;
+  --vp-button-brand-hover-bg: #1d4ed8;
+  --vp-button-alt-bg: #f1f5f9;
+  --vp-button-alt-border: #e2e8f0;
+  --vp-button-alt-hover-bg: #e2e8f0;
+  --vp-button-alt-hover-border: #cbd5e1;
+
+  /* 字体：平台系统字体栈（无自定义 webfont） */
+  --vp-font-family-base: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto,
+    'Helvetica Neue', Arial, 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei',
+    sans-serif;
+
+  --vp-home-hero-name-color: transparent;
+  --vp-home-hero-name-background: -webkit-linear-gradient(120deg, #020617 30%, #2563eb);
+}
+
+/* ========== 色板（深色，shadcn dark） ========== */
+.dark {
+  --vp-c-brand-1: #60a5fa;
+  --vp-c-brand-2: #3b82f6;
+  --vp-c-brand-3: #93c5fd;
+  --vp-c-brand-soft: rgba(96, 165, 250, 0.16);
+
+  --vp-c-bg: #020617;       /* --background: 222.2 84% 4.9% */
+  --vp-c-bg-alt: #0f172a;
+  --vp-c-bg-soft: #0f172a;
+  --vp-c-text-1: #f1f5f9;   /* --foreground: 210 40% 98% */
+  --vp-c-text-2: #94a3b8;   /* --muted-foreground: 215.20 65.1% */
+  --vp-c-text-3: #64748b;
+  --vp-c-border: #1e293b;   /* --border: 217.2 32.6% 17.5% */
+  --vp-c-divider: #1e293b;
+  --vp-c-gutter: #1e293b;
+
+  --vp-c-control: #0f172a;
+  --vp-c-control-hover: #1e293b;
+  --vp-c-code-bg: #0f172a;
+  --vp-c-code-title-bg: #1e293b;
+
+  --vp-button-brand-bg: #2563eb;
+  --vp-button-brand-hover-bg: #1d4ed8;
+  --vp-button-alt-bg: #0f172a;
+  --vp-button-alt-border: #1e293b;
+  --vp-button-alt-hover-bg: #1e293b;
+  --vp-button-alt-hover-border: #334155;
+
+  --vp-home-hero-name-background: -webkit-linear-gradient(120deg, #f1f5f9 30%, #60a5fa);
+}
+
+/* ========== 细节对齐 ========== */
+
+/* 全宽布局：不锁轴线，去掉多余留白 */
+.VPDoc .container {
+  max-width: 100% !important;
+}
+.VPDoc .content {
+  flex: 1 1 auto !important;
+  width: auto !important;
+  min-width: 0;
+}
+.VPDoc .aside {
+  flex: 0 0 256px;
+}
+.VPDoc.has-aside .content-container {
+  max-width: none !important;
+}
+.VPDoc .container {
+  padding-left: 32px;
+  padding-right: 32px;
+}
+
+/* 首页与顶栏同一对齐公式：inset = max(32px, (视口 - layout-max-width) / 2)
+   实现方式 = 居中 1440px 容器 + 32px 内边距（box-sizing: border-box）
+   数学验证：1920→272 / 1560→92 / 1440→32 / 1200→32，与顶栏逐点一致 */
+.VPHero,
+.VPFeatures {
+  padding-left: 0 !important;
+  padding-right: 0 !important;
+}
+.VPHero .container,
+.VPFeatures .container {
+  max-width: var(--vp-layout-max-width) !important;
+  margin-left: auto !important;
+  margin-right: auto !important;
+  padding-left: 32px !important;
+  padding-right: 32px !important;
+}
+
+/* 顶部导航：白底，不加分隔线 */
+.VPNav {
+  --vp-nav-bg-color: var(--vp-c-bg);
+}
+
+/* 侧边栏：与内容同底色，去掉"面板感"分隔 */
+.VPSidebar {
+  --vp-sidebar-bg-color: var(--vp-c-bg);
+  box-shadow: none;
+}
+.VPSidebar .curtain {
+  display: none;
+}
+
+/* 侧边栏分组标题与激活态 */
+.VPSidebar .group-title {
+  color: var(--vp-c-text-3);
+  font-weight: 500;
+}
+.VPSidebarItem.is-active > .item .link .text {
+  color: var(--vp-c-brand-1);
+  font-weight: 600;
+}
+
+/* 首页特性卡片：平台卡片风格（8px 圆角 + 边框 + 白底） */
+.VPFeatures .VPFeature .box {
+  border-radius: var(--vp-border-radius);
+  border: 1px solid var(--vp-c-border);
+  background: var(--vp-c-bg);
+}
+
+/* 代码块与自定义块圆角统一 */
+.vp-doc div[class*='language-'],
+.vp-doc > div.custom-block {
+  border-radius: var(--vp-border-radius);
+}
+
+/* 工具页标题 Logo：统一尺寸与基线对齐；inline-block 覆盖全局 img{display:block} */
+.content-container h1 img {
+  display: inline-block;
+  width: 1.5em;
+  height: 1.5em;
+  vertical-align: -0.22em;
+  margin-right: 0.3em;
+  border-radius: 4px;
+}
+
+/* 侧边栏工具菜单 Logo（VitePress sidebar 不支持图片，用 ::before 注入） */
+/* 注意：若工具页路由 slug 变化，下列选择器需同步 */
+.VPSidebarItem a[href*='/tools/'] .text::before {
+  content: '';
+  display: inline-block;
+  width: 1em;
+  height: 1em;
+  margin-right: 0.4em;
+  vertical-align: -0.125em;
+  background-size: contain;
+  background-repeat: no-repeat;
+  background-position: center;
+  border-radius: 2px;
+}
+.VPSidebarItem a[href$='/tools/claude-code'] .text::before { background-image: url('/docs/logos/claude.svg'); }
+.VPSidebarItem a[href$='/tools/opencode'] .text::before { background-image: url('/docs/logos/opencode.ico'); }
+.VPSidebarItem a[href$='/tools/codex'] .text::before { background-image: url('/docs/logos/codex.png'); }
+.VPSidebarItem a[href$='/tools/trae'] .text::before { background-image: url('/docs/logos/trae.png'); }
+.VPSidebarItem a[href$='/tools/workbuddy'] .text::before { background-image: url('/docs/logos/workbuddy.svg'); }
+.VPSidebarItem a[href$='/tools/openclaw'] .text::before { background-image: url('/docs/logos/openclaw.jpg'); }
+.VPSidebarItem a[href$='/tools/hermes'] .text::before { background-image: url('/docs/logos/hermes.ico'); }

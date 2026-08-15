@@ -19,6 +19,7 @@ use think\facade\Route;
 | 按「调用方」拆为三个命名空间，彻底分离、无需任何运行时模式判断：
 |
 |   - /api/v1/auth/*       中性：登录、公钥、当前用户身份
+|   - /api/v1/site/*       公开：landing 页游客数据（模型广场、套餐目录、站点统计）
 |   - /api/v1/panel/*      用户面（仅 Auth）：强制自取数据——
 |                           管理员在此也只看自己的（DataScope::forSelf）。
 |   - /api/v1/dashboard/*  管理面（Auth + Admin）：全平台管理数据。
@@ -30,6 +31,7 @@ Route::group('api/v1', function () {
     // ─────────────── 中性：认证 ───────────────
     Route::group('auth', function () {
         Route::post('login', 'auth/Auth/login');
+        Route::post('register', 'auth/Auth/register');
         Route::get('public-key', 'auth/Auth/publicKey');
 
         // 密码重置（公开，无需登录）
@@ -39,6 +41,14 @@ Route::group('api/v1', function () {
         Route::group(function () {
             Route::get('user', 'auth/Auth/user');
         })->middleware(Auth::class);
+    });
+
+    // ─────────────── 站点公开（site）：landing 页游客数据，无需登录 ───────────────
+    Route::group('site', function () {
+        Route::get('models', 'site/Site/models');
+        Route::get('plans', 'site/Site/plans');
+        Route::get('overview', 'site/Site/overview');
+        Route::get('providers/:id/logo', 'site/Site/providerLogo')->pattern(['id' => '[\w\-]+']);
     });
 
     // ─────────────── 以下全部需鉴权（Auth） ───────────────
@@ -164,6 +174,7 @@ Route::group('api/v1', function () {
                     Route::get('providers', 'dashboard/Upstream/providers');
                     Route::post('providers', 'dashboard/Upstream/createProvider');
                     Route::group('providers', function () {
+                        Route::put(':id', 'dashboard/Upstream/updateProvider')->pattern(['id' => '[\w\-]+']);
                         Route::put(':id/thinking-config', 'dashboard/Upstream/updateProviderThinkingConfig')->pattern(['id' => '[\w\-]+']);
                         Route::get(':id/endpoints', 'dashboard/Upstream/endpoints')->pattern(['id' => '[\w\-]+']);
                         Route::post(':id/endpoints', 'dashboard/Upstream/createEndpoint')->pattern(['id' => '[\w\-]+']);

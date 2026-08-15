@@ -21,6 +21,9 @@ class Auth extends BaseController
      */
     private const DUMMY_HASH = '$2y$12$smIQMZE9z1vIYqjQazXs3u2ckaEmzx8gkv8fcikJCVwSdOxCJgTee';
 
+    /** 注册/重置密码的最小密码长度 */
+    private const MIN_PASSWORD_LEN = 8;
+
     /**
      * 登录：校验账号密码并签发 JWT
      * POST /api/v1/auth/login
@@ -73,6 +76,71 @@ class Auth extends BaseController
             'token'    => $token,
             'username' => $user->email, // 前端展示用
         ], '登录成功');
+    }
+
+    /**
+     * 注册：创建普通用户并直接签发 JWT（注册即登录）
+     * POST /api/v1/auth/register（公开）
+     *
+     * body: { username(邮箱), password(RSA-OAEP 密文), keyId }
+     * 与登录共用一次性公钥加密通道；密码规则与重置密码一致（≥8 位）。
+     * 邮箱全局唯一（含已禁用/软删账号，避免借注册复活旧账号）。
+     */
+    public function register()
+    {
+        $email       = strtolower(trim((string) $this->request->post('username', '')));
+        $encPassword = (string) $this->request->post('password', ''); // RSA-OAEP 密文(base64)
+        $keyId       = (string) $this->request->post('keyId', '');
+
+        if ($email === '' || $encPassword === '' || $keyId === '') {
+            return fail('邮箱和密码不能为空', 1, 422);
+        }
+        if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
+            return fail('邮箱格式不正确', 1, 422);
+        }
+
+        // 一次性私钥解密密码（与登录一致；失败→专用错误，前端重取 key 重试）
+        $password = SecretCrypto::decrypt($encPassword, $keyId);
+        if ($password === null) {
+            return fail('加密凭证已失效，请重试', 2, 410);
+        }
+        if (strlen($password) < self::MIN_PASSWORD_LEN) {
+            return fail('密码至少 ' . self::MIN_PASSWORD_LEN . ' 位', 1, 422);
+        }
+
+        // 邮箱唯一：任何状态（含 disabled / soft-deleted）都不允许重注册
+        if (User::where('email', $email)->find() !== null) {
+            return fail('该邮箱已注册', 1, 409);
+        }
+
+        // id 需显式生成（users.id 虽有 gen_random_uuid 默认值，但 think-orm 插入后
+        // 不会回填 DB 生成的默认值，JWT sub 会拿到 null），用 UUID v4
+        $b = random_bytes(16);
+        $b[6] = chr((ord($b[6]) & 0x0f) | 0x40);
+        $b[8] = chr((ord($b[8]) & 0x3f) | 0x80);
+        $userId = vsprintf('%s%s-%s-%s-%s-%s%s%s', str_split(bin2hex($b), 4));
+        User::create([
+            'id'           => $userId,
+            'email'        => $email,
+            'password_hash' => password_hash($password, PASSWORD_BCRYPT),
+            'role'         => 'user',
+            'status'       => 'active',
+        ]);
+
+        // 回读：token_version 等 DB 默认值同样不回填，JWT 里的 v 必须取真实值
+        $user = User::where('email', $email)->find();
+
+        $token = Jwt::issue([
+            'sub'   => $user->id,
+            'email' => $user->email,
+            'role'  => $user->role,
+            'v'     => $user->token_version,
+        ]);
+
+        return success([
+            'token'    => $token,
+            'username' => $user->email,
+        ], '注册成功');
     }
 
     /**

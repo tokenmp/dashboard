@@ -5,6 +5,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Sparkline } from '@/components/Sparkline';
+import { ProviderLogo } from '@/components/ProviderLogo';
 import { getModelKeyHealthApi } from '@/api/panel';
 import { formatCompact } from '@/utils/format';
 import type { AiModelItem, AiModelProvider } from '@/types/upstream';
@@ -23,11 +24,11 @@ export function ProviderMappingsDialog({ model, open, onOpenChange }: {
   const providers = model.providers ?? [];
 
   const grouped = useMemo(() => {
-    const map = new Map<string, { providerName: string; providerKey: string; keys: AiModelProvider[] }>();
+    const map = new Map<string, { providerName: string; providerKey: string; first: AiModelProvider; keys: AiModelProvider[] }>();
     for (const p of providers) {
       const name = p.provider_display_name || p.provider_name;
       if (!map.has(p.provider_name)) {
-        map.set(p.provider_name, { providerName: name, providerKey: p.provider_name, keys: [] });
+        map.set(p.provider_name, { providerName: name, providerKey: p.provider_name, first: p, keys: [] });
       }
       map.get(p.provider_name)!.keys.push(p);
     }
@@ -80,6 +81,16 @@ export function ProviderMappingsDialog({ model, open, onOpenChange }: {
                   <div key={group.providerName} className="rounded-lg border p-3">
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-2">
+                        <ProviderLogo
+                          provider={{
+                            id: group.first.provider_id,
+                            name: group.first.provider_name,
+                            display_name: group.first.provider_display_name,
+                            logo_url: group.first.provider_logo_url,
+                            logo_svg: group.first.provider_logo_svg,
+                          }}
+                          size={18}
+                        />
                         <span className="font-medium">{group.providerName}</span>
                         {(() => { const eff = group.keys[0]?.effective_multiplier ?? 1; return eff !== 1 ? <Badge className="border-amber-400 bg-amber-100 text-[10px] text-amber-700">×{eff} 扣费</Badge> : null; })()}
                         <button

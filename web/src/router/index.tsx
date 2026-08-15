@@ -1,8 +1,8 @@
 import { createBrowserRouter, Navigate } from 'react-router-dom';
 import Login from '@/pages/login';
+import Register from '@/pages/register';
 import ForgotPassword from '@/pages/forgot-password';
 import NotFound from '@/pages/not-found';
-import RoleHome from '@/components/RoleHome';
 import RequireAuth from '@/components/RequireAuth';
 import RequireRole from '@/components/RequireRole';
 import Layout from '@/components/layout';
@@ -33,11 +33,20 @@ import PanelNotices from '@/pages/panel/Notices';
 import PanelReleases from '@/pages/panel/Releases';
 import PanelAccount from '@/pages/panel/Account';
 
+// Landing 公开页（游客可见，数据来自 @/api/site）
+import LandingLayout from '@/pages/landing/LandingLayout';
+import LandingHome from '@/pages/landing/Home';
+import Features from '@/pages/landing/Features';
+import SiteModels from '@/pages/landing/Models';
+import SitePlans from '@/pages/landing/Plans';
+import Faq from '@/pages/landing/Faq';
+
 /**
  * 路由配置（按调用方彻底分离）
  *
- * - /login：公开登录页
- * - /：按角色重定向（admin→/dashboard，user→/panel）
+ * - /login：公开登录页；/register：公开注册页
+ * - / 及 /features /models /plans /faq：Landing 公开页（游客与已登录用户均可见，
+ *   已登录者通过导航栏「进入控制台」按角色进入后台）
  *
  * 管理端 /dashboard/*（RequireRole admin + Layout）：概览、请求、用户、上游、
  *   用量、兑换码、市场、系统、更新日志。全平台数据（@/api/dashboard）。
@@ -48,8 +57,21 @@ import PanelAccount from '@/pages/panel/Account';
  */
 export const router = createBrowserRouter([
   { path: '/login', element: <Login /> },
+  { path: '/register', element: <Register /> },
   { path: '/forgot-password', element: <ForgotPassword /> },
-  { path: '/', element: <RoleHome /> },
+
+  // ── Landing 公开页（游客与已登录用户均可见）──
+  {
+    path: '/',
+    element: <LandingLayout />,
+    children: [
+      { index: true, element: <LandingHome /> },
+      { path: 'features', element: <Features /> },
+      { path: 'models', element: <SiteModels /> },
+      { path: 'plans', element: <SitePlans /> },
+      { path: 'faq', element: <Faq /> },
+    ],
+  },
 
   // ── 管理端（admin）──
   {

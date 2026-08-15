@@ -1,15 +1,15 @@
 import { useEffect, useMemo, useState } from 'react';
 import { ChevronRight, Copy, HelpCircle, LayoutGrid, RefreshCw, Search, Table as TableIcon } from 'lucide-react';
 import { type ColumnDef } from '@tanstack/react-table';
-import { getModelKeyHealthApi, getPanelModelsApi, getPanelModelNamesApi } from '@/api/panel';
+import { getPanelModelsApi, getPanelModelNamesApi } from '@/api/panel';
 import { usePagedQuery } from '@/hooks/usePagedQuery';
 import { useAsync } from '@/hooks/useAsync';
 import { useUrlQueryState } from '@/hooks/useUrlQueryState';
 import { DebouncedInput } from '@/components/DebouncedInput';
 import { EmptyState } from '@/components/EmptyState';
 import { ModelIcon, ModelSeriesSelect, findModelIcon } from '@/components/ModelIcon';
+import { ProviderLogo } from '@/components/ProviderLogo';
 import { toast } from 'sonner';
-import { Sparkline } from '@/components/Sparkline';
 import { ModelSuccessDialog } from '@/components/ModelSuccessDialog';
 import { ProviderMappingsDialog } from '@/components/ProviderMappingsDialog';
 import { MiniSuccessBuckets } from '@/components/MiniSuccessBuckets';
@@ -20,7 +20,6 @@ import { Badge } from '@/components/ui/badge';
 import { CapabilityBadge } from '@/components/CapabilityBadge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import {
   Pagination,
   PaginationContent,
@@ -36,11 +35,6 @@ import {
 import { Skeleton } from '@/components/ui/skeleton';
 import { formatCompact, formatNumber } from '@/utils/format';
 import type { AiModelItem, UpstreamQuery } from '@/types/upstream';
-
-function formatPrice(price: number | null): string {
-  if (price == null) return '—';
-  return `¥${(price * 1_000_000).toFixed(2)}/M`;
-}
 
 function SearchInput({ value, onChange }: { value: string; onChange: (value: string) => void }) {
   return (
@@ -72,44 +66,7 @@ function ModelBillingSelect({ value, onChange }: { value: string; onChange: (val
 function ModelCard({ model }: { model: AiModelItem }) {
   const [providerDialogOpen, setProviderDialogOpen] = useState(false);
   const [successOpen, setSuccessOpen] = useState(false);
-  const [healthData, setHealthData] = useState<Record<string, number[]>>({});
-  const [healthLoading, setHealthLoading] = useState(false);
   const providers = useMemo(() => model.providers ?? [], [model.providers]);
-  const grouped = useMemo(() => {
-    const map = new Map<string, { providerName: string; providerKey: string; keys: typeof providers }>();
-    for (const provider of providers) {
-      const name = provider.provider_display_name || provider.provider_name;
-      if (!map.has(provider.provider_name)) {
-        map.set(provider.provider_name, { providerName: name, providerKey: provider.provider_name, keys: [] });
-      }
-      map.get(provider.provider_name)!.keys.push(provider);
-    }
-    return Array.from(map.values());
-  }, [providers]);
-
-  useEffect(() => {
-    if (!providerDialogOpen) return;
-
-    let active = true;
-    setHealthLoading(true);
-    getModelKeyHealthApi(model.id)
-      .then((data) => {
-        if (!active) return;
-        const map: Record<string, number[]> = {};
-        for (const item of data) {
-          map[item.upstream_key_id] = item.series.map((point) => point.success);
-        }
-        setHealthData(map);
-      })
-      .catch(() => {
-        if (active) setHealthData({});
-      })
-      .finally(() => {
-        if (active) setHealthLoading(false);
-      });
-
-    return () => { active = false; };
-  }, [providerDialogOpen, model.id]);
 
   return (
     <>
@@ -186,99 +143,7 @@ function ModelCard({ model }: { model: AiModelItem }) {
           </button>
         </CardContent>
       </Card>
-      <Dialog open={providerDialogOpen} onOpenChange={setProviderDialogOpen}>
-        <DialogContent className="sm:max-w-2xl">
-          <DialogHeader>
-            <DialogTitle>{model.display_name || model.name} · 供应商映射</DialogTitle>
-          </DialogHeader>
-          <div className="max-h-[60vh] overflow-y-auto">
-            {providers.length === 0 ? (
-              <div className="py-6 text-center text-sm text-muted-foreground">暂无可用供应商</div>
-            ) : (
-              <div className="space-y-3">
-                {grouped.map((group) => {
-                  const activeCount = group.keys.filter((key) => key.status === 'active').length;
-                  const totalCount = group.keys.length;
-                  const allActive = activeCount === totalCount;
-                  const maxTokens = Math.max(...group.keys.map((key) => key.max_tokens ?? 0));
-                  const inputPrices = group.keys
-                    .map((key) => key.input_price_per_token)
-                    .filter((value): value is number => value != null);
-                  const outputPrices = group.keys
-                    .map((key) => key.output_price_per_token)
-                    .filter((value): value is number => value != null);
-                  const inputPrice = inputPrices.length ? Math.min(...inputPrices) : null;
-                  const outputPrice = outputPrices.length ? Math.min(...outputPrices) : null;
-
-                  return (
-                    <div key={group.providerName} className="rounded-lg border p-3">
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-2">
-                          <span className="font-medium">{group.providerName}</span>
-                          {(() => { const eff = group.keys[0]?.effective_multiplier ?? 1; return eff !== 1 ? <Badge className="border-amber-400 bg-amber-100 text-[10px] text-amber-700">×{eff} 扣费</Badge> : null; })()}
-                          <button
-                            type="button"
-                            onClick={() => {
-                              const selector = `${model.name}@${group.providerKey}`;
-                              navigator.clipboard.writeText(selector);
-                              toast.success(`已复制选择器：${selector}`);
-                            }}
-                            className="inline-flex items-center gap-1 rounded bg-muted px-1.5 py-0.5 font-mono text-[10px] text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
-                            title="复制选择器"
-                          >
-                            {model.name}@{group.providerKey}
-                            <Copy className="h-2.5 w-2.5" />
-                          </button>
-                        </div>
-                        <Badge
-                          variant={allActive ? 'secondary' : 'destructive'}
-                          className="text-[10px]"
-                        >
-                          {totalCount} 个 Key · {allActive ? '全部可用' : `${activeCount}/${totalCount} 可用`}
-                        </Badge>
-                      </div>
-                      <div className="mt-1.5 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-muted-foreground">
-                        <span>最大输出：<span className="text-foreground">{maxTokens ? formatCompact(maxTokens) : '—'}</span></span>
-                        <span>输入价格：<span className="text-foreground">{formatPrice(inputPrice)}</span></span>
-                        <span>输出价格：<span className="text-foreground">{formatPrice(outputPrice)}</span></span>
-                      </div>
-                      <div className="mt-2 space-y-1.5">
-                        {group.keys.map((key) => (
-                          <div
-                            key={key.mapping_id}
-                            className="flex flex-wrap items-center gap-x-3 gap-y-1 rounded bg-muted/50 px-2 py-1"
-                          >
-                            <span className={key.status === 'active' ? 'text-green-600' : 'text-red-600'}>●</span>
-                            <span
-                              title={key.upstream_key_id}
-                              className="font-mono text-[10px] text-muted-foreground"
-                            >
-                              {key.upstream_key_id.slice(-10)}
-                            </span>
-                            {key.upstream_model_name && key.upstream_model_name !== model.name && (
-                              <span className="truncate text-[10px] text-muted-foreground/70">→ {key.upstream_model_name}</span>
-                            )}
-                            <span className="text-[10px] text-muted-foreground">
-                              <span className="text-foreground">{key.max_tokens ? formatCompact(key.max_tokens) : '—'}</span> · {formatPrice(key.input_price_per_token)} / {formatPrice(key.output_price_per_token)}
-                            </span>
-                            <div className="ml-auto shrink-0">
-                              {healthLoading ? (
-                                <Skeleton className="h-5 w-20" />
-                              ) : (
-                                <Sparkline data={healthData[key.upstream_key_id] ?? []} width={80} height={20} />
-                              )}
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            )}
-          </div>
-        </DialogContent>
-      </Dialog>
+      <ProviderMappingsDialog model={model} open={providerDialogOpen} onOpenChange={setProviderDialogOpen} />
       <ModelSuccessDialog model={model} open={successOpen} onOpenChange={setSuccessOpen} />
     </>
   );
@@ -413,12 +278,31 @@ function Models() {
       header: () => <span className="text-xs font-medium text-muted-foreground">供应商</span>,
       cell: ({ row }) => {
         const ps = row.original.providers ?? [];
-        const provNames = Array.from(new Set(ps.map((p) => p.provider_display_name || p.provider_name)));
+        // 按供应商去重（保留首个携带 logo 字段的映射）
+        const uniq = new Map<string, typeof ps[number]>();
+        for (const p of ps) {
+          const name = p.provider_display_name || p.provider_name;
+          if (!uniq.has(name)) uniq.set(name, p);
+        }
+        const items = Array.from(uniq.entries());
+        if (items.length === 0) return <span className="text-xs text-muted-foreground">—</span>;
         return (
-          <div className="truncate text-xs">
-            {provNames.length === 0 ? <span className="text-muted-foreground">—</span>
-              : provNames.length <= 3 ? provNames.join('、 ')
-              : <>{provNames[0]} 等 <span className="text-muted-foreground">{provNames.length} 个供应商</span></>}
+          <div className="flex items-center gap-1.5 text-xs">
+            <span className="-space-x-1 flex shrink-0">
+              {items.slice(0, 3).map(([name, p]) => (
+                <ProviderLogo
+                  key={name}
+                  provider={{ id: p.provider_id, name: p.provider_name, display_name: p.provider_display_name, logo_url: p.provider_logo_url, logo_svg: p.provider_logo_svg }}
+                  size={16}
+                  className="ring-1 ring-background"
+                />
+              ))}
+            </span>
+            <span className="truncate">
+              {items.length <= 3
+                ? items.map(([name]) => name).join('、 ')
+                : <>{items[0][0]} 等 <span className="text-muted-foreground">{items.length} 个</span></>}
+            </span>
           </div>
         );
       },

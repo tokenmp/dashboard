@@ -5,6 +5,7 @@ import { ToggleIconButton } from '@/components/ToggleIconButton';
 import { getDashboardUpstreamKeysApi, getDashboardUpstreamKeyDetailApi, probeUpstreamKeyApi, updateUpstreamKeyStatusApi, deleteUpstreamKeyApi } from '@/api/dashboard';
 import { CreateKeyDialog } from './CreateKeyDialog';
 import { ConfirmDialog } from '@/components/ConfirmDialog';
+import { ProviderLogo } from '@/components/ProviderLogo';
 import { usePagedQuery } from '@/hooks/usePagedQuery';
 import { useAsync } from '@/hooks/useAsync';
 import { useRole } from '@/hooks/useRole';
@@ -97,7 +98,15 @@ export function KeysTab({ providerId }: { providerId?: string }) {
         accessorFn: (k) => k.provider?.display_name || k.provider?.name || '',
         meta: { className: 'w-[110px]' },
         header: ({ column }) => <DataTableColumnHeader column={column} title="供应商" />,
-        cell: ({ row }) => <span className="text-xs">{row.original.provider?.display_name || row.original.provider?.name || '—'}</span>,
+        cell: ({ row }) => {
+          const p = row.original.provider;
+          return (
+            <span className="flex items-center gap-1.5 text-xs">
+              {p && <ProviderLogo provider={p} size={16} />}
+              {p?.display_name || p?.name || '—'}
+            </span>
+          );
+        },
       });
     }
     cols.push(

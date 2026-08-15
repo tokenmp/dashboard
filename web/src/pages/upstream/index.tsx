@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { AlertTriangle, Brain, CheckCircle2, ChevronRight, Copy, LayoutGrid, Pencil, Plus, Power, PowerOff, RefreshCw, Search, Settings2, Plug, Table as TableIcon } from 'lucide-react';
+import { AlertTriangle, Brain, CheckCircle2, ChevronRight, Copy, Image, LayoutGrid, Pencil, Plus, Power, PowerOff, RefreshCw, Search, Settings2, Plug, Table as TableIcon } from 'lucide-react';
 import { CoinIcon, ToggleIconButton } from '@/components/ToggleIconButton';
 import { ThinkingConfigDialog, type ThinkingConfig } from '@/components/ThinkingConfigDialog';
 import { updateProviderThinkingConfigApi, updateModelThinkingConfigApi } from '@/api/dashboard';
@@ -22,6 +22,9 @@ import { DataTable } from '@/components/ui/data-table';
 import { DataTableColumnHeader } from '@/components/ui/data-table-column-header';
 import { formatCompact, formatNumber } from '@/utils/format';
 import { ProviderCreateDialog } from './ProviderCreateDialog';
+import { findModelIcon } from '@/components/ModelIcon';
+import { ProviderLogo } from '@/components/ProviderLogo';
+import { ProviderLogoDialog } from './ProviderLogoDialog';
 import { ProviderEndpointsDialog } from './ProviderEndpointsDialog';
 import { KeysTab } from './KeysTab';
 import { ModelEditDialog } from './ModelEditDialog';
@@ -103,6 +106,7 @@ function ProvidersTab() {
     { name: 'size', key: 'size', type: 'number', default: 20 },
   ]);
   const [thinkingProvider, setThinkingProvider] = useState<ProviderItem | null>(null);
+  const [logoProvider, setLogoProvider] = useState<ProviderItem | null>(null);
   const { list, total, page, size, loading, error, params, reload, setPage, setFilters } =
     usePagedQuery(getProvidersApiLazy, { initial: { size: 20, sort: '-created_at', ...urlInit } as UpstreamQuery });
   useEffect(() => { write(params); }, [params]);
@@ -112,7 +116,27 @@ function ProvidersTab() {
     {
       id: 'name',
       header: () => <span className="text-xs font-medium text-muted-foreground">名称</span>,
-      cell: ({ row }) => <span className="font-medium">{row.original.display_name || row.original.name}</span>,
+      cell: ({ row }) => {
+        const p = row.original;
+        // 自定义 Logo 优先；未配置时按名称回退内置品牌图标（与前台模型广场口径一致）
+        const builtin = findModelIcon(p.name, p.display_name ?? undefined);
+        const src = p.logo_url
+          ?? (p.logo_svg ? `/api/v1/site/providers/${p.id}/logo` : null)
+          ?? (builtin ? `/model-icons/${builtin.icon}.svg` : null);
+        return (
+          <span className="flex items-center gap-2 font-medium">
+            {src && (
+              <img
+                src={src}
+                alt=""
+                className="h-5 w-5 shrink-0 rounded-sm object-contain"
+                style={src.startsWith('/model-icons/') && builtin ? { background: builtin.logoBackground } : undefined}
+              />
+            )}
+            {p.display_name || p.name}
+          </span>
+        );
+      },
     },
     {
       id: 'status',
@@ -145,15 +169,26 @@ function ProvidersTab() {
       meta: { className: 'w-[50px] text-right' },
       header: () => null,
       cell: ({ row }) => (
-        <Button
-          variant="ghost"
-          size="icon"
-          className={`h-7 w-7 ${row.original.thinking ? 'text-primary' : ''}`}
-          title="思考配置（供应商级，模型/映射未配置时继承此处）"
-          onClick={() => setThinkingProvider(row.original)}
-        >
-          <Brain className="h-4 w-4" />
-        </Button>
+        <div className="flex justify-end gap-1">
+          <Button
+            variant="ghost"
+            size="icon"
+            className={`h-7 w-7 ${row.original.logo_url || row.original.logo_svg ? 'text-primary' : ''}`}
+            title="品牌 Logo（前台模型广场筛选展示）"
+            onClick={() => setLogoProvider(row.original)}
+          >
+            <Image className="h-4 w-4" />
+          </Button>
+          <Button
+            variant="ghost"
+            size="icon"
+            className={`h-7 w-7 ${row.original.thinking ? 'text-primary' : ''}`}
+            title="思考配置（供应商级，模型/映射未配置时继承此处）"
+            onClick={() => setThinkingProvider(row.original)}
+          >
+            <Brain className="h-4 w-4" />
+          </Button>
+        </div>
       ),
     },
   ], []);
@@ -179,6 +214,7 @@ function ProvidersTab() {
       </CardContent></Card>
       <Pager page={page} size={size} total={total} loading={loading} setPage={setPage} />
       <ProviderCreateDialog open={createOpen} onOpenChange={setCreateOpen} onCreated={reload} />
+      <ProviderLogoDialog provider={logoProvider} onClose={() => setLogoProvider(null)} onSaved={reload} />
       <ProviderEndpointsDialog open={!!endpointsProvider} onOpenChange={(o) => !o && setEndpointsProvider(null)} providerId={endpointsProvider?.id ?? null} providerName={endpointsProvider?.name} />
       <ThinkingConfigDialog
         open={!!thinkingProvider}
@@ -266,11 +302,11 @@ function ModelCard({ m, onEdit, onManageMappings, onPatch, toggling, onThinkingS
   };
   const providers = useMemo(() => m.providers ?? [], [m.providers]);
   const grouped = useMemo(() => {
-    const map = new Map<string, { providerName: string; providerKey: string; keys: typeof providers }>();
+    const map = new Map<string, { providerName: string; providerKey: string; first: typeof providers[number]; keys: typeof providers }>();
     for (const p of providers) {
       const name = p.provider_display_name || p.provider_name;
       if (!map.has(p.provider_name)) {
-        map.set(p.provider_name, { providerName: name, providerKey: p.provider_name, keys: [] });
+        map.set(p.provider_name, { providerName: name, providerKey: p.provider_name, first: p, keys: [] });
       }
       map.get(p.provider_name)!.keys.push(p);
     }
@@ -414,6 +450,16 @@ function ModelCard({ m, onEdit, onManageMappings, onPatch, toggling, onThinkingS
                     <div key={group.providerName} className="rounded-lg border p-3">
                       <div className="flex items-center justify-between">
                         <div className="flex items-center gap-2">
+                          <ProviderLogo
+                            provider={{
+                              id: group.first.provider_id,
+                              name: group.first.provider_name,
+                              display_name: group.first.provider_display_name,
+                              logo_url: group.first.provider_logo_url,
+                              logo_svg: group.first.provider_logo_svg,
+                            }}
+                            size={18}
+                          />
                           <span className="font-medium">{group.providerName}</span>
                           {(() => { const eff = group.keys[0]?.effective_multiplier ?? 1; return eff !== 1 ? <Badge className="border-amber-400 bg-amber-100 text-[10px] text-amber-700">×{eff} 扣费</Badge> : null; })()}
                           <button
