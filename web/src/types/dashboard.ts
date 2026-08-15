@@ -40,7 +40,10 @@ export interface QuotaWindow {
   label: string;
   /** 套餐限额，null 表示不限 */
   limit: number | null;
+  /** 已用（扣费次数口径，含倍率；限额与剩余均按此计算） */
   used: number;
+  /** 实际请求次数（区别于带倍率的扣费次数；未提供或与 used 相同时不单独展示） */
+  usedRequests?: number | null;
   /** 窗口重置时刻（ISO-8601）；null=无固定重置（总量桶 / 5h 窗内暂无用量） */
   resetAt?: string | null;
 }

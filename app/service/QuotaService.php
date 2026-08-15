@@ -352,26 +352,37 @@ class QuotaService
 
         // 公共片段：5h / 周 / 总 三个独立窗口（以 [activated_at, expires_at] 为界，互不套住）。
         // 5h/周下界纳入短期窗重置锚点 wra（GREATEST 忽略 NULL）；周期窗与总量仍只认 act
-        $independentUsed = ""
-            . " coalesce(sum(case when created_at >= greatest(now() - interval '5 hours', b.act, b.wra)"
-            . " and (b.exp is null or created_at <= b.exp) then -request_delta else 0 end), 0) as h5_used,"
-            . " coalesce(sum(case when created_at >= greatest((date_trunc('week', now() at time zone 'Asia/Shanghai') at time zone 'Asia/Shanghai'), b.act, b.wra)"
-            . " and created_at < ((date_trunc('week', now() at time zone 'Asia/Shanghai') + interval '7 days') at time zone 'Asia/Shanghai')"
-            . " and (b.exp is null or created_at <= b.exp) then -request_delta else 0 end), 0) as week_used,"
-            . " coalesce(sum(case when created_at >= b.act and (b.exp is null or created_at <= b.exp)"
-            . " then -request_delta else 0 end), 0) as total_used";
+        $windowConds = [
+            'h5'    => "created_at >= greatest(now() - interval '5 hours', b.act, b.wra)"
+                     . " and (b.exp is null or created_at <= b.exp)",
+            'week'  => "created_at >= greatest((date_trunc('week', now() at time zone 'Asia/Shanghai') at time zone 'Asia/Shanghai'), b.act, b.wra)"
+                     . " and created_at < ((date_trunc('week', now() at time zone 'Asia/Shanghai') + interval '7 days') at time zone 'Asia/Shanghai')"
+                     . " and (b.exp is null or created_at <= b.exp)",
+            'total' => "created_at >= b.act and (b.exp is null or created_at <= b.exp)",
+        ];
+        $independentUsed = ''
+            . " coalesce(sum(case when {$windowConds['h5']} then -request_delta else 0 end), 0) as h5_used,"
+            . " coalesce(sum(case when {$windowConds['week']} then -request_delta else 0 end), 0) as week_used,"
+            . " coalesce(sum(case when {$windowConds['total']} then -request_delta else 0 end), 0) as total_used";
+        // 实际请求数（区别于带倍率的扣费次数）：同窗口条件下去重计请求条目。
+        // 老数据 request_log_id 为空时计 0，前端仅在 >0 且 ≠used 时展示。
+        $independentActual = ''
+            . " count(distinct case when {$windowConds['h5']} then request_log_id end) as h5_actual,"
+            . " count(distinct case when {$windowConds['week']} then request_log_id end) as week_actual,"
+            . " count(distinct case when {$windowConds['total']} then request_log_id end) as total_actual";
 
         if ($isPermanent) {
             // 永久套餐：不计算月周期窗口（避免 cycle_days*86400 溢出 int4）
             $row = Db::connect('pgsql')->query(
                 "with b as (select ?::timestamptz as act, ?::timestamptz as wra, ?::timestamptz as exp)"
-                . " select " . $independentUsed
+                . " select " . $independentUsed . ',' . $independentActual
                 . " from usage_ledger, b"
                 . " where user_id = ? and billing_plan = 'coding' and ledger_type = 'charge' and request_delta < 0"
                 . " and user_plan_id = ?::uuid",
                 [$act, $wra, $exp, $userId, $plan['bindingId']]
             )[0];
-            $monthUsed = 0;
+            $monthUsed   = 0;
+            $monthActual = 0;
         } else {
             // 周期套餐：月(周期窗口) + 周/5h/总(独立窗口)
             $row = Db::connect('pgsql')->query(
@@ -396,14 +407,16 @@ class QuotaService
                 . "), b as (select ?::timestamptz as act, ?::timestamptz as wra, ?::timestamptz as exp)"
                 . " select"
                 . " coalesce(sum(case when created_at >= cycle_window_start and created_at <= cycle_window_end then -request_delta else 0 end), 0) as cycle_used,"
+                . " count(distinct case when created_at >= cycle_window_start and created_at <= cycle_window_end then request_log_id end) as cycle_actual,"
                 . " min(mwin.cycle_window_end)::text as cycle_reset,"
-                . $independentUsed
+                . $independentUsed . ',' . $independentActual
                 . " from usage_ledger, mwin, b"
                 . " where user_id = ? and billing_plan = 'coding' and ledger_type = 'charge' and request_delta < 0"
                 . " and user_plan_id = ?::uuid",
                 [$act, $exp, $cycleDays, $act, $wra, $exp, $userId, $plan['bindingId']]
             )[0];
-            $monthUsed = (float) ($row['cycle_used'] ?? 0);
+            $monthUsed   = (float) ($row['cycle_used'] ?? 0);
+            $monthActual = (int) ($row['cycle_actual'] ?? 0);
         }
 
         // 5h 滚动窗「下次恢复」时刻：窗内最早一笔用量滚出窗口的时间（无用量则 null）
@@ -428,23 +441,26 @@ class QuotaService
         $h5Used    = max(0, (float) ($row['h5_used'] ?? 0));
         $weekUsed  = max(0, (float) ($row['week_used'] ?? 0));
         $totalUsed = max(0, (float) ($row['total_used'] ?? 0));
+        $h5Actual    = (int) ($row['h5_actual'] ?? 0);
+        $weekActual  = (int) ($row['week_actual'] ?? 0);
+        $totalActual = (int) ($row['total_actual'] ?? 0);
 
         $windows = [];
         if ($totalLimit !== null && $totalLimit > 0) {
-            $windows[] = ['key' => 'total', 'label' => '总量', 'limit' => $totalLimit, 'used' => $totalUsed, 'resetAt' => null];
+            $windows[] = ['key' => 'total', 'label' => '总量', 'limit' => $totalLimit, 'used' => $totalUsed, 'usedRequests' => $totalActual, 'resetAt' => null];
         }
         if (!$isPermanent && $cycleLimit !== null && $cycleLimit > 0) {
-            $windows[] = ['key' => 'month', 'label' => $label, 'limit' => $cycleLimit, 'used' => max(0, $monthUsed), 'resetAt' => $cycleReset];
+            $windows[] = ['key' => 'month', 'label' => $label, 'limit' => $cycleLimit, 'used' => max(0, $monthUsed), 'usedRequests' => $monthActual, 'resetAt' => $cycleReset];
         }
         if ($weekLimit > 0) {
-            $windows[] = ['key' => 'week', 'label' => '本周', 'limit' => $weekLimit, 'used' => $weekUsed, 'resetAt' => $weekReset];
+            $windows[] = ['key' => 'week', 'label' => '本周', 'limit' => $weekLimit, 'used' => $weekUsed, 'usedRequests' => $weekActual, 'resetAt' => $weekReset];
         }
         if ($h5Limit > 0) {
-            $windows[] = ['key' => 'h5', 'label' => '近 5 小时', 'limit' => $h5Limit, 'used' => $h5Used, 'resetAt' => $h5Reset];
+            $windows[] = ['key' => 'h5', 'label' => '近 5 小时', 'limit' => $h5Limit, 'used' => $h5Used, 'usedRequests' => $h5Actual, 'resetAt' => $h5Reset];
         }
         if (!$windows) {
             // 全不限套餐：回退展示当前周期已用，避免整块空白
-            $windows[] = ['key' => 'month', 'label' => $isPermanent ? '总量' : $label, 'limit' => null, 'used' => max(0, $isPermanent ? $totalUsed : $monthUsed)];
+            $windows[] = ['key' => 'month', 'label' => $isPermanent ? '总量' : $label, 'limit' => null, 'used' => max(0, $isPermanent ? $totalUsed : $monthUsed), 'usedRequests' => $isPermanent ? $totalActual : $monthActual];
         }
 
         return [

@@ -19,6 +19,8 @@ import { useMutation } from '@/hooks/useMutation';
 import { StatusBadge } from '@/components/StatusBadge';
 import { QuotaCards } from '@/components/QuotaCards';
 import { EmptyState } from '@/components/EmptyState';
+import type { QuotaItem } from '@/types/dashboard';
+import type { UserPlanItem } from '@/types/user';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -62,7 +64,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
-import { formatDate, formatDateTime, formatNumber } from '@/utils/format';
+import { formatCompact, formatDate, formatDateTime, formatNumber } from '@/utils/format';
 import { toast } from 'sonner';
 import { getApiError } from '@/utils/error';
 import type { UserBasic, UserListQuery, UserUpdatePayload } from '@/types/user';
@@ -118,6 +120,36 @@ function Users() {
     { accessorKey: 'role', meta: { className: 'w-[90px]' }, header: ({ column }) => <DataTableColumnHeader column={column} title="角色" />, cell: ({ row }) => <Badge variant={row.original.role === 'admin' ? 'default' : 'secondary'} className="text-[10px]">{row.original.role}</Badge> },
     { id: 'status', meta: { className: 'w-[90px]' }, header: () => <span className="text-xs font-medium text-muted-foreground">状态</span>, cell: ({ row }) => <StatusBadge status={row.original.status} /> },
     { accessorKey: 'preferred_billing', meta: { className: 'w-[110px]' }, header: ({ column }) => <DataTableColumnHeader column={column} title="首选计费" />, cell: ({ row }) => <span className="text-xs">{row.original.preferred_billing}</span> },
+    {
+      id: 'plans',
+      meta: { className: 'w-[220px]' },
+      header: () => <span className="text-xs font-medium text-muted-foreground">套餐</span>,
+      cell: ({ row }) => {
+        const plans = row.original.plans ?? [];
+        if (plans.length === 0) return <span className="text-xs text-muted-foreground">—</span>;
+        return (
+          <div className="flex flex-wrap gap-1">
+            {plans.map((p, i) => (
+              <Badge key={`${p.name}-${i}`} variant="outline" className="h-5 px-1.5 text-[10px]">{p.name}</Badge>
+            ))}
+          </div>
+        );
+      },
+    },
+    {
+      id: 'usage',
+      meta: { className: 'w-[150px]' },
+      header: () => <span className="text-xs font-medium text-muted-foreground">本月用量</span>,
+      cell: ({ row }) => {
+        const u = row.original.usage;
+        if (!u) return <span className="text-xs text-muted-foreground">—</span>;
+        return (
+          <span className="text-xs tabular-nums text-muted-foreground" title={`${u.monthRequests} 次调用 · ${u.monthTokens} token`}>
+            {formatNumber(u.monthRequests)} 次 · {formatCompact(u.monthTokens)} tok
+          </span>
+        );
+      },
+    },
     { accessorKey: 'created_at', meta: { className: 'w-[160px]' }, header: ({ column }) => <DataTableColumnHeader column={column} title="注册时间" />, cell: ({ row }) => <span className="font-mono text-xs text-muted-foreground">{formatDateTime(row.original.created_at)}</span> },
     {
       id: 'action',
@@ -599,8 +631,29 @@ function GrantPlanButton({ userId, onDone }: { userId: string; onDone?: () => vo
   );
 }
 
-function DetailDrawer({ id, onClose }: { id: string | null; onClose: () => void }) {
-  const { data, loading, error, reload } = useAsync(
+/** 从 quota 项中提取该套餐的余量摘要（coding 多套餐按 planName 匹配；token/image 同类型聚合取首项） */
+function planQuotaHint(quota: QuotaItem[], plan: UserPlanItem): string | null {
+  const items = quota.filter((q) => q.billingPlan === plan.plan_type);
+  if (items.length === 0) return null;
+  const item = plan.plan_type === 'coding'
+    ? (items.find((q) => q.planName === plan.plan?.name) ?? null)
+    : items[0];
+  if (!item) return null;
+  if (item.mode === 'window' && item.windows?.length) {
+    return item.windows
+      .map((w) => w.limit == null
+        ? `${w.label} 已用 ${formatNumber(w.used)}`
+        : `${w.label}剩 ${formatNumber(Math.max(0, w.limit - w.used))}`)
+      .join(' · ');
+  }
+  if (item.mode === 'capped') {
+    return `剩余 ${formatCompact(item.available ?? 0)} / ${formatCompact(item.total ?? item.limit ?? 0)}`;
+  }
+  if (item.mode === 'balance') return `可用 ${formatCompact(item.available ?? 0)}`;
+  return null;
+}
+
+function DetailDrawer({ id, onClose }: { id: string | null; onClose: () => void }) {  const { data, loading, error, reload } = useAsync(
     () => (id ? getDashboardUserDetailApi(id) : Promise.resolve(null)),
     [id],
   );
@@ -661,6 +714,7 @@ function DetailDrawer({ id, onClose }: { id: string | null; onClose: () => void 
                 ) : (
                   activePlans.map((p) => {
                     const expired = isPlanExpired(p.expires_at);
+                    const quotaHint = expired ? null : planQuotaHint(data.quota, p);
                     return (
                     <div key={p.id} className="flex items-center justify-between rounded-lg border p-2.5">
                       <div>
@@ -673,6 +727,9 @@ function DetailDrawer({ id, onClose }: { id: string | null; onClose: () => void 
                         <div className="text-xs text-muted-foreground">
                           {p.plan_type} · 生效 {formatDate(p.activated_at)} · 过期 {formatDate(p.expires_at) ?? '永久'}
                         </div>
+                        {quotaHint && (
+                          <div className="mt-0.5 text-xs tabular-nums text-emerald-600">{quotaHint}</div>
+                        )}
                       </div>
                       <div className="flex items-center gap-2">
                         {p.status === 'active' && (

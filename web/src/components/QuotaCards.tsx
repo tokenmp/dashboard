@@ -146,11 +146,16 @@ export function QuotaCard({ q, className }: { q: QuotaItem; className?: string }
   );
 }
 
-/** 额度明细卡组：dashboard 侧整组渲染时使用（逐项映射为 QuotaCard）。 */
+/** 额度明细卡组：dashboard 侧整组渲染时使用（逐项映射为 QuotaCard）。
+ *  列数随数量自适应：1 张占满整行、2 张两列、3 张起才用三列，避免单套餐被挤在 1/3 宽的窄格里。 */
 export function QuotaCards({ items, className }: { items: QuotaItem[]; className?: string }) {
   if (items.length === 0) return null;
+  const grid =
+    items.length === 1 ? 'grid grid-cols-1 gap-4'
+    : items.length === 2 ? 'grid grid-cols-1 gap-4 sm:grid-cols-2'
+    : 'grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3';
   return (
-    <div className={className ?? 'grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3'}>
+    <div className={className ?? grid}>
       {items.map((q) => (
         <QuotaCard key={`${q.billingPlan}-${q.planName ?? ''}`} q={q} />
       ))}
