@@ -195,8 +195,8 @@ function Register() {
             {error && <p className="text-sm text-destructive">{error}</p>}
           </CardContent>
           <CardFooter className="flex flex-col gap-3">
-            <Button type="submit" className="w-full" disabled={loading}>
-              {loading ? '注册中…' : '注册'}
+            <Button type="submit" className="w-full" disabled={loading || !codeSent}>
+              {loading ? '注册中…' : codeSent ? '注册' : '请先发送邮箱验证码'}
             </Button>
             <p className="text-sm text-muted-foreground">
               已有账号？{' '}
