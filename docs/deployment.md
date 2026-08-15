@@ -10,8 +10,8 @@
 ```
 外网 → Caddy(host, :80/:443, TLS)
         ├─ next.tokenmp.cn ──── import newstack ──→ 绿栈(新, 容器)
-        │                                            ├─ /api/v1/* & SPA → 127.0.0.1:18080 → tokenmp-dashboard(FrankenPHP)
-        │                                            └─ /v1/*          → 127.0.0.1:18081 → tokenmp-executor(Go)
+        │                                            ├─ /api/v1/* & SPA → 127.0.0.1:18180 → tokenmp-dashboard(FrankenPHP)
+        │                                            └─ /v1/*          → 127.0.0.1:18181 → tokenmp-executor(Go)
         └─ api.tokenmp.cn ──── import api_stack ──┐
               (api_stack 内一行开关:              ├─ legacy_stack(蓝, systemd 旧栈) 8080/8081/3000, 库 tokenmp_prod
                import legacy_stack ⇄ newstack)    └─ newstack(绿, 同上)

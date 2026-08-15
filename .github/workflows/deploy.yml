@@ -46,6 +46,6 @@ jobs:
               -f docker-compose.1panel.yml up -d --no-deps --no-build --force-recreate
             sleep 5
             # 冒烟：首页(SPA) + 公开 API
-            curl -fsS "http://127.0.0.1:${DASHBOARD_PORT:-18080}/" >/dev/null
-            curl -fsS "http://127.0.0.1:${DASHBOARD_PORT:-18080}/api/v1/site/overview" >/dev/null
+            curl -fsS "http://127.0.0.1:${DASHBOARD_PORT:-18180}/" >/dev/null
+            curl -fsS "http://127.0.0.1:${DASHBOARD_PORT:-18180}/api/v1/site/overview" >/dev/null
             echo "✓ dashboard $TAG deployed (绿栈 next.tokenmp.cn)"

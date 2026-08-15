@@ -3,7 +3,7 @@
 # 来源: github.com/tokenmp/dashboard
 # 运行时: FrankenPHP(Caddy+PHP 8.4),容器内 80（/api/v1 与 SPA 同端口）
 # 数据库: 同机 postgres 容器（postgres-redis_default 网络内主机名 postgres）的 tokenmp 库
-# 端口:   仅绑 127.0.0.1:18080 —— 只供同机 host 级 Caddy 反代
+# 端口:   仅绑 127.0.0.1:18180 —— 只供同机 host 级 Caddy 反代
 #         （8080/3000 被蓝栈 systemd 旧 management + 旧 next web 占用，切流前不可动）
 # ============================================================
 #
@@ -27,7 +27,7 @@ services:
     networks:
       - pgnet
     ports:
-      - "127.0.0.1:${DASHBOARD_PORT:-18080}:80"
+      - "127.0.0.1:${DASHBOARD_PORT:-18180}:80"
     # 共享密钥 (JWT_SECRET / API_KEY_PEPPER / MASTER_ENCRYPTION_KEY / PG_PASS 等)
     # 统一来自宿主机 /opt/tokenmp/secrets.env —— 单一来源, 与 executor 容器保持一致。
     env_file:
