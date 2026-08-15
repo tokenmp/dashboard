@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 64 64" fill="none">
+	<!-- TokenMP 文档站标识：与面板同源的几何（两方块+圆），底色用文档主题蓝 #2563eb 以示区分 -->
+	<rect width="64" height="64" rx="16" fill="#2563EB"/>
+	<rect x="12" y="34" width="18" height="18" rx="5" fill="#fff" opacity=".92"/>
+	<rect x="34" y="12" width="18" height="18" rx="5" fill="#fff" opacity=".5"/>
+	<circle cx="32" cy="32" r="10" fill="#fff"/>
+</svg>

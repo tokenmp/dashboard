@@ -11,9 +11,13 @@ export default defineConfig({
   cleanUrls: true, // /guide/quickstart 而非 /guide/quickstart.html（openresty try_files 已兜底）
   srcExclude: ['README.md'], // README 是给开发者的，不进站点
 
-  head: [['link', { rel: 'icon', href: '/favicon.ico' }]],
+  // 图标用文档站自己的蓝色 logo；base 下不能写绝对路径（会落到面板的 favicon），用 BASE 拼
+  head: [['link', { rel: 'icon', type: 'image/svg+xml', href: BASE + 'logo.svg' }]],
 
   themeConfig: {
+    // 与面板同源的品牌几何（两方块+圆），但底色为文档主题蓝，浏览器标签页一眼区分面板与文档
+    // vitepress 会自动给 themeConfig.logo 加 base，这里不能再拼 BASE
+    logo: '/logo.svg',
     // 与 landing 公开站同一颗蓝色（#2563eb），主题色覆盖见 theme/custom.css
     nav: [
       { text: '指南', link: '/guide/quickstart', activeMatch: '/guide/' },
