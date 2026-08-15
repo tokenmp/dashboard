@@ -1,11 +1,12 @@
-# TokenMP Dashboard 部署 —— 推 v* 标签时, GitHub 托管 runner 通过 SSH 连到生产服务器,
-# 在 /opt/tokenmp-dashboard 本地 build + 重建容器 + 写回 versions.env。
+# TokenMP Dashboard 部署（蓝绿·绿栈）—— 推 v* 标签时, GitHub 托管 runner 通过 SSH 连到
+# tokenmp 生产服务器, 在 /opt/tokenmp-dashboard 本地 build + 重建容器 + 写回 versions.env。
+# 绿栈只服务 next.tokenmp.cn；api.tokenmp.cn 的切流由 executor 仓库 prod-v* 标签的 promote.yml 负责。
 # 不使用 self-hosted runner, 无需在服务器常驻 runner 进程。
 #
 # 所需 GitHub Secrets (见 docs/deployment.md):
 #   DEPLOY_HOST     生产服务器地址
-#   DEPLOY_USER     部署账号(对 /opt/tokenmp 有写权限、在 docker 组、已配 GitHub git 凭证)
-#   DEPLOY_SSH_KEY  部署账号的 SSH 私钥(ed25519, 对应服务器 authorized_keys 里的公钥)
+#   DEPLOY_USER     部署账号(sumwai, 在 docker 组、有 NOPASSWD sudo)
+#   DEPLOY_SSH_KEY  部署账号的 SSH 私钥
 name: deploy
 
 on:
@@ -43,6 +44,8 @@ jobs:
             sed -i "s/^DASHBOARD_VERSION=.*/DASHBOARD_VERSION=$TAG/" /opt/tokenmp/versions.env
             docker compose --env-file /opt/tokenmp/versions.env \
               -f docker-compose.1panel.yml up -d --no-deps --no-build --force-recreate
-            sleep 3
-            curl -fsS "http://127.0.0.1:${DASHBOARD_PORT:-8088}/" >/dev/null
-            echo "✓ dashboard $TAG deployed"
+            sleep 5
+            # 冒烟：首页(SPA) + 公开 API
+            curl -fsS "http://127.0.0.1:${DASHBOARD_PORT:-18080}/" >/dev/null
+            curl -fsS "http://127.0.0.1:${DASHBOARD_PORT:-18080}/api/v1/site/overview" >/dev/null
+            echo "✓ dashboard $TAG deployed (绿栈 next.tokenmp.cn)"
