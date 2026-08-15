@@ -73,7 +73,8 @@ export default defineConfig({
 
     outline: { level: [2, 3] },
     docFooter: { prev: '上一篇', next: '下一篇' },
-    lastUpdated: true,
+    // 「最后更新」需读 git log；容器构建无 .git，用 DOCS_NO_GIT=1 关闭
+    lastUpdated: process.env.DOCS_NO_GIT ? false : true,
     returnToTopLabel: '回到顶部',
     sidebarMenuLabel: '目录',
     darkModeSwitchLabel: '主题',

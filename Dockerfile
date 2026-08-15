@@ -23,6 +23,8 @@ COPY docs-site/package.json docs-site/package-lock.json ./
 RUN npm config set registry https://registry.npmmirror.com && npm ci
 
 COPY docs-site/ ./
+# 容器内无 .git，关闭依赖 git log 的「最后更新」
+ENV DOCS_NO_GIT=1
 # vitepress outDir = .vitepress/dist（base 已配置为 /docs/），挪到 /out/docs 供运行时拷贝
 RUN npm run build && mkdir -p /out && mv .vitepress/dist /out/docs
 
