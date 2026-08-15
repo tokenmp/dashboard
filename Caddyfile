@@ -18,6 +18,13 @@
 		php_server
 	}
 
+	# 文档站（VitePress 产物 public/docs）：cleanUrls 无 .html 后缀，需回退 {path}.html
+	handle /docs/* {
+		header /docs/assets/* Cache-Control "public, max-age=31536000, immutable"
+		try_files {path} {path}.html /docs/404.html
+		file_server
+	}
+
 	# 其余前端路由：真实文件直接返回，否则回退 SPA index.html（支持深层路由刷新）
 	handle {
 		# 带内容哈希的静态资源：永久缓存（文件名变即失效）

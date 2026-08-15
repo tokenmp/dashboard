@@ -13,6 +13,20 @@ COPY web/ ./
 RUN npm run build
 
 ############################################
+# Stage 1b: 构建文档站（VitePress → public/docs）
+############################################
+FROM node:24-alpine AS docs
+WORKDIR /build
+
+# 先拷 lock 文件，利用 Docker 层缓存
+COPY docs-site/package.json docs-site/package-lock.json ./
+RUN npm config set registry https://registry.npmmirror.com && npm ci
+
+COPY docs-site/ ./
+# vitepress outDir = .vitepress/dist（base 已配置为 /docs/），挪到 /out/docs 供运行时拷贝
+RUN npm run build && mkdir -p /out && mv .vitepress/dist /out/docs
+
+############################################
 # Stage 2: 安装 PHP 依赖（composer）
 ############################################
 FROM composer:2 AS composer
@@ -58,6 +72,9 @@ COPY --from=composer /app/vendor vendor
 
 # 前端构建产物（来自 frontend 阶段）
 COPY --from=frontend /public/static public/static
+
+# 文档站构建产物（来自 docs 阶段，经 public/docs 提供 /docs 子路径）
+COPY --from=docs /out/docs public/docs
 
 # 自定义 Caddyfile（ThinkPHP 兼容模式路由：解决 FrankenPHP 不设 PATH_INFO）
 COPY Caddyfile /etc/frankenphp/Caddyfile

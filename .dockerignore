@@ -41,3 +41,8 @@ docker-compose*.yml
 # 文档
 README.md
 LICENSE.txt
+
+# 文档站构建产物与依赖（镜像内由 VitePress 重新构建）
+docs-site/node_modules
+docs-site/.vitepress/dist
+docs-site/.vitepress/cache
