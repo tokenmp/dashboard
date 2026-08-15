@@ -12,6 +12,7 @@ import {
   CardTitle,
 } from '@/components/ui/card';
 import AuthShell from '@/components/auth/AuthShell';
+import { useCaptcha } from '@/hooks/useCaptcha';
 import { sendResetCodeApi, resetPasswordApi } from '@/api/auth';
 import { useMutation } from '@/hooks/useMutation';
 
@@ -24,6 +25,7 @@ import { useMutation } from '@/hooks/useMutation';
  */
 function ForgotPassword() {
   const navigate = useNavigate();
+  const { triggerCaptcha, captchaMount, captchaError } = useCaptcha('register');
   const [step, setStep] = useState<1 | 2>(1);
   const [email, setEmail] = useState('');
   const [code, setCode] = useState('');
@@ -34,13 +36,16 @@ function ForgotPassword() {
   const { loading: sending, mutate: sendMut } = useMutation();
   const { loading: resetting, mutate: resetMut } = useMutation();
 
-  const handleSend = async (e: React.FormEvent) => {
+  const handleSend = (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
-    await sendMut(() => sendResetCodeApi(email), {
-      successMsg: '验证码已发送，请查收邮箱（5 分钟内有效）',
-      onSuccess: () => setStep(2),
-    });
+    // 发码接口有守卫：与旧栈一致复用 register scene（scene 未配置时直连）
+    triggerCaptcha((captchaParam) =>
+      void sendMut(() => sendResetCodeApi(email, captchaParam), {
+        successMsg: '验证码已发送，请查收邮箱（5 分钟内有效）',
+        onSuccess: () => setStep(2),
+      }),
+    );
   };
 
   const handleReset = async (e: React.FormEvent) => {
@@ -87,7 +92,7 @@ function ForgotPassword() {
               {error && <p className="text-sm text-destructive">{error}</p>}
             </CardContent>
             <CardFooter className="flex flex-col gap-3">
-              <Button type="submit" className={"w-full bg-gradient-to-br from-blue-500 to-blue-600 shadow-[0_8px_20px_-6px_rgba(37,99,235,0.45)] hover:from-blue-600 hover:to-blue-700"} disabled={sending}>
+              <Button type="submit" className="w-full" disabled={sending}>
                 {sending ? '发送中…' : '发送验证码'}
               </Button>
               <Link to="/login" className="text-sm text-muted-foreground hover:underline">
@@ -139,7 +144,7 @@ function ForgotPassword() {
               {error && <p className="text-sm text-destructive">{error}</p>}
             </CardContent>
             <CardFooter className="flex flex-col gap-3">
-              <Button type="submit" className={"w-full bg-gradient-to-br from-blue-500 to-blue-600 shadow-[0_8px_20px_-6px_rgba(37,99,235,0.45)] hover:from-blue-600 hover:to-blue-700"} disabled={resetting}>
+              <Button type="submit" className="w-full" disabled={resetting}>
                 {resetting ? '重置中…' : '重置密码'}
               </Button>
               <Button
@@ -155,6 +160,8 @@ function ForgotPassword() {
           </form>
         )}
       </Card>
+      {captchaError && <p className="mt-3 text-center text-sm text-destructive">{captchaError}</p>}
+      {captchaMount}
     </AuthShell>
   );
 }

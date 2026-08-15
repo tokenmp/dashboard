@@ -2,6 +2,23 @@ import client from './client';
 import { rsaOaepEncrypt } from '@/utils/crypto';
 import type { ApiResponse, LoginResult, PublicKeyResult, UserInfo } from '@/types';
 
+/** 验证码公开配置（scene 为空 = 该场景未启用人机验证） */
+export interface CaptchaConfig {
+  prefix: string;
+  region: string;
+  register_scene_id: string;
+  login_scene_id: string;
+}
+
+/**
+ * 取验证码配置：GET /auth/captcha-config（公开）
+ * 供前端初始化阿里云滑块 SDK；不含任何密钥。
+ */
+export async function getCaptchaConfigApi(): Promise<CaptchaConfig> {
+  const res = await client.get<ApiResponse<CaptchaConfig>>('/auth/captcha-config');
+  return res.data.data;
+}
+
 /**
  * 取一次性公钥：GET /auth/public-key（公开，按 IP 限流）
  */
@@ -30,6 +47,7 @@ export async function encryptSecret(
 export async function loginApi(
   username: string,
   password: string,
+  captchaVerifyParam?: string,
 ): Promise<LoginResult> {
   const submit = async () => {
     const { keyId, ciphertext } = await encryptSecret(password);
@@ -37,6 +55,7 @@ export async function loginApi(
       username,
       password: ciphertext,
       keyId,
+      ...(captchaVerifyParam ? { captcha_verify_param: captchaVerifyParam } : {}),
     });
   };
 
@@ -64,13 +83,18 @@ export async function getUserApi(): Promise<UserInfo> {
  * 注册：加密密码后提交，成功直接返回 token（注册即登录）。
  * 加密凭证失效（HTTP 410 / code:2）时自动重取 key 重试一次，与登录一致。
  */
-export async function registerApi(email: string, password: string): Promise<LoginResult> {
+export async function registerApi(
+  email: string,
+  password: string,
+  captchaVerifyParam?: string,
+): Promise<LoginResult> {
   const submit = async () => {
     const { keyId, ciphertext } = await encryptSecret(password);
     return client.post<ApiResponse<LoginResult>>('/auth/register', {
       username: email,
       password: ciphertext,
       keyId,
+      ...(captchaVerifyParam ? { captcha_verify_param: captchaVerifyParam } : {}),
     });
   };
 
@@ -88,8 +112,11 @@ export async function registerApi(email: string, password: string): Promise<Logi
 /**
  * 发送密码重置验证码：POST /auth/password/send-code（公开，防枚举始终返回 sent）
  */
-export async function sendResetCodeApi(email: string): Promise<void> {
-  await client.post('/auth/password/send-code', { email });
+export async function sendResetCodeApi(email: string, captchaVerifyParam?: string): Promise<void> {
+  await client.post('/auth/password/send-code', {
+    email,
+    ...(captchaVerifyParam ? { captcha_verify_param: captchaVerifyParam } : {}),
+  });
 }
 
 /**

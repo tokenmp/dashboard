@@ -5,6 +5,7 @@ namespace app\controller\auth;
 
 use app\BaseController;
 use app\model\User;
+use app\service\Captcha;
 use app\service\Jwt;
 use app\service\SecretCrypto;
 
@@ -25,6 +26,16 @@ class Auth extends BaseController
     private const MIN_PASSWORD_LEN = 8;
 
     /**
+     * 验证码公开配置：GET /api/v1/auth/captcha-config
+     * 供前端初始化阿里云滑块 SDK（prefix/region/场景 ID）；不含 AK/SK。
+     * 场景 ID 为空 = 该场景未启用人机验证。
+     */
+    public function captchaConfig()
+    {
+        return success(Captcha::publicConfig());
+    }
+
+    /**
      * 登录：校验账号密码并签发 JWT
      * POST /api/v1/auth/login
      *
@@ -38,6 +49,12 @@ class Auth extends BaseController
      */
     public function login()
     {
+        // 人机验证守卫：login scene 未配置时直接放行（当前库中为空 = 登录不弹滑块）
+        $guard = Captcha::guard('login', $this->request->post('captcha_verify_param'));
+        if ($guard !== null) {
+            return $guard;
+        }
+
         $account     = (string) $this->request->post('username', '');
         $encPassword = (string) $this->request->post('password', ''); // RSA-OAEP 密文(base64)
         $keyId       = (string) $this->request->post('keyId', '');
@@ -88,6 +105,12 @@ class Auth extends BaseController
      */
     public function register()
     {
+        // 人机验证守卫：register scene 已配置时须先过阿里云滑块
+        $guard = Captcha::guard('register', $this->request->post('captcha_verify_param'));
+        if ($guard !== null) {
+            return $guard;
+        }
+
         $email       = strtolower(trim((string) $this->request->post('username', '')));
         $encPassword = (string) $this->request->post('password', ''); // RSA-OAEP 密文(base64)
         $keyId       = (string) $this->request->post('keyId', '');

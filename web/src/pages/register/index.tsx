@@ -12,6 +12,7 @@ import {
   CardTitle,
 } from '@/components/ui/card';
 import AuthShell from '@/components/auth/AuthShell';
+import { useCaptcha } from '@/hooks/useCaptcha';
 import { useAuthStore } from '@/store/auth';
 import { getApiError } from '@/utils/error';
 import { homePathFor } from '@/utils/redirect';
@@ -21,6 +22,7 @@ import { homePathFor } from '@/utils/redirect';
  */
 function Register() {
   const navigate = useNavigate();
+  const { triggerCaptcha, captchaMount, captchaError } = useCaptcha('register');
   const register = useAuthStore((s) => s.register);
   const token = useAuthStore((s) => s.token);
   const user = useAuthStore((s) => s.user);
@@ -42,7 +44,7 @@ function Register() {
     }
   }, [token, user, navigate, fetchUser]);
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
     if (password.length < 8) {
@@ -53,9 +55,14 @@ function Register() {
       setError('两次输入的密码不一致');
       return;
     }
+    // 配置了 register scene 时先过阿里云滑块，通过后携票据提交
+    triggerCaptcha((captchaParam) => void doSubmit(captchaParam));
+  };
+
+  const doSubmit = async (captchaParam?: string) => {
     setLoading(true);
     try {
-      await register(email.trim(), password);
+      await register(email.trim(), password, captchaParam);
       // token 变化由上面的 useEffect 监听并负责跳转
     } catch (err) {
       setError(getApiError(err));
@@ -114,7 +121,7 @@ function Register() {
             {error && <p className="text-sm text-destructive">{error}</p>}
           </CardContent>
           <CardFooter className="flex flex-col gap-3">
-            <Button type="submit" className={"w-full bg-gradient-to-br from-blue-500 to-blue-600 shadow-[0_8px_20px_-6px_rgba(37,99,235,0.45)] hover:from-blue-600 hover:to-blue-700"} disabled={loading}>
+            <Button type="submit" className="w-full" disabled={loading}>
               {loading ? '注册中…' : '注册'}
             </Button>
             <p className="text-sm text-muted-foreground">
@@ -126,6 +133,8 @@ function Register() {
           </CardFooter>
         </form>
       </Card>
+      {captchaError && <p className="mt-3 text-center text-sm text-destructive">{captchaError}</p>}
+      {captchaMount}
     </AuthShell>
   );
 }

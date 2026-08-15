@@ -12,12 +12,14 @@ import {
   CardTitle,
 } from '@/components/ui/card';
 import AuthShell from '@/components/auth/AuthShell';
+import { useCaptcha } from '@/hooks/useCaptcha';
 import { useAuthStore } from '@/store/auth';
 import { getApiError } from '@/utils/error';
 import { safeRedirect, homePathFor } from '@/utils/redirect';
 
 function Login() {
   const navigate = useNavigate();
+  const { triggerCaptcha, captchaMount, captchaError } = useCaptcha('login');
   const [searchParams] = useSearchParams();
   const login = useAuthStore((s) => s.login);
   const token = useAuthStore((s) => s.token);
@@ -48,12 +50,17 @@ function Login() {
     }
   }, [token, user, redirectTarget, navigate, fetchUser]);
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    // 配置了 login scene 时先过阿里云滑块，通过后携票据提交
+    triggerCaptcha((captchaParam) => void doSubmit(captchaParam));
+  };
+
+  const doSubmit = async (captchaParam?: string) => {
     setError('');
     setLoading(true);
     try {
-      await login(username, password);
+      await login(username, password, captchaParam);
       // token 变化由上面的 useEffect 监听并负责跳转
     } catch (err) {
       setError(getApiError(err));
@@ -101,7 +108,7 @@ function Login() {
           <CardFooter className="flex flex-col gap-3">
             <Button
               type="submit"
-              className="w-full bg-gradient-to-br from-blue-500 to-blue-600 shadow-[0_8px_20px_-6px_rgba(37,99,235,0.45)] hover:from-blue-600 hover:to-blue-700"
+              className="w-full"
               disabled={loading}
             >
               {loading ? '登录中…' : '登 录'}
@@ -117,6 +124,8 @@ function Login() {
           </CardFooter>
         </form>
       </Card>
+      {captchaError && <p className="mt-3 text-center text-sm text-destructive">{captchaError}</p>}
+      {captchaMount}
     </AuthShell>
   );
 }

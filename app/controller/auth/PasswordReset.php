@@ -5,6 +5,7 @@ namespace app\controller\auth;
 
 use app\BaseController;
 use app\model\User;
+use app\service\Captcha;
 use app\service\Mailer;
 use app\service\SecretCrypto;
 use think\facade\Db;
@@ -37,6 +38,12 @@ class PasswordReset extends BaseController
      */
     public function sendCode()
     {
+        // 人机验证守卫：与旧栈一致，忘记密码复用 register scene
+        $guard = Captcha::guard('register', $this->request->post('captcha_verify_param'));
+        if ($guard !== null) {
+            return $guard;
+        }
+
         $email = strtolower(trim((string) $this->request->post('email', '')));
         if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
             return fail('邮箱格式不正确', 1, 422);

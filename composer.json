@@ -20,12 +20,13 @@
         }
     ],
     "require": {
-        "php": ">=8.0.0",
-        "topthink/framework": "^8.0",
-        "topthink/think-orm": "^3.0|^4.0",
-        "topthink/think-filesystem": "^2.0|^3.0",
+        "alibabacloud/captcha-20230305": "^1.1",
         "firebase/php-jwt": "^7.1",
-        "phpmailer/phpmailer": "^6.9"
+        "php": ">=8.0.0",
+        "phpmailer/phpmailer": "^6.9",
+        "topthink/framework": "^8.0",
+        "topthink/think-filesystem": "^2.0|^3.0",
+        "topthink/think-orm": "^3.0|^4.0"
     },
     "require-dev": {
         "topthink/think-dumper": "^1.0",
@@ -46,7 +47,12 @@
         }
     },
     "config": {
-        "preferred-install": "dist"
+        "preferred-install": "dist",
+        "policy": {
+            "advisories": {
+                "block": false
+            }
+        }
     },
     "scripts": {
         "post-autoload-dump": [
