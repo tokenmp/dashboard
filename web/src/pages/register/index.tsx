@@ -11,6 +11,7 @@ import {
   CardHeader,
   CardTitle,
 } from '@/components/ui/card';
+import AuthShell from '@/components/auth/AuthShell';
 import { useAuthStore } from '@/store/auth';
 import { getApiError } from '@/utils/error';
 import { homePathFor } from '@/utils/redirect';
@@ -64,8 +65,8 @@ function Register() {
   };
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-background px-4">
-      <Card className="w-full max-w-sm">
+    <AuthShell>
+      <Card className={"w-full rounded-2xl border-white/90 bg-white/90 shadow-[0_20px_50px_-12px_rgba(37,99,235,0.18),0_4px_16px_rgba(15,23,42,0.05)] backdrop-blur"}>
         <CardHeader>
           <CardTitle>注册</CardTitle>
           <CardDescription>注册 TokenMP 账号，开始使用全部模型</CardDescription>
@@ -113,7 +114,7 @@ function Register() {
             {error && <p className="text-sm text-destructive">{error}</p>}
           </CardContent>
           <CardFooter className="flex flex-col gap-3">
-            <Button type="submit" className="w-full" disabled={loading}>
+            <Button type="submit" className={"w-full bg-gradient-to-br from-blue-500 to-blue-600 shadow-[0_8px_20px_-6px_rgba(37,99,235,0.45)] hover:from-blue-600 hover:to-blue-700"} disabled={loading}>
               {loading ? '注册中…' : '注册'}
             </Button>
             <p className="text-sm text-muted-foreground">
@@ -125,7 +126,7 @@ function Register() {
           </CardFooter>
         </form>
       </Card>
-    </div>
+    </AuthShell>
   );
 }
 
