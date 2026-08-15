@@ -12,9 +12,9 @@ interface AuthState {
   /** 拉取用户失败的原因；非空时停止自动重试，需手动重试 */
   userError: string | null;
   /** 登录：调用后端拿 token，写入 localStorage 与 state */
-  login: (username: string, password: string) => Promise<void>;
+  login: (username: string, password: string, captchaVerifyParam?: string) => Promise<void>;
   /** 注册：成功即登录（后端直接签发 token），写入 localStorage 与 state */
-  register: (email: string, password: string) => Promise<void>;
+  register: (email: string, password: string, emailCode: string) => Promise<void>;
   /** 登出：清空 token 与用户 */
   logout: () => void;
   /** 拉取当前用户信息并写入 state；已存在或加载中或已失败时跳过 */
@@ -31,15 +31,15 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   user: null,
   loadingUser: false,
   userError: null,
-  login: async (username, password) => {
-    const { token } = await loginApi(username, password);
+  login: async (username, password, captchaVerifyParam) => {
+    const { token } = await loginApi(username, password, captchaVerifyParam);
     localStorage.setItem(TOKEN_KEY, token);
     set({ token, user: null });
     // 登录成功后立即拉取用户信息
     get().fetchUser(true);
   },
-  register: async (email, password) => {
-    const { token } = await registerApi(email, password);
+  register: async (email, password, emailCode) => {
+    const { token } = await registerApi(email, password, emailCode);
     localStorage.setItem(TOKEN_KEY, token);
     set({ token, user: null });
     get().fetchUser(true);

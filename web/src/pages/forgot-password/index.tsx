@@ -11,6 +11,8 @@ import {
   CardHeader,
   CardTitle,
 } from '@/components/ui/card';
+import AuthShell from '@/components/auth/AuthShell';
+import { useCaptcha } from '@/hooks/useCaptcha';
 import { sendResetCodeApi, resetPasswordApi } from '@/api/auth';
 import { useMutation } from '@/hooks/useMutation';
 
@@ -23,6 +25,7 @@ import { useMutation } from '@/hooks/useMutation';
  */
 function ForgotPassword() {
   const navigate = useNavigate();
+  const { triggerCaptcha, captchaMount, captchaError } = useCaptcha('register');
   const [step, setStep] = useState<1 | 2>(1);
   const [email, setEmail] = useState('');
   const [code, setCode] = useState('');
@@ -33,13 +36,16 @@ function ForgotPassword() {
   const { loading: sending, mutate: sendMut } = useMutation();
   const { loading: resetting, mutate: resetMut } = useMutation();
 
-  const handleSend = async (e: React.FormEvent) => {
+  const handleSend = (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
-    await sendMut(() => sendResetCodeApi(email), {
-      successMsg: '验证码已发送，请查收邮箱（5 分钟内有效）',
-      onSuccess: () => setStep(2),
-    });
+    // 发码接口有守卫：与旧栈一致复用 register scene（scene 未配置时直连）
+    triggerCaptcha((captchaParam) =>
+      void sendMut(() => sendResetCodeApi(email, captchaParam), {
+        successMsg: '验证码已发送，请查收邮箱（5 分钟内有效）',
+        onSuccess: () => setStep(2),
+      }),
+    );
   };
 
   const handleReset = async (e: React.FormEvent) => {
@@ -60,8 +66,8 @@ function ForgotPassword() {
   };
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-background px-4">
-      <Card className="w-full max-w-sm">
+    <AuthShell>
+      <Card className={"w-full rounded-2xl border-white/90 bg-white/90 shadow-[0_20px_50px_-12px_rgba(37,99,235,0.18),0_4px_16px_rgba(15,23,42,0.05)] backdrop-blur"}>
         <CardHeader>
           <CardTitle>找回密码</CardTitle>
           <CardDescription>
@@ -154,7 +160,9 @@ function ForgotPassword() {
           </form>
         )}
       </Card>
-    </div>
+      {captchaError && <p className="mt-3 text-center text-sm text-destructive">{captchaError}</p>}
+      {captchaMount}
+    </AuthShell>
   );
 }
 

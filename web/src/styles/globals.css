@@ -74,3 +74,13 @@
     @apply bg-background text-foreground;
   }
 }
+
+/* ── 认证页（AuthShell）背景网格：细线 + 径向遮罩向四周淡出 ── */
+.auth-grid {
+  background-image:
+    linear-gradient(rgba(37, 99, 235, 0.05) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(37, 99, 235, 0.05) 1px, transparent 1px);
+  background-size: 36px 36px;
+  -webkit-mask-image: radial-gradient(ellipse 70% 60% at 50% 40%, #000 20%, transparent 70%);
+  mask-image: radial-gradient(ellipse 70% 60% at 50% 40%, #000 20%, transparent 70%);
+}

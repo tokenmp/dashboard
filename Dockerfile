@@ -56,6 +56,11 @@ RUN install-php-extensions pdo_mysql pdo_pgsql pgsql
 # git：scripts/sync-releases.php 需读取 git tag 同步版本日志
 RUN apk add --no-cache git
 
+# 生产错误显示纪律：阿里云 SDK 依赖（ratchet/clue 等）在 PHP 8.4 有编译期
+# Deprecated，不能让它污染 JSON 响应；记日志、不显示、压掉 Deprecated。
+RUN printf 'error_reporting = E_ALL & ~E_DEPRECATED & ~E_NOTICE\ndisplay_errors = Off\nlog_errors = On\n' \
+      > /usr/local/etc/php/conf.d/zz-tokenmp.ini
+
 WORKDIR /app
 
 # 应用源码（直接来自构建上下文，避免把 web/ 源码带入运行时）

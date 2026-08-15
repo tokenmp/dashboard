@@ -146,11 +146,31 @@ final class AuthControllerTest extends IntegrationTestCase
 
     /* ----------------------------- 注册 ----------------------------- */
 
-    /** 调 register(),返回响应对象。 */
-    private function register(string $email, string $plainPassword)
+    /** 测试用注册验证码（6 位，测试里直接种缓存 bcrypt 哈希，与生产同构）。 */
+    private const REG_CODE = '654321';
+
+    /** 在缓存中为邮箱种一条注册验证码（绕过 send-code 的滑块与 SMTP）。 */
+    private function seedRegCode(string $email): void
     {
-        $enc  = $this->encryptPassword($plainPassword);
-        $this->postRequest(['username' => $email, 'password' => $enc['password'], 'keyId' => $enc['keyId']]);
+        \think\facade\Cache::set('regcode_' . md5($email), [
+            'hash'     => password_hash(self::REG_CODE, PASSWORD_BCRYPT),
+            'attempts' => 0,
+        ], 300);
+    }
+
+    /** 调 register(),返回响应对象。默认带正确验证码；传 null 表示不带。 */
+    private function register(string $email, string $plainPassword, ?string $code = self::REG_CODE)
+    {
+        if ($code !== null) {
+            $this->seedRegCode($email);
+        }
+        $enc = $this->encryptPassword($plainPassword);
+        $this->postRequest(array_filter([
+            'username'   => $email,
+            'password'   => $enc['password'],
+            'keyId'      => $enc['keyId'],
+            'email_code' => $code,
+        ], fn ($v) => $v !== null));
 
         return (new AuthController(app()))->register();
     }
@@ -203,6 +223,18 @@ final class AuthControllerTest extends IntegrationTestCase
         $this->assertSame(422, $this->httpCode($bad));
 
         // 均未落库
+        $this->assertSame(0, (int) $this->rows('SELECT count(*) AS c FROM users')[0]['c']);
+    }
+
+    public function testRegisterRequiresEmailCode(): void
+    {
+        // 未获取验证码（缓存无条目）→ 400
+        $noCode = $this->register('nocode@test.local', self::PASSWORD, null);
+        $this->assertSame(422, $this->httpCode($noCode));
+
+        // 验证码错误 → 400，且不落库
+        $wrong = $this->register('wrongcode@test.local', self::PASSWORD, '000000');
+        $this->assertSame(400, $this->httpCode($wrong));
         $this->assertSame(0, (int) $this->rows('SELECT count(*) AS c FROM users')[0]['c']);
     }
 }
