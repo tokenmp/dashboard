@@ -41,7 +41,7 @@ import type {
   UpstreamKeyOption,
   UpstreamQuery,
 } from '@/types/upstream';
-import type { UsageLedgerItem, QuotaResult, PriceRuleItem, UsageQuery } from '@/types/usage';
+import type { UsageLedgerItem, QuotaResult, PriceRuleItem, UsageQuery, ModelRankItem, ModelRankPeriod } from '@/types/usage';
 import type {
   MarketplaceListingItem,
   MarketplaceSettlementItem,
@@ -73,6 +73,14 @@ import type {
 // ── 概览（全平台）──
 export async function getDashboardOverviewApi(): Promise<AdminOverview> {
   const res = await client.get<ApiResponse<AdminOverview>>('/dashboard/overview');
+  return res.data.data;
+}
+export async function getDashboardOverviewModelsApi(
+  period: ModelRankPeriod,
+): Promise<ModelRankItem[]> {
+  const res = await client.get<ApiResponse<ModelRankItem[]>>('/dashboard/overview/models', {
+    params: { period },
+  });
   return res.data.data;
 }
 

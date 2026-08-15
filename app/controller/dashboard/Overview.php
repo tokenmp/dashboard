@@ -4,23 +4,80 @@ declare(strict_types=1);
 namespace app\controller\dashboard;
 
 use app\BaseController;
+use app\model\RequestLog as RequestLogModel;
 use think\facade\Db;
 
 /**
  * 管理面概览（dashboard，全平台）
  *
  * 路由前缀 /api/v1/dashboard
- * - GET /overview  全平台用户、上游 Key、今日请求/token/成功率、近 30 天趋势
+ * - GET /overview          全平台用户、上游 Key、今日请求/token/成功率、近 30 天趋势
+ * - GET /overview/models   按模型用量排行（period=today|7d|month）
  *
  * 注：时间口径以数据库会话时区为准（current_date / now()）。
  */
 class Overview extends BaseController
 {
+    /**
+     * 模型用量排行的 period 白名单：DB 会话时区下界（值仅来自本表，可安全拼入 whereRaw）
+     */
+    private const PERIOD_BOUNDS = [
+        'today' => 'current_date',
+        '7d'    => "current_date - interval '6 day'",
+        'month' => 'date_trunc(\'month\', current_date)',
+    ];
+
     /** GET /api/v1/dashboard/overview */
     public function overview()
     {
         $todayStart = date('Y-m-d 00:00:00');
         return success($this->adminOverview($todayStart));
+    }
+
+    /**
+     * GET /api/v1/dashboard/overview/models?period=today|7d|month&limit=10
+     *
+     * 全平台按模型聚合用量，实际调用次数降序（次序 token 消耗）。
+     */
+    public function models()
+    {
+        $period = (string) $this->request->get('period', 'today');
+        if (!isset(self::PERIOD_BOUNDS[$period])) {
+            $period = 'today';
+        }
+        $limit = max(1, min(20, (int) $this->request->get('limit', 10)));
+
+        return success($this->modelRank(null, $period, $limit));
+    }
+
+    /**
+     * 按模型聚合用量排行（think-orm 查询构建器；null=全平台）。
+     *
+     * 时间下界走 DB 会话时区（current_date / date_trunc），与 panel 版口径一致；
+     * NULL 模型名经 coalesce 别名显示为 unknown（group by 仍按原列，NULL 自成一组）。
+     */
+    private function modelRank(?string $userId, string $period, int $limit): array
+    {
+        $query = RequestLogModel::fieldRaw("coalesce(model_name,'unknown') as model_name")
+            ->fieldRaw('count(*) as requests')
+            ->fieldRaw('count(*) filter (where success is true) as successes')
+            ->fieldRaw('coalesce(sum(total_tokens),0) as tokens')
+            ->whereRaw('created_at >= ' . self::PERIOD_BOUNDS[$period]);
+        if ($userId !== null) {
+            $query->where('user_id', $userId);
+        }
+        $rows = $query->group('model_name')
+            ->orderRaw('requests desc, tokens desc')
+            ->limit($limit)
+            ->select()
+            ->toArray();
+
+        return array_map(fn ($r) => [
+            'model'     => $r['model_name'],
+            'requests'  => (int) $r['requests'],
+            'successes' => (int) $r['successes'],
+            'tokens'    => (int) $r['tokens'],
+        ], $rows);
     }
 
     /** 全平台指标 */

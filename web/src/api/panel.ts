@@ -23,7 +23,7 @@ import type {
   UpstreamKeyDetailResult,
   UpstreamQuery,
 } from '@/types/upstream';
-import type { UsageLedgerItem, QuotaResult, UsageQuery, UsageTimelineItem, UsageByModelItem } from '@/types/usage';
+import type { UsageLedgerItem, QuotaResult, UsageQuery, UsageTimelineItem, UsageByModelItem, ModelRankItem, ModelRankPeriod } from '@/types/usage';
 import type {
   MarketplaceListingItem,
   MarketplaceSettlementItem,
@@ -47,6 +47,14 @@ import type {
 // ── 概览 ──
 export async function getPanelOverviewApi(): Promise<UserOverview> {
   const res = await client.get<ApiResponse<UserOverview>>('/panel/overview');
+  return res.data.data;
+}
+export async function getPanelOverviewModelsApi(
+  period: ModelRankPeriod,
+): Promise<ModelRankItem[]> {
+  const res = await client.get<ApiResponse<ModelRankItem[]>>('/panel/overview/models', {
+    params: { period },
+  });
   return res.data.data;
 }
 

@@ -4,6 +4,7 @@ declare(strict_types=1);
 namespace app\controller\panel;
 
 use app\BaseController;
+use app\model\RequestLog as RequestLogModel;
 use app\service\DataScope;
 use app\service\QuotaService;
 use think\facade\Db;
@@ -44,6 +45,60 @@ class Overview extends BaseController
             'quota' => $quota,
             'trend' => $trend,
         ]);
+    }
+
+    /**
+     * 模型用量排行的 period 白名单：DB 会话时区下界（值仅来自本表，可安全拼入 whereRaw）
+     */
+    private const PERIOD_BOUNDS = [
+        'today' => 'current_date',
+        '7d'    => "current_date - interval '6 day'",
+        'month' => 'date_trunc(\'month\', current_date)',
+    ];
+
+    /**
+     * GET /api/v1/panel/overview/models?period=today|7d|month&limit=10
+     *
+     * 按模型聚合自身用量，实际调用次数降序（次序 token 消耗）。
+     */
+    public function models()
+    {
+        $ctx    = DataScope::forSelf(app('user'));
+        $period = (string) $this->request->get('period', 'today');
+        if (!isset(self::PERIOD_BOUNDS[$period])) {
+            $period = 'today';
+        }
+        $limit = max(1, min(20, (int) $this->request->get('limit', 10)));
+
+        return success($this->modelRank($ctx->userId(), $period, $limit));
+    }
+
+    /**
+     * 按模型聚合用量排行（think-orm 查询构建器）。
+     *
+     * 时间下界走 DB 会话时区（current_date / date_trunc），与 todayStats/trend30 口径一致；
+     * NULL 模型名经 coalesce 别名显示为 unknown（group by 仍按原列，NULL 自成一组）。
+     */
+    private function modelRank(string $userId, string $period, int $limit): array
+    {
+        $rows = RequestLogModel::fieldRaw("coalesce(model_name,'unknown') as model_name")
+            ->fieldRaw('count(*) as requests')
+            ->fieldRaw('count(*) filter (where success is true) as successes')
+            ->fieldRaw('coalesce(sum(total_tokens),0) as tokens')
+            ->whereRaw('created_at >= ' . self::PERIOD_BOUNDS[$period])
+            ->where('user_id', $userId)
+            ->group('model_name')
+            ->orderRaw('requests desc, tokens desc')
+            ->limit($limit)
+            ->select()
+            ->toArray();
+
+        return array_map(fn ($r) => [
+            'model'     => $r['model_name'],
+            'requests'  => (int) $r['requests'],
+            'successes' => (int) $r['successes'],
+            'tokens'    => (int) $r['tokens'],
+        ], $rows);
     }
 
     /**
