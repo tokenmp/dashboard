@@ -32,6 +32,7 @@ Route::group('api/v1', function () {
     Route::group('auth', function () {
         Route::post('login', 'auth/Auth/login');
         Route::post('register', 'auth/Auth/register');
+        Route::post('register/send-code', 'auth/Auth/sendRegisterCode');
         Route::get('public-key', 'auth/Auth/publicKey');
         Route::get('captcha-config', 'auth/Auth/captchaConfig');
 

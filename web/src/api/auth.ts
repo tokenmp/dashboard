@@ -80,13 +80,27 @@ export async function getUserApi(): Promise<UserInfo> {
 }
 
 /**
- * 注册：加密密码后提交，成功直接返回 token（注册即登录）。
+ * 发送注册邮箱验证码：POST /auth/register/send-code（公开）
+ * 人机滑块在这一步（captcha_verify_param）；已注册邮箱防枚举同样返回 sent。
+ */
+export async function sendRegisterCodeApi(
+  email: string,
+  captchaVerifyParam?: string,
+): Promise<void> {
+  await client.post('/auth/register/send-code', {
+    username: email,
+    ...(captchaVerifyParam ? { captcha_verify_param: captchaVerifyParam } : {}),
+  });
+}
+
+/**
+ * 注册：邮箱验证码 + 加密密码提交，成功直接返回 token（注册即登录）。
  * 加密凭证失效（HTTP 410 / code:2）时自动重取 key 重试一次，与登录一致。
  */
 export async function registerApi(
   email: string,
   password: string,
-  captchaVerifyParam?: string,
+  emailCode: string,
 ): Promise<LoginResult> {
   const submit = async () => {
     const { keyId, ciphertext } = await encryptSecret(password);
@@ -94,7 +108,7 @@ export async function registerApi(
       username: email,
       password: ciphertext,
       keyId,
-      ...(captchaVerifyParam ? { captcha_verify_param: captchaVerifyParam } : {}),
+      email_code: emailCode,
     });
   };
 

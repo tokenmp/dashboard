@@ -7,7 +7,9 @@ use app\BaseController;
 use app\model\User;
 use app\service\Captcha;
 use app\service\Jwt;
+use app\service\Mailer;
 use app\service\SecretCrypto;
+use think\facade\Cache;
 
 /**
  * 认证接口（中性，panel / dashboard 共用）
@@ -24,6 +26,62 @@ class Auth extends BaseController
 
     /** 注册/重置密码的最小密码长度 */
     private const MIN_PASSWORD_LEN = 8;
+
+    /** 注册邮箱验证码：有效期（秒）与最大失败尝试次数 */
+    private const CODE_TTL_SECONDS  = 300;
+    private const CODE_MAX_ATTEMPTS = 5;
+
+    /**
+     * 发送注册邮箱验证码：POST /api/v1/auth/register/send-code（公开）
+     *
+     * body: { username(邮箱), captcha_verify_param }
+     * - 人机验证守卫（register scene）拦在最前——滑块在发码步，不在注册提交步；
+     * - 防枚举：邮箱已注册同样返回成功，但静默不发信；
+     * - 防刷：同一邮箱 60s 冷却；验证码存缓存 bcrypt 哈希（不落库不存明文）；
+     * - 投递：Mailer（SMTP 配置来自 system_config，与旧栈同源）。
+     */
+    public function sendRegisterCode()
+    {
+        $guard = Captcha::guard('register', $this->request->post('captcha_verify_param'));
+        if ($guard !== null) {
+            return $guard;
+        }
+
+        $email = strtolower(trim((string) $this->request->post('username', '')));
+        if ($email === '' || !filter_var($email, FILTER_VALIDATE_EMAIL)) {
+            return fail('邮箱格式不正确', 1, 422);
+        }
+
+        // 防枚举：已注册邮箱同样返回成功，但不发信
+        if (User::where('email', $email)->find() !== null) {
+            return success(['sent' => true], '验证码已发送，请查收邮箱（5 分钟内有效）');
+        }
+
+        // 60s 重发冷却
+        $cooldownKey = 'regcode_cd_' . md5($email);
+        if (Cache::get($cooldownKey)) {
+            return fail('发送过于频繁，请 1 分钟后再试', 12, 429);
+        }
+
+        $code = str_pad((string) random_int(0, 999999), 6, '0', STR_PAD_LEFT);
+        Cache::set('regcode_' . md5($email), [
+            'hash'     => password_hash($code, PASSWORD_BCRYPT),
+            'attempts' => 0,
+        ], self::CODE_TTL_SECONDS);
+        Cache::set($cooldownKey, 1, 60);
+
+        try {
+            if (!Mailer::sendVerificationCode($email, $code)) {
+                // Mailer 在 SMTP 未配置时返回 false——注册邮箱认证离不开邮件，必须显式失败
+                return fail('邮件服务未配置，暂时无法注册', 13, 500);
+            }
+        } catch (\Throwable $e) {
+            trace('[Register] 发送验证码失败：' . $e->getMessage(), 'error');
+            return fail('验证码发送失败，请稍后再试', 14, 500);
+        }
+
+        return success(['sent' => true], '验证码已发送，请查收邮箱（5 分钟内有效）');
+    }
 
     /**
      * 验证码公开配置：GET /api/v1/auth/captcha-config
@@ -105,18 +163,16 @@ class Auth extends BaseController
      */
     public function register()
     {
-        // 人机验证守卫：register scene 已配置时须先过阿里云滑块
-        $guard = Captcha::guard('register', $this->request->post('captcha_verify_param'));
-        if ($guard !== null) {
-            return $guard;
-        }
-
         $email       = strtolower(trim((string) $this->request->post('username', '')));
         $encPassword = (string) $this->request->post('password', ''); // RSA-OAEP 密文(base64)
         $keyId       = (string) $this->request->post('keyId', '');
+        $emailCode   = (string) $this->request->post('email_code', '');
 
         if ($email === '' || $encPassword === '' || $keyId === '') {
             return fail('邮箱和密码不能为空', 1, 422);
+        }
+        if ($emailCode === '') {
+            return fail('请输入邮箱验证码', 8, 422);
         }
         if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
             return fail('邮箱格式不正确', 1, 422);
@@ -135,6 +191,23 @@ class Auth extends BaseController
         if (User::where('email', $email)->find() !== null) {
             return fail('该邮箱已注册', 1, 409);
         }
+
+        // 邮箱验证码认证（缓存存 bcrypt 哈希，5 分钟 TTL，失败累计 5 次作废）
+        $codeKey = 'regcode_' . md5($email);
+        $entry   = Cache::get($codeKey);
+        if (!is_array($entry) || !isset($entry['hash'])) {
+            return fail('验证码无效或已过期，请重新获取', 9, 400);
+        }
+        if (($entry['attempts'] ?? 0) >= self::CODE_MAX_ATTEMPTS) {
+            Cache::delete($codeKey);
+            return fail('尝试次数过多，请重新获取验证码', 10, 429);
+        }
+        if (!password_verify($emailCode, $entry['hash'])) {
+            $entry['attempts'] = ($entry['attempts'] ?? 0) + 1;
+            Cache::set($codeKey, $entry, self::CODE_TTL_SECONDS);
+            return fail('验证码错误', 11, 400);
+        }
+        Cache::delete($codeKey); // 一次性：验证通过即销毁
 
         // id 需显式生成（users.id 虽有 gen_random_uuid 默认值，但 think-orm 插入后
         // 不会回填 DB 生成的默认值，JWT sub 会拿到 null），用 UUID v4
