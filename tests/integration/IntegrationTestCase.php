@@ -198,6 +198,9 @@ abstract class IntegrationTestCase extends TestCase
             'reason'        => $o['reason'] ?? 'test',
             'user_plan_id'  => $o['user_plan_id'] ?? null,
         ];
+        if (isset($o['request_log_id'])) {
+            $row['request_log_id'] = $o['request_log_id'];
+        }
         if (isset($o['created_at'])) {
             $row['created_at'] = $o['created_at'];
         }
@@ -234,6 +237,9 @@ abstract class IntegrationTestCase extends TestCase
             'success'      => (int) ($o['success'] ?? true), // boolean 强转 int(PDO emulate prepare)
             'total_tokens' => $o['total_tokens'] ?? 0,
         ];
+        if (isset($o['model_name'])) {
+            $row['model_name'] = $o['model_name'];
+        }
         if (isset($o['created_at'])) {
             $row['created_at'] = $o['created_at'];
         }

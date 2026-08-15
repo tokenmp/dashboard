@@ -16,6 +16,10 @@ export interface UserBasic {
   coding_plan_strategy: string;
   created_at: string;
   updated_at: string;
+  /** 生效中套餐（管理面列表附挂） */
+  plans?: { name: string; planType: string }[];
+  /** 本月实际用量（管理面列表附挂，count 请求条数不含倍率；无用量为 null） */
+  usage?: { monthRequests: number; monthTokens: number } | null;
 }
 
 /** 扣费套餐选择策略 key（与后端枚举一一对应；勿用任意 string） */

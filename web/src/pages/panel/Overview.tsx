@@ -10,11 +10,12 @@ import {
   Coins,
   Gift,
 } from 'lucide-react';
-import { getPanelOverviewApi } from '@/api/panel';
+import { getPanelOverviewApi, getPanelOverviewModelsApi } from '@/api/panel';
 import { useAsync } from '@/hooks/useAsync';
 import { StatCard } from '@/components/StatCard';
 import { QuotaCard } from '@/components/QuotaCards';
 import { TrendChart } from '@/components/TrendChart';
+import { ModelRankCard } from '@/components/ModelRankCard';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -155,6 +156,8 @@ function OverviewView({ data }: { data: UserOverview }) {
           ))}
         </div>
       </section>
+
+      <ModelRankCard fetcher={getPanelOverviewModelsApi} title="我的模型调用排行" />
 
       <TrendSection trend={trend} />
     </div>

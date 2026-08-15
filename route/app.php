@@ -46,6 +46,9 @@ Route::group('api/v1', function () {
 
         // ─── 用户面 panel：自取数据（DataScope::forSelf） ───
         Route::group('panel', function () {
+            // 注意：overview/models 必须在 overview 之前注册——静态路由 overview 会
+            // 前缀匹配 overview/models（同下 keys/xxx 的先例）。
+            Route::get('overview/models', 'panel/Overview/models');
             Route::get('overview', 'panel/Overview/overview');
 
             // 我的请求日志
@@ -114,6 +117,8 @@ Route::group('api/v1', function () {
         // ─── 管理面 dashboard：全平台（额外挂 Admin） ───
         Route::group(function () {
             Route::group('dashboard', function () {
+                // overview/models 必须在 overview 之前注册（理由同 panel 侧）。
+                Route::get('overview/models', 'dashboard/Overview/models');
                 Route::get('overview', 'dashboard/Overview/overview');
 
                 // 全平台请求日志（可按 userId 筛选）
@@ -248,6 +253,13 @@ Route::group('api/v1', function () {
 */
 Route::get('/', 'Index/index');
 
-// 兜底：未匹配的非 /api 路径（如 /dashboard、/panel、/login）也返回前端入口，
-// 由 React Router 在客户端处理
-Route::miss('Index/index');
+// 兜底：未匹配的非 /api 路径（如 /dashboard、/panel、/login）返回前端入口，
+// 由 React Router 在客户端处理；未匹配的 /api 路径返回 404 JSON——
+// 避免调用方拿到 200 + SPA HTML 误判成功（安全测试中发现的口径问题）。
+Route::miss(function (\think\Request $request) {
+    $path = trim($request->pathinfo(), '/');
+    if ($path === 'api' || str_starts_with($path, 'api/')) {
+        return json(['code' => 1, 'message' => 'Not Found', 'data' => null])->code(404);
+    }
+    return (new \app\controller\Index(app()))->index();
+});

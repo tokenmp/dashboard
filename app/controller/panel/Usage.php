@@ -89,9 +89,9 @@ class Usage extends BaseController
             $plan    = $b['billing_plan'];
             $byReq   = $plan === 'coding';
             $res     = $reservedMap[$plan] ?? ['tokens' => 0, 'requests' => 0];
-            $balance = $byReq ? (int) $b['request_balance'] : (int) $b['token_balance'];
-            $used    = $byReq ? (int) $b['request_used'] : (int) $b['token_used'];
-            $chargedIn = $byReq ? (int) $b['request_charged_in'] : (int) $b['token_charged_in'];
+            $balance = $byReq ? (float) $b['request_balance'] : (int) $b['token_balance'];
+            $used    = $byReq ? (float) $b['request_used'] : (int) $b['token_used'];
+            $chargedIn = $byReq ? (float) $b['request_charged_in'] : (int) $b['token_charged_in'];
             $reserve = $byReq ? $res['requests'] : $res['tokens'];
             $plans[] = [
                 'billingPlan' => $plan,
@@ -125,7 +125,7 @@ class Usage extends BaseController
             'billing_plan' => $r['billing_plan'],
             'bucket' => $r['bucket'],
             'token_delta' => (int) $r['token_delta'],
-            'request_delta' => (int) $r['request_delta'],
+            'request_delta' => (float) $r['request_delta'],
             'cnt' => (int) $r['cnt'],
         ], $rows));
     }
@@ -151,7 +151,7 @@ class Usage extends BaseController
             'billing_plan' => $r['billing_plan'],
             'model' => $r['model_name'],
             'token_charge' => (int) $r['token_charge'],
-            'request_charge' => (int) $r['request_charge'],
+            'request_charge' => (float) $r['request_charge'],
             'cnt' => (int) $r['cnt'],
         ], $rows));
     }

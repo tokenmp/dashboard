@@ -5,6 +5,7 @@ namespace app\controller\dashboard;
 
 use app\BaseController;
 use app\model\BotKey;
+use app\model\RequestLog as RequestLogModel;
 use app\model\User as UserModel;
 use app\model\UserApiKey;
 use app\model\UserPlan;
@@ -54,7 +55,57 @@ class User extends BaseController
         Pagination::applySort($query, $this->request, ['created_at', 'updated_at'], '-created_at');
         $list = $query->page($page, $size)->select();
 
-        return success(Pagination::wrap($list, $total, $page, $size));
+        return success(Pagination::wrap($this->withPlansAndUsage($list), $total, $page, $size));
+    }
+
+    /**
+     * 给列表行批量附挂：生效中套餐 + 本月用量（避免逐用户 N+1，两趟批量查询）。
+     */
+    private function withPlansAndUsage($list): array
+    {
+        $users = array_map(fn ($u) => $u instanceof UserModel ? $u->toArray() : (array) $u, is_array($list) ? $list : $list->toArray());
+        $ids   = array_values(array_filter(array_column($users, 'id')));
+        if ($ids === []) {
+            return array_map(fn ($u) => array_merge($u, ['plans' => [], 'usage' => null]), $users);
+        }
+
+        // 生效中套餐（active 且未过期），只取展示所需字段；过期判断走 DB now()（会话时区）
+        $planRows = UserPlan::where('user_id', 'in', $ids)
+            ->where('status', 'active')
+            ->whereRaw('(expires_at is null or expires_at > now())')
+            ->with(['plan' => function ($r) {
+                $r->field('id,name,plan_type');
+            }])
+            ->order('activated_at', 'desc')
+            ->select();
+        $plansByUser = [];
+        foreach ($planRows as $p) {
+            $plansByUser[$p->user_id][] = [
+                'name'     => $p->plan?->name ?? $p->plan_type,
+                'planType' => $p->plan?->plan_type ?? 'coding',
+            ];
+        }
+
+        // 本月实际用量（DB 会话时区，count 请求条数，不含倍率）
+        $usageRows = RequestLogModel::where('user_id', 'in', $ids)
+            ->whereRaw("created_at >= date_trunc('month', current_date)")
+            ->fieldRaw('user_id, count(*) as requests, coalesce(sum(total_tokens),0) as tokens')
+            ->group('user_id')
+            ->select()
+            ->toArray();
+        $usageByUser = [];
+        foreach ($usageRows as $r) {
+            $usageByUser[$r['user_id']] = [
+                'monthRequests' => (int) $r['requests'],
+                'monthTokens'   => (int) $r['tokens'],
+            ];
+        }
+
+        foreach ($users as &$u) {
+            $u['plans'] = $plansByUser[$u['id']] ?? [];
+            $u['usage'] = $usageByUser[$u['id']] ?? null;
+        }
+        return $users;
     }
 
     /**

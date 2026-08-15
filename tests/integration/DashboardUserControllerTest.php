@@ -70,6 +70,37 @@ final class DashboardUserControllerTest extends IntegrationTestCase
         $this->assertSame('admin', $data['list'][0]['role']);
     }
 
+    public function testListAttachesActivePlansAndMonthUsage(): void
+    {
+        $u1 = $this->uuid();
+        $u2 = $this->uuid();
+        $this->seedUser($u1, ['email' => 'p1@test.local', 'role' => 'user']);
+        $this->seedUser($u2, ['email' => 'p2@test.local', 'role' => 'user']);
+        // u1:生效套餐 + 本月用量;u2:已停用套餐 + 上月用量(均不应出现)
+        $planId = $this->seedPlan(['plan_type' => 'coding', 'name' => 'Coding 测试版']);
+        $this->seedUserPlan($u1, $planId, ['plan_type' => 'coding']);
+        $inactive = $this->seedPlan(['plan_type' => 'token', 'name' => '旧套餐']);
+        $this->seedUserPlan($u2, $inactive, ['plan_type' => 'token', 'status' => 'disabled']);
+        $this->seedRequestLog($u1, ['model_name' => 'glm-5.2', 'total_tokens' => 100]);
+        $this->seedRequestLog($u1, ['model_name' => 'glm-5.2', 'total_tokens' => 50]);
+        $this->seedRequestLog($u2, ['total_tokens' => 999, 'created_at' => date('Y-m-d H:i:s', strtotime('-40 days'))]);
+
+        $this->getRequest([]);
+        $data = $this->body($this->controller()->list())['data'];
+
+        $byEmail = [];
+        foreach ($data['list'] as $row) {
+            $byEmail[$row['email']] = $row;
+        }
+        // u1:套餐名 + 本月实际调用 2 次 / 150 token
+        $this->assertSame([['name' => 'Coding 测试版', 'planType' => 'coding']], $byEmail['p1@test.local']['plans']);
+        $this->assertSame(2, $byEmail['p1@test.local']['usage']['monthRequests']);
+        $this->assertSame(150, $byEmail['p1@test.local']['usage']['monthTokens']);
+        // u2:停用套餐与上月用量都不计入
+        $this->assertSame([], $byEmail['p2@test.local']['plans']);
+        $this->assertNull($byEmail['p2@test.local']['usage']);
+    }
+
     public function testListFiltersByKeyword(): void
     {
         $this->seedUser($this->uuid(), ['email' => 'findme@test.local', 'role' => 'user']);

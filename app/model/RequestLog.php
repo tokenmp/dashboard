@@ -53,7 +53,7 @@ use think\Model;
  * @property string|null $billing_user_plan_id      本次实际付费的用户套餐实例
  * @property string|null $billing_plan_id           本次实际付费的套餐定义
  * @property string|null $billing_plan_name         套餐名称的冗余快照，便于展示与排查
- * @property int         $billing_charge_requests   本次结算实际扣减的请求次数
+ * @property float       $billing_charge_requests   本次结算实际扣减的请求次数（小数倍率下可为小数）
  * @property int         $billing_charge_tokens     本次结算实际扣减的 token 数
  * @property string|null $thinking_effort_original  客户端原始请求里写的思考强度
  * @property bool        $thinking_effort_degraded  是否因上游不支持而把思考强度降级
@@ -98,7 +98,7 @@ class RequestLog extends Model
         'thinking_mode' => 'bool',
         'billing_user_plan_id' => 'string',
         'billing_plan_id' => 'string',
-        'billing_charge_requests' => 'integer',
+        'billing_charge_requests' => 'float',
         'billing_charge_tokens' => 'integer',
         'thinking_effort_degraded' => 'bool',
     ];

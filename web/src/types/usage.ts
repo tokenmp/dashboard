@@ -33,6 +33,17 @@ export interface UsageByModelItem {
   cnt: number;
 }
 
+/** 概览·模型用量排行的时间范围 */
+export type ModelRankPeriod = 'today' | '7d' | 'month';
+
+/** 概览·按模型聚合用量（Token 降序） */
+export interface ModelRankItem {
+  model: string;
+  requests: number;
+  successes: number;
+  tokens: number;
+}
+
 /** 额度项（平台/用户共用） */
 export interface QuotaItem {
   billingPlan: string;

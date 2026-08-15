@@ -1,9 +1,10 @@
 import { RefreshCw, Users, KeyRound, Activity, Zap, CheckCircle2 } from 'lucide-react';
-import { getDashboardOverviewApi } from '@/api/dashboard';
+import { getDashboardOverviewApi, getDashboardOverviewModelsApi } from '@/api/dashboard';
 import { useAsync } from '@/hooks/useAsync';
 import { useRole } from '@/hooks/useRole';
 import { StatCard } from '@/components/StatCard';
 import { TrendChart } from '@/components/TrendChart';
+import { ModelRankCard } from '@/components/ModelRankCard';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -84,6 +85,8 @@ function AdminView({ data }: { data: AdminOverview }) {
           icon={<Zap className="h-4 w-4" />}
         />
       </div>
+
+      <ModelRankCard fetcher={getDashboardOverviewModelsApi} title="全平台模型调用排行" />
 
       <TrendSection
         trend={trend}

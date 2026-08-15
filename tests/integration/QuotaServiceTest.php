@@ -127,7 +127,35 @@ final class QuotaServiceTest extends IntegrationTestCase
         }
         $this->assertNotNull($monthWin);
         $this->assertSame(1000, $monthWin['limit']);
-        $this->assertSame(140, $monthWin['used']);
+        $this->assertSame(140.0, $monthWin['used']);
+    }
+
+    public function testCodingWindowUsedRequestsCountsDistinctLogs(): void
+    {
+        // 倍率场景:3 个真实请求(glm×5 类)各扣 5 次 → used=15,usedRequests=3
+        $user = $this->uuid();
+        $plan = $this->seedPlan(['plan_type' => 'coding', 'cycle_limit' => 500]);
+        $binding = $this->seedUserPlan($user, $plan, ['plan_type' => 'coding', 'activated_at' => date('Y-m-d H:i:s', strtotime('-10 days'))]);
+        foreach ([1, 2, 3] as $i) {
+            $this->seedLedger($user, [
+                'ledger_type' => 'charge', 'billing_plan' => 'coding',
+                'request_delta' => -5, 'user_plan_id' => $binding,
+                'request_log_id' => $this->seedRequestLog($user),
+            ]);
+        }
+        // 老数据(无 request_log_id):只计扣费次数,不计实际次数
+        $this->seedLedger($user, ['ledger_type' => 'charge', 'billing_plan' => 'coding', 'request_delta' => -2, 'user_plan_id' => $binding]);
+
+        $item = $this->findItem($this->service->summary($user), 'coding');
+        $monthWin = null;
+        foreach ($item['windows'] as $w) {
+            if ($w['key'] === 'month') {
+                $monthWin = $w;
+            }
+        }
+        $this->assertNotNull($monthWin);
+        $this->assertSame(17.0, $monthWin['used']);          // 3×5 + 2(扣费口径,与执行器一致)
+        $this->assertSame(3, $monthWin['usedRequests']);     // 实际 3 个请求
     }
 
     /* ----------------------------- legacyUsage ----------------------------- */
@@ -152,7 +180,7 @@ final class QuotaServiceTest extends IntegrationTestCase
         // coding 不展示余额,只展示已用请求(取负)
         $this->assertArrayHasKey('coding', $byPlan);
         $this->assertSame(0, $byPlan['coding']['tokenBalance']);
-        $this->assertSame(-25, $byPlan['coding']['requestBalance']);
+        $this->assertSame(-25.0, $byPlan['coding']['requestBalance']);
     }
 
     public function testMultipleCodingPlansEachGetOwnCard(): void
@@ -174,7 +202,7 @@ final class QuotaServiceTest extends IntegrationTestCase
         $this->assertSame('尝鲜版', $codingItems[0]['planName']);
         $this->assertSame('旗舰版', $codingItems[1]['planName']);
         // 各卡的周期窗用量按绑定隔离（顺序翻转后：尝鲜版 20、旗舰版 30）
-        $this->assertSame(20, $codingItems[0]['windows'][0]['used']);
-        $this->assertSame(30, $codingItems[1]['windows'][0]['used']);
+        $this->assertSame(20.0, $codingItems[0]['windows'][0]['used']);
+        $this->assertSame(30.0, $codingItems[1]['windows'][0]['used']);
     }
 }
