@@ -19,7 +19,7 @@ export default defineConfig({
       { text: '指南', link: '/guide/quickstart', activeMatch: '/guide/' },
       { text: '工具接入', link: '/guide/tools/', activeMatch: '/guide/tools/' },
       { text: 'API', link: '/api/endpoints', activeMatch: '/api/' },
-      { text: '模型与倍率', link: '/guide/billing', activeMatch: '/guide/billing' },
+      { text: '套餐与计费', link: '/guide/plans', activeMatch: '/guide/(plans|plan-cycles|billing)' },
       {
         text: '进入控制台',
         // 站外链接不加 base；域名定下来后替换为正式地址
