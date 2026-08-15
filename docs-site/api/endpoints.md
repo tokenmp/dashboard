@@ -112,5 +112,4 @@ OpenAI Images 协议兼容端点，支持智谱等图像上游。
 
 ## 信息来源
 
-- 实现依据：executor 仓库 `cmd/executor/routes.go`（路由注册）、`internal/errorcodes/`（codes.go 错误码定义 / messages.go 公开文案 / metadata.go 分类与重试建议）
-- 行为核对：2026-08-15 对照线上网关实测
+- 错误码与响应格式于 2026-08-15 对照线上网关整理核对

@@ -73,5 +73,4 @@ curl https://api.tokenmp.cn/v1/responses \
 
 ## 信息来源
 
-- 实现依据：executor 仓库 `internal/executor/protocols/responses/`（请求处理）、`protocols/responses_stream_copy.go`（事件流转换）
-- 行为核对：2026-08-15 对照线上网关实测（Codex CLI 0.147.0 经此端点跑通）
+- 本页行为于 2026-08-15 对照线上网关实测核对（含 Codex CLI 0.147.0 实测）

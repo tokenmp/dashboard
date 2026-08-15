@@ -37,5 +37,5 @@
 
 ## 信息来源
 
-- 实现依据：executor 仓库 `internal/executor/protocols/billing.go`、`internal/executor/billing/charge_math.go`（结算与倍率）；倍率规则表 `price_multiplier_rules`（000071 迁移：小数倍率 NUMERIC(12,4)）
-- 公开口径：与 landing [模型页](https://tokenmp.cn/models) 共用同一 SQL
+- 倍率与公开站[模型页](https://tokenmp.cn/models)实时展示来自同一数据源，账单可直接对账
+- 本页计费规则于 2026-08-15 对照线上账单核对

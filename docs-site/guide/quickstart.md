@@ -65,11 +65,9 @@ Anthropic 协议客户端同样可用（`/v1/messages`），鉴权支持 `x-api-
 ## 下一步
 
 - [工具接入](/guide/tools/) —— Claude Code / OpenCode / Codex CLI / Trae 等工具一键配置
-- [套餐与限额](/guide/plans) —— 了解各维度限额如何生效
-- [模型倍率与计费](/guide/billing) —— 帐单是怎么算出来的
+- [套餐与计费](/guide/plans) —— 套餐类型、周期与限额、计费倍率
 - [API 参考](/api/endpoints) —— 全部可用端点
 
 ## 信息来源
 
-- 流程依据：dashboard 注册（`/register`，注册即登录）与控制台 API Key 管理
-- 请求示例：2026-08-15 对照线上网关实测（模型 `mimo-v2.5`）
+- 请求示例于 2026-08-15 在线上网关实测通过（模型 `mimo-v2.5`）

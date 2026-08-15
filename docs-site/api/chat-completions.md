@@ -110,5 +110,4 @@ data: [DONE]
 
 ## 信息来源
 
-- 实现依据：executor 仓库 `internal/executor/protocols/chat/`（请求处理）、`protocols/streaming.go`（SSE 透传与 usage 注入）、`protocols/convert/conversion_openai_anthropic.go`（跨协议降级字段映射）
-- 行为核对：2026-08-15 对照线上网关实测
+- 本页行为于 2026-08-15 对照线上网关实测核对

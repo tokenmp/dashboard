@@ -107,5 +107,4 @@ data: {"type":"message_stop"}
 
 ## 信息来源
 
-- 实现依据：executor 仓库 `internal/executor/protocols/messages/`（请求处理与 system 提取）、`protocols/streaming.go`（事件流与 in-stream 错误）、`protocols/compat_helpers.go`（统一错误格式）
-- 行为核对：2026-08-15 对照线上网关实测
+- 本页行为于 2026-08-15 对照线上网关实测核对
