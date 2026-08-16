@@ -34,7 +34,9 @@ import {
 } from '@/components/ui/select';
 import { Skeleton } from '@/components/ui/skeleton';
 import { formatCompact, formatNumber } from '@/utils/format';
+import { useIsMobile } from '@/hooks/use-is-mobile';
 import type { AiModelItem, UpstreamQuery } from '@/types/upstream';
+import { ModelsMobile } from './Models.mobile';
 
 function SearchInput({ value, onChange }: { value: string; onChange: (value: string) => void }) {
   return (
@@ -63,7 +65,8 @@ function ModelBillingSelect({ value, onChange }: { value: string; onChange: (val
   );
 }
 
-function ModelCard({ model }: { model: AiModelItem }) {
+/** 模型卡片：桌面卡片视图与移动端强制卡片视图共用。 */
+export function ModelCard({ model }: { model: AiModelItem }) {
   const [providerDialogOpen, setProviderDialogOpen] = useState(false);
   const [successOpen, setSuccessOpen] = useState(false);
   const providers = useMemo(() => model.providers ?? [], [model.providers]);
@@ -196,7 +199,8 @@ function ModelPagination({
   );
 }
 
-function Models() {
+/** 模型目录·桌面端：卡片/表格双视图切换。 */
+function ModelsDesktop() {
   const { initial: urlInit, write } = useUrlQueryState([
     { name: 'q', key: 'keyword' },
     { name: 'billing', key: 'billingMode' },
@@ -513,6 +517,12 @@ function Models() {
       )}
     </div>
   );
+}
+
+/** 模型目录：按视口分发桌面/移动视图（移动端强制卡片视图）。 */
+function Models() {
+  const isMobile = useIsMobile();
+  return isMobile ? <ModelsMobile /> : <ModelsDesktop />;
 }
 
 export default Models;

@@ -12,7 +12,8 @@ import { Card, CardContent } from '@/components/ui/card';
 import { DebouncedInput } from '@/components/DebouncedInput';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
+import { Sheet, SheetHeader, SheetTitle } from '@/components/ui/sheet';
+import { DetailSheetContent } from '@/components/mobile';
 import { type ColumnDef } from '@tanstack/react-table';
 import { DataTable } from '@/components/ui/data-table';
 import { DataTableColumnHeader } from '@/components/ui/data-table-column-header';
@@ -113,7 +114,7 @@ function RedemptionsDrawer({ codeId, onClose }: { codeId: string | null; onClose
   ], []);
   return (
     <Sheet open={codeId !== null} onOpenChange={(open) => !open && onClose()}>
-      <SheetContent side="right" className="w-full overflow-y-auto sm:max-w-2xl">
+      <DetailSheetContent>
         <SheetHeader><SheetTitle>兑换记录</SheetTitle></SheetHeader>
         {codeId === null ? null : loading ? (
           <div className="space-y-3 p-4">{Array.from({ length: 6 }).map((_, i) => <Skeleton key={i} className="h-10 w-full" />)}</div>
@@ -137,7 +138,7 @@ function RedemptionsDrawer({ codeId, onClose }: { codeId: string | null; onClose
             {data.pagination.list.length === 0 ? <EmptyState title="暂无兑换记录" /> : <DataTable columns={recordColumns} data={data.pagination.list} />}
           </div>
         ) : null}
-      </SheetContent>
+      </DetailSheetContent>
     </Sheet>
   );
 }

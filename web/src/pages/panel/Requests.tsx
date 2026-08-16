@@ -4,6 +4,7 @@ import { getPanelRequestsApi, getPanelRequestDetailApi, getPanelKeysApi } from '
 import { usePagedQuery } from '@/hooks/usePagedQuery';
 import { useUrlQueryState } from '@/hooks/useUrlQueryState';
 import { useAsync } from '@/hooks/useAsync';
+import { useIsMobile } from '@/hooks/use-is-mobile';
 import { StatusBadge } from '@/components/StatusBadge';
 import { EmptyState } from '@/components/EmptyState';
 import { Badge } from '@/components/ui/badge';
@@ -20,10 +21,11 @@ import {
 } from '@/components/ui/select';
 import {
   Sheet,
-  SheetContent,
   SheetHeader,
   SheetTitle,
 } from '@/components/ui/sheet';
+import { DetailSheetContent } from '@/components/mobile';
+import { RequestsMobile } from './Requests.mobile';
 import { type ColumnDef } from '@tanstack/react-table';
 import { DataTable } from '@/components/ui/data-table';
 import {
@@ -43,10 +45,11 @@ import type {
 } from '@/types/request-log';
 import type { UserApiKeyItem } from '@/types/user';
 
-const PROTOCOLS = ['openai', 'anthropic', 'openai_chat', 'openai_responses', 'anthropic_messages', 'image_generation', 'tokenmp_gateway', 'custom'];
+/** 协议筛选项（桌面/移动视图共用） */
+export const PROTOCOLS = ['openai', 'anthropic', 'openai_chat', 'openai_responses', 'anthropic_messages', 'image_generation', 'tokenmp_gateway', 'custom'];
 
 /** 日期输入校验：空值或标准 YYYY-MM-DD（年份恰好 4 位），拒绝 6 位年份等异常输入 */
-const isDate = (v: string) => v === '' || /^\d{4}-\d{2}-\d{2}$/.test(v);
+export const isDate = (v: string) => v === '' || /^\d{4}-\d{2}-\d{2}$/.test(v);
 
 type AttemptRow = RequestAttemptItem & { pass: number };
 
@@ -72,10 +75,10 @@ const ATTEMPT_COLUMNS: ColumnDef<AttemptRow>[] = [
 ];
 
 /**
- * 用户面·我的请求记录：分页列表 + 详情抽屉。
+ * 用户面·我的请求记录（桌面视图）：分页表格 + 列显隐 + 详情抽屉。
  * 始终是「我的请求」视角，后端按当前用户 scope，不做管理分支。
  */
-function Requests() {
+function RequestsDesktop() {
   const [detailId, setDetailId] = useState<string | null>(null);
 
   const { initial: urlInit, write } = useUrlQueryState([
@@ -268,7 +271,8 @@ function FiltersBar({
 
 /* ----------------------------- 详情抽屉 ----------------------------- */
 
-function DetailDrawer({ id, onClose }: { id: string | null; onClose: () => void }) {
+/** 请求详情抽屉（桌面/移动视图共用；移动端经 DetailSheetContent 从底部滑出）。 */
+export function DetailDrawer({ id, onClose }: { id: string | null; onClose: () => void }) {
   const { data, loading, error } = useAsync(
     () => (id ? getPanelRequestDetailApi(id) : Promise.resolve(null)),
     [id],
@@ -276,7 +280,7 @@ function DetailDrawer({ id, onClose }: { id: string | null; onClose: () => void 
 
   return (
     <Sheet open={id !== null} onOpenChange={(open) => !open && onClose()}>
-      <SheetContent side="right" className="w-full overflow-y-auto sm:max-w-2xl">
+      <DetailSheetContent>
         <SheetHeader>
           <SheetTitle>请求详情</SheetTitle>
         </SheetHeader>
@@ -292,7 +296,7 @@ function DetailDrawer({ id, onClose }: { id: string | null; onClose: () => void 
             <AttemptsSection attempts={data.attempts} />
           </div>
         ) : null}
-      </SheetContent>
+      </DetailSheetContent>
     </Sheet>
   );
 }
@@ -437,4 +441,10 @@ function AttemptsSection({ attempts }: { attempts: RequestAttemptItem[] }) {
   );
 }
 
-export default Requests;
+/**
+ * 请求日志页：按视口切换桌面表格视图 / 移动卡片视图（同一份数据 API 与筛选状态模型）。
+ */
+export default function Requests() {
+  const isMobile = useIsMobile();
+  return isMobile ? <RequestsMobile /> : <RequestsDesktop />;
+}

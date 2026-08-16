@@ -13,9 +13,12 @@ import { type ColumnDef } from '@tanstack/react-table';
 import { DataTable } from '@/components/ui/data-table';
 import { DataTableColumnHeader } from '@/components/ui/data-table-column-header';
 import { formatDateTime, formatNumber } from '@/utils/format';
+import { useIsMobile } from '@/hooks/use-is-mobile';
 import type { RedeemCodeRedemptionItem } from '@/types/redeem';
+import { RedemptionsMobile } from './Redemptions.mobile';
 
-function Redemptions() {
+/** 我的兑换·桌面端：兑换输入卡片 + 记录表格。 */
+function RedemptionsDesktop() {
   // 自取数据：我名下的全部兑换凭证（无分页）
   const { data, loading, error, reload } = useAsync(getPanelRedemptionsApi);
   const list = data ?? [];
@@ -70,8 +73,8 @@ function Redemptions() {
   );
 }
 
-/** 兑换输入卡片：输入码 → 兑换 → 成功后刷新列表 */
-function RedeemCard({ onRedeemed }: { onRedeemed: () => void }) {
+/** 兑换输入卡片：输入码 → 兑换 → 成功后刷新列表（桌面/移动共用） */
+export function RedeemCard({ onRedeemed }: { onRedeemed: () => void }) {
   const [code, setCode] = useState('');
   const [result, setResult] = useState<RedeemResult | null>(null);
   const { loading, mutate } = useMutation();
@@ -124,8 +127,15 @@ function RedeemCard({ onRedeemed }: { onRedeemed: () => void }) {
   );
 }
 
-function PlanBadge({ type, name }: { type: string; name?: string }) {
+/** 套餐快照徽标（桌面表格与移动卡片共用） */
+export function PlanBadge({ type, name }: { type: string; name?: string }) {
   return <Badge variant="outline" className="text-[10px]">{type}{name ? `·${name}` : ''}</Badge>;
+}
+
+/** 我的兑换：按视口分发桌面/移动视图。 */
+function Redemptions() {
+  const isMobile = useIsMobile();
+  return isMobile ? <RedemptionsMobile /> : <RedemptionsDesktop />;
 }
 
 export default Redemptions;

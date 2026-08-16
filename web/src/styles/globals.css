@@ -75,6 +75,11 @@
   }
 }
 
+/* ── 移动端安全区（iPhone 底部 Home 横条）── */
+.pb-safe {
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+}
+
 /* ── 认证页（AuthShell）背景网格：细线 + 径向遮罩向四周淡出 ── */
 .auth-grid {
   background-image:

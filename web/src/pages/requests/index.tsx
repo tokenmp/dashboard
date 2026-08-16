@@ -24,10 +24,12 @@ import {
 } from '@/components/ui/select';
 import {
   Sheet,
-  SheetContent,
   SheetHeader,
   SheetTitle,
 } from '@/components/ui/sheet';
+import { DetailSheetContent } from '@/components/mobile';
+import { useIsMobile } from '@/hooks/use-is-mobile';
+import { RequestsAdminMobile } from './index.mobile';
 import { type ColumnDef } from '@tanstack/react-table';
 import { DataTable } from '@/components/ui/data-table';
 import { DataTableColumnHeader } from '@/components/ui/data-table-column-header';
@@ -41,9 +43,11 @@ import { formatCompact, formatDateTime, formatNumber } from '@/utils/format';
 import { attemptErrorLabel, withAttemptPasses } from '@/utils/attempts';
 import type { RequestAttemptItem, RequestLogItem, RequestLogQuery } from '@/types/request-log';
 
-const PROTOCOLS = ['openai', 'anthropic', 'openai_chat', 'openai_responses', 'anthropic_messages', 'image_generation', 'tokenmp_gateway', 'custom'];
+/** 协议筛选项（桌面/移动视图共用） */
+export const PROTOCOLS = ['openai', 'anthropic', 'openai_chat', 'openai_responses', 'anthropic_messages', 'image_generation', 'tokenmp_gateway', 'custom'];
 
-function Requests() {
+/** 管理端·请求日志（桌面视图）：筛选表格 + 列显隐 + 详情抽屉。 */
+function RequestsAdminDesktop() {
   const { isAdmin } = useRole();
   const [detailId, setDetailId] = useState<string | null>(null);
 
@@ -198,7 +202,7 @@ function FiltersBar({
 
 /* ----------------------------- 详情抽屉 ----------------------------- */
 
-function DetailDrawer({ id, onClose }: { id: string | null; onClose: () => void }) {
+export function DetailDrawer({ id, onClose }: { id: string | null; onClose: () => void }) {
   const { data, loading, error } = useAsync(
     () => (id ? getDashboardRequestDetailApi(id) : Promise.resolve(null)),
     [id],
@@ -206,7 +210,7 @@ function DetailDrawer({ id, onClose }: { id: string | null; onClose: () => void 
 
   return (
     <Sheet open={id !== null} onOpenChange={(open) => !open && onClose()}>
-      <SheetContent side="right" className="w-full overflow-y-auto sm:max-w-2xl">
+      <DetailSheetContent>
         <SheetHeader>
           <SheetTitle>请求详情</SheetTitle>
         </SheetHeader>
@@ -223,7 +227,7 @@ function DetailDrawer({ id, onClose }: { id: string | null; onClose: () => void 
             <EventsSection events={data.events} />
           </div>
         ) : null}
-      </SheetContent>
+      </DetailSheetContent>
     </Sheet>
   );
 }
@@ -524,4 +528,8 @@ function EventsSection({ events }: { events: import('@/types/request-log').Reque
   );
 }
 
-export default Requests;
+/** 薄壳：按视口分流——移动端渲染卡片视图（index.mobile.tsx），桌面渲染原表格视图。 */
+export default function Requests() {
+  const isMobile = useIsMobile();
+  return isMobile ? <RequestsAdminMobile /> : <RequestsAdminDesktop />;
+}

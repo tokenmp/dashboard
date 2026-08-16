@@ -1,5 +1,7 @@
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { Link, NavLink, Outlet, useLocation } from 'react-router-dom';
+import { Menu } from 'lucide-react';
+import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
 import { useAuthStore } from '@/store/auth';
 import { homePathFor } from '@/utils/redirect';
 import { useRole } from '@/hooks/useRole';
@@ -43,16 +45,17 @@ function ScrollManager() {
 export default function LandingLayout() {
   const token = useAuthStore((s) => s.token);
   const { user } = useRole();
+  // 移动端抽屉菜单开关（桌面端导航始终可见，不涉及）
+  const [menuOpen, setMenuOpen] = useState(false);
 
   return (
     <div className="min-h-screen bg-white text-zinc-800 antialiased">
       <header className="sticky top-0 z-50 border-b border-zinc-100 bg-white/75 backdrop-blur-md">
-        <div className="mx-auto flex h-16 max-w-6xl items-center justify-between px-6">
-          <Link to="/" className="flex items-center gap-2.5">
-            <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-zinc-900 text-sm font-bold text-white">
-              T
-            </span>
-            <span className="text-[17px] font-semibold tracking-tight">TokenMP</span>
+        {/* 移动端与面板 header 同规格（h-14 + 22px logo），避免面板 → landing 跳变；桌面维持 h-16 + 32px */}
+        <div className="mx-auto flex h-14 max-w-6xl items-center justify-between px-4 md:h-16 md:px-6">
+          <Link to="/" className="flex items-center gap-2 md:gap-2.5">
+            <img src="/tokenmp.svg" alt="TokenMP" className="h-[22px] w-[22px] md:h-8 md:w-8" />
+            <span className="text-[15px] font-bold tracking-tight md:text-[17px] md:font-semibold">TokenMP</span>
           </Link>
 
           <nav className="hidden items-center gap-8 text-sm text-zinc-500 md:flex">
@@ -78,7 +81,7 @@ export default function LandingLayout() {
                 进入控制台
               </Link>
             ) : (
-              <>
+              <div className="hidden items-center gap-1 md:flex">
                 <Link to="/login" className="rounded-lg px-3 py-2 text-sm font-medium text-zinc-500 transition hover:text-zinc-900">
                   登录
                 </Link>
@@ -88,11 +91,73 @@ export default function LandingLayout() {
                 >
                   免费注册
                 </Link>
-              </>
+              </div>
             )}
+            {/* 移动端菜单入口（桌面端隐藏） */}
+            <button
+              type="button"
+              aria-label="打开菜单"
+              onClick={() => setMenuOpen(true)}
+              className="flex h-9 w-9 items-center justify-center rounded-lg text-zinc-500 transition hover:text-zinc-900 md:hidden"
+            >
+              <Menu className="h-5 w-5" />
+            </button>
           </div>
         </div>
       </header>
+
+      {/* 移动端抽屉菜单：导航链接 + 登录/免费注册，点击任意链接后关闭 */}
+      <Sheet open={menuOpen} onOpenChange={setMenuOpen}>
+        <SheetContent side="right" className="flex w-3/4 flex-col">
+          <SheetHeader>
+            <SheetTitle className="text-left">菜单</SheetTitle>
+          </SheetHeader>
+          <nav className="flex flex-col gap-1 px-4">
+            {NAV_ITEMS.map((item) => (
+              <NavLink
+                key={item.to}
+                to={item.to}
+                onClick={() => setMenuOpen(false)}
+                className={({ isActive }) =>
+                  `rounded-lg px-3 py-2.5 text-base ${
+                    isActive ? 'font-medium text-zinc-900' : 'text-zinc-500 transition hover:text-zinc-900'
+                  }`
+                }
+              >
+                {item.label}
+              </NavLink>
+            ))}
+          </nav>
+          <div className="mt-auto flex flex-col gap-2 px-4 pb-2">
+            {token ? (
+              <Link
+                to={user ? homePathFor(user.role) : '/panel'}
+                onClick={() => setMenuOpen(false)}
+                className="rounded-lg bg-zinc-900 px-4 py-2 text-center text-sm font-medium text-white transition hover:bg-zinc-700"
+              >
+                进入控制台
+              </Link>
+            ) : (
+              <>
+                <Link
+                  to="/login"
+                  onClick={() => setMenuOpen(false)}
+                  className="rounded-lg px-3 py-2 text-center text-sm font-medium text-zinc-500 transition hover:text-zinc-900"
+                >
+                  登录
+                </Link>
+                <Link
+                  to="/register"
+                  onClick={() => setMenuOpen(false)}
+                  className="rounded-lg bg-zinc-900 px-4 py-2 text-center text-sm font-medium text-white transition hover:bg-zinc-700"
+                >
+                  免费注册
+                </Link>
+              </>
+            )}
+          </div>
+        </SheetContent>
+      </Sheet>
 
       <ScrollManager />
       <Outlet />
@@ -101,7 +166,7 @@ export default function LandingLayout() {
         <div className="mx-auto grid max-w-6xl gap-10 px-6 py-14 md:grid-cols-[1.5fr_1fr_1fr_1fr]">
           <div>
             <div className="flex items-center gap-2.5">
-              <span className="flex h-7 w-7 items-center justify-center rounded-md bg-zinc-900 text-xs font-bold text-white">T</span>
+              <img src="/tokenmp.svg" alt="TokenMP" className="h-7 w-7" />
               <span className="font-semibold text-zinc-900">TokenMP</span>
             </div>
             <p className="mt-3 max-w-xs text-sm leading-relaxed text-zinc-500">AI 模型统一网关，用得起、看得清。</p>

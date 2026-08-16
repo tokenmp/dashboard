@@ -3,9 +3,19 @@ import { Link } from 'react-router-dom';
 import { BarChart3, CalendarDays, Check, Clock, Coins, Hash, KeyRound, Percent, Shield, Shuffle, Ticket, Timer, type LucideIcon } from 'lucide-react';
 import ModelIcon from '@/components/ModelIcon';
 import { getSiteModelsApi, getSiteOverviewApi, getSitePlansApi } from '@/api/site';
+import { useIsMobile } from '@/hooks/use-is-mobile';
 import type { SiteModel, SiteOverview, SitePlan } from '@/types/site';
-import { CodeWindow, CtaBand, Eyebrow, HeroActions, MultiplierBadge, SITE_CONTACT_EMAIL, capabilityText } from './components';
-import { formatCount, formatMultiplier } from './components';
+import {
+  CodeWindow,
+  CtaBand,
+  CtaBandMobile,
+  Eyebrow,
+  HeroActions,
+  MultiplierBadge,
+  SITE_CONTACT_EMAIL,
+  capabilityText,
+} from './components';
+import { formatCount, formatMultiplier, formatTokens } from './components';
 
 /**
  * Landing 首页：对所有人可见（含已登录用户，已登录者通过导航栏「进入控制台」去后台）。
@@ -46,6 +56,7 @@ const FEATURES = [
 ];
 
 function LandingHome() {
+  const isMobile = useIsMobile();
   const [overview, setOverview] = useState<SiteOverview | null>(null);
   const [models, setModels] = useState<SiteModel[]>([]);
   const [plans, setPlans] = useState<SitePlan[]>([]);
@@ -70,6 +81,11 @@ function LandingHome() {
     [overview?.min_multiplier != null ? `×${formatMultiplier(overview.min_multiplier)}` : '—', '最低模型倍率'],
     ['100%', 'OpenAI 兼容'],
   ];
+
+  // 移动端专属分支：桌面 JSX 完全不渲染（视觉零变化）
+  if (isMobile) {
+    return <LandingHomeMobile overview={overview} models={models} plans={plans} />;
+  }
 
   return (
     <main>
@@ -194,6 +210,150 @@ function LandingHome() {
   );
 }
 
+/**
+ * 移动端首页（v3 ⑭ 定稿）：单列 hero（23px 标题 + 纵向全宽 CTA）+ 一行三列统计卡
+ * + 横滑特性卡（~210px 宽，隐藏滚动条）+ 单列模型预览 / 套餐预览 + 页尾渐变 CTA 卡。
+ */
+function LandingHomeMobile({
+  overview,
+  models,
+  plans,
+}: {
+  overview: SiteOverview | null;
+  models: SiteModel[];
+  plans: SitePlan[];
+}) {
+  // 统计改一行三列：取前三项（OpenAI 兼容已由 hero 徽章表达，避免四列过挤）
+  const stats: Array<[string, string]> = [
+    [overview ? `${overview.models}+` : '—', '接入模型'],
+    [overview ? `${overview.providers}+` : '—', '上游供应商'],
+    [overview?.min_multiplier != null ? `×${formatMultiplier(overview.min_multiplier)}` : '—', '最低模型倍率'],
+  ];
+
+  return (
+    <main className="pb-1">
+      {/* ── Hero：单列，pill 徽章 + 23px 两行标题 + 纵向全宽 CTA ── */}
+      <section className="px-4 pt-5">
+        <span className="inline-flex items-center gap-[5px] rounded-full bg-blue-600/[0.07] px-[9px] py-1 text-[10.5px] font-semibold text-blue-600">
+          <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
+          OpenAI 兼容接口 · 一行代码迁移
+        </span>
+        <h1 className="mt-[11px] text-[23px] font-extrabold leading-[1.25] tracking-tight text-zinc-900">
+          一个入口，
+          <br />
+          用遍<span className="text-blue-600">所有大模型</span>
+        </h1>
+        <p className="mt-2 text-[12.5px] leading-[1.6] text-zinc-500">
+          一个 API 密钥调用全部主流模型。透明倍率、套餐限额、用量明细——成本尽在掌握。
+        </p>
+        <div className="mt-[15px] flex flex-col gap-2">
+          <a
+            href="/register"
+            className="flex h-[42px] items-center justify-center rounded-[10px] bg-zinc-900 text-[13.5px] font-semibold text-white transition hover:bg-zinc-700"
+          >
+            免费注册
+          </a>
+          <Link
+            to="/models"
+            className="flex h-[42px] items-center justify-center rounded-[10px] border border-zinc-200 bg-white text-[13.5px] font-semibold text-zinc-900 transition hover:bg-zinc-50"
+          >
+            查看模型价格
+          </Link>
+          <p className="text-center text-[10.5px] text-zinc-400">注册即送体验额度，一行代码完成迁移</p>
+        </div>
+      </section>
+
+      {/* ── 统计：一行三列紧凑卡 ── */}
+      <section className="mt-[15px] px-4">
+        <div className="grid grid-cols-3 rounded-[12px] border border-zinc-100 bg-white py-2.5">
+          {stats.map(([value, label]) => (
+            <div key={label} className="text-center">
+              <div className="text-[15px] font-extrabold tracking-tight text-zinc-900">{value}</div>
+              <div className="mt-px text-[10px] text-zinc-400">{label}</div>
+            </div>
+          ))}
+        </div>
+      </section>
+
+      {/* ── 功能特性：横滑卡片（~210px 宽，隐藏滚动条） ── */}
+      <section>
+        <h2 className="px-4 pb-0.5 pt-[15px] text-[14.5px] font-extrabold tracking-tight text-zinc-900">
+          为「用得起、看得清」而设计
+        </h2>
+        <p className="px-4 text-[11px] text-zinc-400">左滑查看更多 →</p>
+        <div className="mt-[9px] flex gap-[9px] overflow-x-auto px-4 pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+          {FEATURES.map((f) => (
+            <Link
+              key={f.title}
+              to="/features"
+              className="w-[210px] shrink-0 rounded-[12px] border border-zinc-100 bg-gradient-to-b from-zinc-50 to-white p-3"
+            >
+              <span className="flex h-8 w-8 items-center justify-center rounded-[9px] bg-blue-600/10 text-blue-600">
+                <f.icon className="h-4 w-4" />
+              </span>
+              <h3 className="mt-[9px] text-[13px] font-bold text-zinc-900">{f.title}</h3>
+              <p className="mt-1 text-[11px] leading-[1.55] text-zinc-500">{f.desc}</p>
+            </Link>
+          ))}
+        </div>
+      </section>
+
+      {/* ── 模型广场预览：单列列表卡 ── */}
+      <section className="mt-3 px-4">
+        <div className="flex items-baseline justify-between gap-2">
+          <h2 className="text-[14.5px] font-extrabold tracking-tight text-zinc-900">全部模型，公开倍率</h2>
+          <Link to="/models" className="shrink-0 text-[11px] font-medium text-blue-600">
+            查看全部 →
+          </Link>
+        </div>
+        {models.length > 0 ? (
+          <div className="mt-2 flex flex-col gap-[7px]">
+            {models.map((m) => (
+              <Link
+                key={m.id}
+                to="/models"
+                className="flex items-center gap-2.5 rounded-[10px] border border-zinc-100 bg-white px-[11px] py-[9px]"
+              >
+                <ModelIcon id={m.name} displayName={m.display_name ?? undefined} size={20} />
+                <span className="min-w-0 flex-1">
+                  <span className="block truncate font-mono text-[12.5px] font-semibold text-zinc-700">{m.name}</span>
+                  <span className="mt-px block truncate text-[10.5px] text-zinc-400">
+                    {formatTokens(m.context_window)} · {capabilityText(m.capabilities)}
+                  </span>
+                </span>
+                <MultiplierBadge multiplier={m.multiplier} billingMode={m.billing_mode} />
+              </Link>
+            ))}
+          </div>
+        ) : (
+          <p className="mt-2 rounded-[12px] border border-dashed border-zinc-200 px-4 py-8 text-center text-xs text-zinc-400">
+            模型目录加载中或暂无可用模型
+          </p>
+        )}
+      </section>
+
+      {/* ── 套餐预览：单列纵向 ── */}
+      {plans.length > 0 && (
+        <section className="mt-4 px-4">
+          <h2 className="text-[14.5px] font-extrabold tracking-tight text-zinc-900">简单透明的定价</h2>
+          <div className="mt-2 flex flex-col gap-2">
+            {plans.map((plan, i) => (
+              <PlanCardMobile key={plan.id} plan={plan} featured={plans.length >= 3 && i === 1} />
+            ))}
+          </div>
+          <p className="mt-3 text-center">
+            <Link to="/plans" className="text-[11.5px] font-medium text-blue-600">
+              查看全部套餐 →
+            </Link>
+          </p>
+        </section>
+      )}
+
+      <CtaBandMobile title="准备好开始了吗？" sub="注册即送体验额度，一行代码完成迁移。" />
+    </main>
+  );
+}
+
 function ModelsPreviewTable({ models }: { models: SiteModel[] }) {
   return (
     <div className="mt-10 overflow-hidden rounded-2xl border border-zinc-200 bg-white">
@@ -261,6 +421,52 @@ export function PlanCard({ plan, featured }: { plan: SitePlan; featured?: boolea
           featured
             ? 'bg-white text-zinc-900 hover:bg-zinc-200'
             : 'border border-zinc-200 text-zinc-700 hover:border-zinc-300 hover:bg-zinc-50'
+        }`}
+      >
+        {plan.price > 0 ? '立即订阅' : '免费注册'}
+      </a>
+    </div>
+  );
+}
+
+/** 移动端套餐卡片（v3 ⑰ 定稿）：单列紧凑版，首页预览与套餐页共用；推荐套餐蓝描边 + 角标 + 全宽 CTA */
+export function PlanCardMobile({ plan, featured }: { plan: SitePlan; featured?: boolean }) {
+  const items = planLimitItems(plan);
+  return (
+    <div
+      className={`relative rounded-[12px] bg-white p-3 ${
+        featured ? 'border-[1.5px] border-blue-600' : 'border border-zinc-100'
+      }`}
+    >
+      {featured && (
+        <span className="absolute -top-px right-2.5 rounded-b-md bg-blue-600 px-[7px] py-0.5 text-[9.5px] font-semibold text-white">
+          最受欢迎
+        </span>
+      )}
+      <div className="flex items-baseline justify-between gap-2 pt-0.5">
+        <h3 className="text-[13.5px] font-bold text-zinc-900">{plan.name}</h3>
+        <div className="text-[15px] font-extrabold tracking-tight text-zinc-900">
+          {plan.price > 0 ? `¥${plan.price}` : '免费'}
+          {plan.price > 0 && priceSuffix(plan.category) && (
+            <span className="text-[10.5px] font-normal text-zinc-400">{priceSuffix(plan.category)}</span>
+          )}
+        </div>
+      </div>
+      <p className="mt-0.5 text-[10.5px] text-zinc-400">{planTypeLabel(plan.plan_type)}</p>
+      <ul className="mt-2 space-y-[3px]">
+        {items.map((item) => (
+          <li key={item.label} className="flex items-center gap-1.5 text-[11.5px] leading-[1.6] text-zinc-600">
+            <item.icon className="h-3 w-3 shrink-0 text-blue-600" />
+            <span>
+              {item.label} {item.value}
+            </span>
+          </li>
+        ))}
+      </ul>
+      <a
+        href="/register"
+        className={`mt-[11px] flex h-[38px] items-center justify-center rounded-[10px] text-[13px] font-semibold transition ${
+          featured ? 'bg-blue-600 text-white hover:bg-blue-700' : 'bg-zinc-900 text-white hover:bg-zinc-700'
         }`}
       >
         {plan.price > 0 ? '立即订阅' : '免费注册'}

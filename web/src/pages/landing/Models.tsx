@@ -3,14 +3,16 @@ import { Search } from 'lucide-react';
 import ModelIcon, { findModelIcon } from '@/components/ModelIcon';
 import { Skeleton } from '@/components/ui/skeleton';
 import { getSiteModelsApi } from '@/api/site';
+import { useIsMobile } from '@/hooks/use-is-mobile';
 import type { SiteModel } from '@/types/site';
-import { CtaBand, MultiplierBadge, capabilityText, formatTokens } from './components';
+import { CtaBand, CtaBandMobile, MultiplierBadge, capabilityText, formatTokens } from './components';
 
 /**
  * 模型广场：数据来自公开接口 /api/v1/site/models（模型目录 + 当前时刻倍率）。
  * 供应商筛选按模型实际挂载的供应商聚合。
  */
 export default function Models() {
+  const isMobile = useIsMobile();
   const [models, setModels] = useState<SiteModel[] | null>(null);
   const [error, setError] = useState('');
   const [provider, setProvider] = useState<string>('');
@@ -51,6 +53,84 @@ export default function Models() {
       return hitProvider && hitKeyword;
     });
   }, [models, provider, keyword]);
+
+  // 移动端专属分支（v3 ⑯ 定稿）：搜索框 + 供应商 chips 横滑 + 列表卡（名称/上下文·能力副行/倍率徽章右对齐），表格模式完全不渲染
+  if (isMobile) {
+    return (
+      <>
+        <main className="pb-1 pt-2.5">
+          {/* 搜索框：全宽 */}
+          <div className="px-4">
+            <div className="flex h-8 items-center gap-1.5 rounded-[8px] border border-zinc-200 bg-white px-2.5">
+              <Search className="h-3.5 w-3.5 shrink-0 text-zinc-400" />
+              <input
+                value={keyword}
+                onChange={(e) => setKeyword(e.target.value)}
+                placeholder="搜索模型名称…"
+                className="w-full bg-transparent text-xs text-zinc-700 outline-none placeholder:text-zinc-400"
+              />
+            </div>
+          </div>
+
+          {/* 供应商 chips：横滑，隐藏滚动条 */}
+          <div className="mt-1.5 flex gap-1.5 overflow-x-auto px-4 pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+            <ProviderChip compact active={provider === ''} onClick={() => setProvider('')}>
+              全部{models ? ` (${models.length})` : ''}
+            </ProviderChip>
+            {providers.map((p) => (
+              <ProviderChip
+                key={p.name}
+                compact
+                active={provider === p.name}
+                onClick={() => setProvider(p.name)}
+                name={p.name}
+                logo={p.logo}
+              >
+                {p.name} ({p.count})
+              </ProviderChip>
+            ))}
+          </div>
+
+          {/* 模型列表卡 */}
+          {error ? (
+            <p className="mx-3.5 mt-2 rounded-[12px] border border-dashed border-zinc-200 px-4 py-8 text-center text-xs text-zinc-400">
+              {error}
+            </p>
+          ) : models === null ? (
+            <ModelsListSkeleton />
+          ) : filtered.length === 0 ? (
+            <p className="mx-3.5 mt-2 rounded-[12px] border border-dashed border-zinc-200 px-4 py-8 text-center text-xs text-zinc-400">
+              没有符合条件的模型
+            </p>
+          ) : (
+            <>
+              <div className="mt-2 flex flex-col gap-[7px] px-4">
+                {filtered.map((m) => (
+                  <div
+                    key={m.id}
+                    className="flex items-center gap-2.5 rounded-[10px] border border-zinc-100 bg-white px-[11px] py-[9px]"
+                  >
+                    <ModelIcon id={m.name} displayName={m.display_name ?? undefined} size={20} />
+                    <div className="min-w-0 flex-1">
+                      <div className="truncate font-mono text-[12.5px] font-semibold text-zinc-700">{m.name}</div>
+                      <div className="mt-px truncate text-[10.5px] text-zinc-400">
+                        {formatTokens(m.context_window)} · {capabilityText(m.capabilities)}
+                      </div>
+                    </div>
+                    <MultiplierBadge multiplier={m.multiplier} billingMode={m.billing_mode} />
+                  </div>
+                ))}
+              </div>
+              <p className="px-4 pt-2.5 text-[10.5px] leading-relaxed text-zinc-400">
+                共 {filtered.length} 个模型 · 倍率为当前时刻生效值，计费说明详见常见问题
+              </p>
+            </>
+          )}
+        </main>
+        <CtaBandMobile title="所有模型，一个密钥全通用" sub="注册后即可调用以上全部模型。" />
+      </>
+    );
+  }
 
   return (
     <>
@@ -95,37 +175,40 @@ export default function Models() {
         </p>
       ) : (
         <div className="mt-8 overflow-hidden rounded-2xl border border-zinc-200 bg-white">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="border-b border-zinc-100 bg-zinc-50/60 text-left text-xs uppercase tracking-wide text-zinc-400">
-                <th className="px-6 py-4 font-medium">模型</th>
-                <th className="px-6 py-4 font-medium">供应商</th>
-                <th className="px-6 py-4 font-medium">倍率</th>
-                <th className="px-6 py-4 font-medium">上下文</th>
-                <th className="hidden px-6 py-4 font-medium md:table-cell">支持能力</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-zinc-100">
-              {filtered.map((m) => (
-                <tr key={m.id} className="transition hover:bg-zinc-50/60">
-                  <td className="px-6 py-4">
-                    <span className="flex items-center gap-2.5">
-                      <ModelIcon id={m.name} displayName={m.display_name ?? undefined} size={24} />
-                      <span className="font-mono text-[13px] font-medium text-zinc-900">{m.name}</span>
-                    </span>
-                  </td>
-                  <td className="px-6 py-4 text-zinc-500">
-                    {m.providers.length > 1 ? `${m.providers[0].name} 等 ${m.providers.length} 家` : m.owned_by}
-                  </td>
-                  <td className="px-6 py-4">
-                    <MultiplierBadge multiplier={m.multiplier} billingMode={m.billing_mode} />
-                  </td>
-                  <td className="px-6 py-4 font-mono text-xs text-zinc-500">{formatTokens(m.context_window)}</td>
-                  <td className="hidden px-6 py-4 text-zinc-500 md:table-cell">{capabilityText(m.capabilities)}</td>
+          {/* 窄屏横向滚动，min-w 保证列不被压扁 */}
+          <div className="overflow-x-auto">
+            <table className="w-full min-w-[640px] text-sm">
+              <thead>
+                <tr className="border-b border-zinc-100 bg-zinc-50/60 text-left text-xs uppercase tracking-wide text-zinc-400">
+                  <th className="px-6 py-4 font-medium">模型</th>
+                  <th className="px-6 py-4 font-medium">供应商</th>
+                  <th className="px-6 py-4 font-medium">倍率</th>
+                  <th className="px-6 py-4 font-medium">上下文</th>
+                  <th className="hidden px-6 py-4 font-medium md:table-cell">支持能力</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody className="divide-y divide-zinc-100">
+                {filtered.map((m) => (
+                  <tr key={m.id} className="transition hover:bg-zinc-50/60">
+                    <td className="px-6 py-4">
+                      <span className="flex items-center gap-2.5">
+                        <ModelIcon id={m.name} displayName={m.display_name ?? undefined} size={24} />
+                        <span className="font-mono text-[13px] font-medium text-zinc-900">{m.name}</span>
+                      </span>
+                    </td>
+                    <td className="px-6 py-4 text-zinc-500">
+                      {m.providers.length > 1 ? `${m.providers[0].name} 等 ${m.providers.length} 家` : m.owned_by}
+                    </td>
+                    <td className="px-6 py-4">
+                      <MultiplierBadge multiplier={m.multiplier} billingMode={m.billing_mode} />
+                    </td>
+                    <td className="px-6 py-4 font-mono text-xs text-zinc-500">{formatTokens(m.context_window)}</td>
+                    <td className="hidden px-6 py-4 text-zinc-500 md:table-cell">{capabilityText(m.capabilities)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
           <div className="flex flex-col items-start justify-between gap-2 border-t border-zinc-100 px-6 py-4 text-xs text-zinc-400 sm:flex-row sm:items-center">
             <span>共 {filtered.length} 个模型</span>
             <span>倍率为当前时刻生效值，计费说明详见常见问题</span>
@@ -173,18 +256,43 @@ function ModelsTableSkeleton() {
   );
 }
 
+/** 移动端列表骨架屏：与列表卡同构（图标 + 名称/副行两栏 + 右侧倍率徽章） */
+function ModelsListSkeleton() {
+  const widths = [72, 55, 84, 62, 76, 58];
+  return (
+    <div className="mt-2 flex flex-col gap-[7px] px-4">
+      {widths.map((w, i) => (
+        <div
+          key={i}
+          className="flex items-center gap-2.5 rounded-[10px] border border-zinc-100 bg-white px-[11px] py-[9px]"
+        >
+          <Skeleton className="h-5 w-5 shrink-0 rounded-md" />
+          <div className="min-w-0 flex-1">
+            <Skeleton className="h-3.5" style={{ width: `${w}%` }} />
+            <Skeleton className="mt-1.5 h-2.5 w-1/3" />
+          </div>
+          <Skeleton className="h-5 w-11 shrink-0 rounded-md" />
+        </div>
+      ))}
+    </div>
+  );
+}
+
 function ProviderChip({
   active,
   onClick,
   children,
   name,
   logo,
+  compact,
 }: {
   active: boolean;
   onClick: () => void;
   children: React.ReactNode;
   name?: string;
   logo?: string | null;
+  /** 移动端紧凑尺寸（高 26px、字号 11.5px），不影响桌面默认样式 */
+  compact?: boolean;
 }) {
   // 优先用后台配置的供应商 Logo；未配置时按名称回退内置品牌图标匹配库
   const match = !logo && name ? findModelIcon(name) : undefined;
@@ -196,7 +304,9 @@ function ProviderChip({
     <button
       type="button"
       onClick={onClick}
-      className={`inline-flex cursor-pointer items-center gap-1.5 rounded-full px-3.5 py-1.5 text-xs transition ${
+      className={`inline-flex cursor-pointer items-center gap-1.5 rounded-full transition ${
+        compact ? 'h-[26px] shrink-0 whitespace-nowrap px-2.5 text-[11.5px]' : 'px-3.5 py-1.5 text-xs'
+      } ${
         active
           ? 'bg-zinc-900 font-medium text-white'
           : 'border border-zinc-200 bg-white text-zinc-500 hover:border-zinc-300 hover:text-zinc-900'

@@ -20,16 +20,18 @@ import { type ColumnDef } from '@tanstack/react-table';
 import { DataTable } from '@/components/ui/data-table';
 import { DataTableColumnHeader } from '@/components/ui/data-table-column-header';
 import { formatCompact, formatDateTime, formatNumber } from '@/utils/format';
+import { useIsMobile } from '@/hooks/use-is-mobile';
 import type { UsageQuery, UserQuota, QuotaItem, UsageByModelItem, UsageLedgerItem, UsageTimelineItem } from '@/types/usage';
+import { UsageMobile } from './Usage.mobile';
 
-const LEDGER_TYPES = ['charge', 'refund', 'recharge', 'adjustment', 'plan_grant', 'plan_upgrade', 'plan_renew', 'plan_replace'];
-const BILLING_PLANS = ['coding', 'token', 'image', 'free'];
+export const LEDGER_TYPES = ['charge', 'refund', 'recharge', 'adjustment', 'plan_grant', 'plan_upgrade', 'plan_renew', 'plan_replace'];
+export const BILLING_PLANS = ['coding', 'token', 'image', 'free'];
 
 /**
  * 用户面·我的用量：用量流水 + 我的额度。
  * 始终是用户视角，不含计费规则等管理功能。
  */
-function Usage() {
+function UsageDesktop() {
   const [sp, setSp] = useSearchParams();
   const tab = sp.get('tab') ?? 'timeline';
   const switchTab = (t: string) => {
@@ -171,15 +173,15 @@ function TimelineTab() {
   );
 }
 
-function formatBucketTime(ts: number): string {
+export function formatBucketTime(ts: number): string {
   const d = new Date(ts);
   const pad = (n: number) => String(n).padStart(2, '0');
   return `${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
 }
 
 /* ----------------------------- 按模型 ----------------------------- */
-const PLAN_LABEL: Record<string, string> = { coding: '编程套餐', token: 'Token 套餐', image: '图像套餐' };
-const planByRequest = (plan: string) => plan === 'coding';
+export const PLAN_LABEL: Record<string, string> = { coding: '编程套餐', token: 'Token 套餐', image: '图像套餐' };
+export const planByRequest = (plan: string) => plan === 'coding';
 
 function ByModelTab() {
   const [hours, setHoursSel] = useState(24);
@@ -319,7 +321,8 @@ function LedgerTab() {
 }
 
 /* ----------------------------- 额度总览 ----------------------------- */
-function QuotaTab() {
+/** 额度总览：卡片网格已响应式，桌面/移动共用。 */
+export function QuotaTab() {
   const { data, loading, error, reload } = useAsync(getPanelUsageQuotaApi);
   return (
     <div className="space-y-3">
@@ -370,8 +373,14 @@ function planLabel(plan: string): string {
 }
 
 /** 按计费套餐取该流水的实际变动值（coding=请求次数，其余=token） */
-function deltaFor(l: UsageLedgerItem): number {
+export function deltaFor(l: UsageLedgerItem): number {
   return l.billing_plan === 'coding' ? l.request_delta : Number(l.token_delta);
+}
+
+/** 我的用量：按视口分发桌面/移动视图。 */
+function Usage() {
+  const isMobile = useIsMobile();
+  return isMobile ? <UsageMobile /> : <UsageDesktop />;
 }
 
 export default Usage;

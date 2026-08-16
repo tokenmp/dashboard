@@ -1,5 +1,5 @@
 import { useEffect } from 'react';
-import { NavLink, Outlet, useNavigate } from 'react-router-dom';
+import { Link, NavLink, Outlet, useNavigate } from 'react-router-dom';
 import { LayoutDashboard, ScrollText, Gauge, KeyRound, Gift, Cpu, Megaphone, BookOpen, UserCircle, ShieldCheck, LogOut, ChevronDown } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator } from '@/components/ui/dropdown-menu';
@@ -7,6 +7,9 @@ import { useAuthStore } from '@/store/auth';
 import { useRole } from '@/hooks/useRole';
 import { NotificationBell } from '@/components/NotificationBell';
 import { ScrollingAnnouncement } from '@/components/ScrollingAnnouncement';
+import { BrandLogo } from '@/components/BrandLogo';
+import { MobileTabBar } from '@/components/mobile';
+import type { MobileTabItem } from '@/components/mobile';
 import { getPanelNoticesApi } from '@/api/panel';
 import { cn } from '@/lib/utils';
 
@@ -30,6 +33,15 @@ const NAV_GROUPS: { label: string; items: { to: string; label: string; icon: typ
   ]},
 ];
 
+/** 移动端底部五 Tab：概览 / 模型 / 密钥 / 日志 / 我的（其余入口收进「我的」页） */
+const PANEL_TABS: MobileTabItem[] = [
+  { to: '/panel', label: '概览', icon: LayoutDashboard, end: true },
+  { to: '/panel/models', label: '模型', icon: Cpu },
+  { to: '/panel/keys', label: '密钥', icon: KeyRound },
+  { to: '/panel/requests', label: '日志', icon: ScrollText },
+  { to: '/panel/me', label: '我的', icon: UserCircle },
+];
+
 /**
  * 用户端布局（/panel）：精简侧栏 + 顶部 Header（通知铃铛与登出）+ 内容区 Outlet。
  * 与管理端 Layout 共用通知/登出，仅导航项不同。
@@ -50,7 +62,7 @@ function PanelLayout() {
   };
 
   return (
-    <div className="flex h-screen overflow-hidden bg-background">
+    <div className="flex h-dvh overflow-hidden bg-background">
       <aside className="hidden w-56 shrink-0 flex-col border-r bg-card/50 md:flex">
         <div className="flex h-14 items-center border-b px-5">
           <span className="text-base font-semibold">TokenMP 面板</span>
@@ -94,8 +106,12 @@ function PanelLayout() {
       </aside>
 
       <div className="flex flex-1 flex-col overflow-hidden">
-        <header className="flex h-14 shrink-0 items-center justify-between border-b px-6">
-          <span className="text-lg font-semibold md:hidden">TokenMP 面板</span>
+        <header className="flex h-14 shrink-0 items-center justify-between border-b px-4 md:px-6">
+          {/* 移动端：logo + 品牌名（点击回首页），用户菜单收进「我的」页 */}
+          <Link to="/" className="flex items-center gap-2 md:hidden">
+            <BrandLogo className="h-[22px] w-[22px]" />
+            <span className="text-[15px] font-bold">TokenMP</span>
+          </Link>
           <ScrollingAnnouncement
             fetcher={getPanelNoticesApi}
             viewAllTo="/panel/notices"
@@ -106,7 +122,7 @@ function PanelLayout() {
             <NotificationBell />
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                <Button variant="outline" size="sm">
+                <Button variant="outline" size="sm" className="hidden md:inline-flex">
                   <UserCircle className="mr-1.5 h-4 w-4" />
                   <span className="max-w-[180px] truncate">{user?.email ?? '—'}</span>
                   <ChevronDown className="ml-1 h-3.5 w-3.5 opacity-50" />
@@ -138,9 +154,10 @@ function PanelLayout() {
             </DropdownMenu>
           </div>
         </header>
-        <main className="flex-1 overflow-y-auto p-6">
+        <main className="flex-1 overflow-y-auto p-4 md:p-6">
           <Outlet />
         </main>
+        <MobileTabBar tabs={PANEL_TABS} />
       </div>
     </div>
   );
