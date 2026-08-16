@@ -34,13 +34,15 @@ export function formatPercent(rate: number | null | undefined, digits = 2): stri
 }
 
 /**
- * 将后端返回的时间（UTC，形如 `YYYY-MM-DD HH:MM:SS[.u]`）解析为本地时区的 dayjs 对象。
- * 数据库统一以 UTC 存储，字符串不带时区后缀，这里按 UTC 解析后交由浏览器本地时区展示。
+ * 将后端返回的时间字符串解析为用户本地时区的 dayjs 对象。
+ * 后端 PG 会话时区为 Asia/Shanghai：不带时区后缀的 `YYYY-MM-DD HH:MM:SS`
+ * 是北京时间墙钟值——须按 +08:00 解析（此前误按 UTC 解析导致展示偏移）。
+ * 自带偏移（+08:00/Z 等）的字符串原样解析。
  */
 function parseServerTime(s: string): dayjs.Dayjs {
-  // 规范化：空格分隔改为 ISO 的 T，补齐 UTC 后缀
-  const iso = s.replace(' ', 'T') + (/[+-]\d{2}:?\d{2}$|Z$/.test(s) ? '' : 'Z');
-  return dayjs.utc(iso).local();
+  // 规范化：空格分隔改为 ISO 的 T；无时区后缀则按服务端会话时区（北京时间）补齐
+  const iso = s.replace(' ', 'T') + (/[+-]\d{2}:?\d{2}$|Z$/.test(s) ? '' : '+08:00');
+  return dayjs(iso).local();
 }
 
 /**
