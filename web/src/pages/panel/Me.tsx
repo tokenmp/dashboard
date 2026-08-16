@@ -9,6 +9,19 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { formatCompact, formatNumber } from '@/utils/format';
 import { cn } from '@/lib/utils';
 
+
+/** 重置倒计时（简版，与桌面 QuotaCards 口径一致）：>1 天显示「N天M时」，>1 时「M时S分」，否则「S分 / 即将重置」 */
+function formatCountdownShort(ms: number): string {
+  if (ms <= 0) return '即将重置';
+  const totalMin = Math.floor(ms / 60_000);
+  const d = Math.floor(totalMin / 1440);
+  const h = Math.floor((totalMin % 1440) / 60);
+  const m = totalMin % 60;
+  if (d > 0) return m > 0 || h > 0 ? `${d}天${h}时` : `${d}天`;
+  if (h > 0) return `${h}时${m}分`;
+  return m > 0 ? `${m}分` : '即将重置';
+}
+
 /** 「我的」页入口行（icon 底色 + 标题/副标题 + 右箭头） */
 function MeCell({
   to,
@@ -149,27 +162,53 @@ function PanelMe() {
                       </div>
                     </div>
                   </div>
-                  {/* 用量摘要（与额度总览同源）：次卡显示各窗口 已用/限额，Token 卡显示余额 */}
-                  {q && (
-                    <div className="mt-1 flex flex-wrap gap-x-3 gap-y-0.5 pl-1 text-[10.5px] text-muted-foreground">
-                      {q.unit === 'requests' ? (
-                        (q.windows ?? []).map((w) => (
-                          <span key={w.key}>
-                            {w.label ?? w.key}{' '}
-                            <span className="font-medium tabular-nums text-foreground">
-                              {formatNumber(w.used ?? 0)}
-                            </span>
-                            {w.limit != null ? ` / ${formatNumber(w.limit)}` : ' / 不限'}
+                  {/* 用量（与额度总览同源）：次卡=各窗口进度条（5h/周/月由套餐配置决定，全量渲染）；
+                      Token 卡=余额。进度条 ≥70% 琥珀、≥90% 红。 */}
+                  {q && q.unit === 'requests'
+                    ? (q.windows ?? []).map((w) => {
+                        const used = w.used ?? 0;
+                        const limit = w.limit;
+                        const unlimited = limit == null;
+                        const pct = unlimited ? 0 : Math.round(Math.min(1, used / limit) * 100);
+                        return (
+                          <div key={w.key} className="mt-1.5 pl-1">
+                            <div className="flex items-center justify-between text-[10.5px]">
+                              <span className="text-muted-foreground">{w.label}</span>
+                              <span className="tabular-nums text-muted-foreground">
+                                已用 <span className="font-semibold text-foreground">{formatNumber(used)}</span>
+                                {unlimited ? ' · 不限' : ` / ${formatNumber(limit)}`}
+                              </span>
+                            </div>
+                            <div className="mt-1 h-1 w-full overflow-hidden rounded-full bg-muted">
+                              <div
+                                className={cn(
+                                  'h-full rounded-full transition-all',
+                                  pct >= 90 ? 'bg-destructive' : pct >= 70 ? 'bg-amber-500' : 'bg-primary',
+                                )}
+                                style={unlimited ? { width: '100%', opacity: 0.15 } : { width: pct + '%' }}
+                              />
+                            </div>
+                            {!unlimited && (
+                              <div className="mt-0.5 flex items-center justify-between text-[9.5px] tabular-nums text-muted-foreground">
+                                <span>剩余 {formatNumber(Math.max(0, limit - used))}</span>
+                                {w.resetAt && (
+                                  <span>
+                                    {w.key === 'h5' ? '恢复' : '重置'} · {formatCountdownShort(new Date(w.resetAt).getTime() - Date.now())}
+                                  </span>
+                                )}
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })
+                    : q && (
+                        <div className="mt-1 flex flex-wrap gap-x-3 gap-y-0.5 pl-1 text-[10.5px] text-muted-foreground">
+                          <span>
+                            余额 <span className="font-medium tabular-nums text-foreground">{formatCompact(q.balance)}</span> {q.unit}
+                            {q.reserved ? <span className="ml-1">（占用 {formatCompact(q.reserved)}）</span> : null}
                           </span>
-                        ))
-                      ) : (
-                        <span>
-                          余额 <span className="font-medium tabular-nums text-foreground">{formatCompact(q.balance)}</span> {q.unit}
-                          {q.reserved ? <span className="ml-1">（占用 {formatCompact(q.reserved)}）</span> : null}
-                        </span>
+                        </div>
                       )}
-                    </div>
-                  )}
                 </div>
               );
             })}
