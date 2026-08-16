@@ -1,5 +1,6 @@
+import { useState } from 'react';
 import { NavLink, useNavigate } from 'react-router-dom';
-import { ShieldCheck, Megaphone, Gift, BookOpen, UserCircle, Gauge, LogOut, ChevronRight } from 'lucide-react';
+import { ShieldCheck, Megaphone, Gift, BookOpen, UserCircle, Gauge, LogOut, ChevronRight, ChevronDown } from 'lucide-react';
 import { useAsync } from '@/hooks/useAsync';
 import { useRole } from '@/hooks/useRole';
 import { useAuthStore } from '@/store/auth';
@@ -57,6 +58,7 @@ const PLAN_TYPE_META: Record<string, { label: string; cls: string }> = {
 /** 「我的」页（/panel/me，移动端第 5 Tab；桌面亦可访问）。
  * 身份卡 → 我的套餐 → 管理后台（admin 可见）→ 服务入口（公告带最新一条摘要）→ 账户入口 → 登出。 */
 function PanelMe() {
+  const [plansExpanded, setPlansExpanded] = useState(false);
   const navigate = useNavigate();
   const logout = useAuthStore((s) => s.logout);
   const { user } = useRole();
@@ -95,38 +97,72 @@ function PanelMe() {
         </div>
       </div>
 
-      {/* 我的套餐：固定单行高度区块（加载中/有套餐/无套餐高度一致），杜绝加载完成推挤下方入口 */}
-      <div className="mt-2 rounded-xl border p-3">
-        <div className="text-[10.5px] text-muted-foreground">
-          我的套餐{activePlans.length > 1 ? `（${activePlans.length}）` : ''}
-        </div>
-        <div className="mt-1 flex h-7 items-center gap-2">
-          {plansLoading ? (
-            <Skeleton className="h-4 w-40" />
-          ) : !firstPlan ? (
-            <span className="text-[11.5px] text-muted-foreground">暂无生效套餐 · 可通过兑换码获取</span>
-          ) : (
-            <>
-              {firstPlanMeta && (
-                <span className={cn('shrink-0 rounded-full px-2 py-0.5 text-[10px] font-medium', firstPlanMeta.cls)}>
-                  {firstPlanMeta.label}
-                </span>
-              )}
-              <div className="min-w-0 flex-1 truncate text-[12px]">
-                {firstPlan.plan?.name ?? '未命名套餐'}
-                <span className="ml-1.5 text-[10px] text-muted-foreground">
-                  {firstPlan.expires_at ? `至 ${firstPlan.expires_at.slice(0, 10)}` : '长期有效'}
-                </span>
-              </div>
-              {activePlans.length > 1 && (
-                <span className="shrink-0 rounded-full bg-muted px-1.5 py-0.5 text-[10px] text-muted-foreground">
-                  +{activePlans.length - 1}
-                </span>
-              )}
-            </>
+      {/* 我的套餐：收起时固定单行高度（加载中/有/无套餐一致，杜绝加载完成推挤下方入口）；
+          多套餐时点击区块展开全部（高度变化由用户主动触发，与密钥卡点卡展开交互一致） */}
+      <button
+        type="button"
+        className="mt-2 block w-full rounded-xl border p-3 text-left active:bg-accent/40"
+        onClick={() => setPlansExpanded((v) => !v)}
+        disabled={plansLoading || !firstPlan}
+        aria-expanded={plansExpanded}
+      >
+        <div className="flex items-center justify-between">
+          <span className="text-[10.5px] text-muted-foreground">
+            我的套餐{activePlans.length > 1 ? `（${activePlans.length}）` : ''}
+          </span>
+          {activePlans.length > 1 && (
+            <span className="flex items-center gap-0.5 text-[10px] text-muted-foreground">
+              {plansExpanded ? '收起' : '全部'}
+              <ChevronDown className={cn('h-3 w-3 transition-transform', plansExpanded && 'rotate-180')} />
+            </span>
           )}
         </div>
-      </div>
+        {plansLoading ? (
+          <div className="mt-1 flex h-7 items-center">
+            <Skeleton className="h-4 w-40" />
+          </div>
+        ) : !firstPlan ? (
+          <div className="mt-1 flex h-7 items-center">
+            <span className="text-[11.5px] text-muted-foreground">暂无生效套餐 · 可通过兑换码获取</span>
+          </div>
+        ) : plansExpanded ? (
+          <div className="mt-1.5 space-y-2">
+            {activePlans.map((up) => {
+              const meta = PLAN_TYPE_META[up.plan?.plan_type ?? ''] ?? { label: up.plan?.plan_type ?? '套餐', cls: 'bg-muted text-muted-foreground' };
+              return (
+                <div key={up.id} className="flex items-center gap-2">
+                  <span className={cn('shrink-0 rounded-full px-2 py-0.5 text-[10px] font-medium', meta.cls)}>{meta.label}</span>
+                  <div className="min-w-0 flex-1">
+                    <div className="truncate text-[12.5px] font-medium">{up.plan?.name ?? '未命名套餐'}</div>
+                    <div className="truncate text-[10px] text-muted-foreground">
+                      {up.expires_at ? `有效期至 ${up.expires_at.slice(0, 10)}` : '长期有效'}
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        ) : (
+          <div className="mt-1 flex h-7 items-center gap-2">
+            {firstPlanMeta && (
+              <span className={cn('shrink-0 rounded-full px-2 py-0.5 text-[10px] font-medium', firstPlanMeta.cls)}>
+                {firstPlanMeta.label}
+              </span>
+            )}
+            <div className="min-w-0 flex-1 truncate text-[12px]">
+              {firstPlan.plan?.name ?? '未命名套餐'}
+              <span className="ml-1.5 text-[10px] text-muted-foreground">
+                {firstPlan.expires_at ? `至 ${firstPlan.expires_at.slice(0, 10)}` : '长期有效'}
+              </span>
+            </div>
+            {activePlans.length > 1 && (
+              <span className="shrink-0 rounded-full bg-muted px-1.5 py-0.5 text-[10px] text-muted-foreground">
+                +{activePlans.length - 1}
+              </span>
+            )}
+          </div>
+        )}
+      </button>
 
       {/* admin 专属：管理后台 */}
       {user?.role === 'admin' && (
