@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { RefreshCw, Search } from 'lucide-react';
-import { getPanelUsageLedgerApi, getPanelUsageQuotaApi, getPanelUsageTimelineApi, getPanelUsageByModelApi } from '@/api/panel';
+import { getPanelUsageLedgerApi, getPanelOverviewApi, getPanelUsageTimelineApi, getPanelUsageByModelApi } from '@/api/panel';
 import { usePagedQuery } from '@/hooks/usePagedQuery';
 import { useUrlQueryState } from '@/hooks/useUrlQueryState';
 import { useAsync } from '@/hooks/useAsync';
@@ -323,14 +323,17 @@ function LedgerTab() {
 /* ----------------------------- 额度总览 ----------------------------- */
 /** 额度总览：卡片网格已响应式，桌面/移动共用。 */
 export function QuotaTab() {
-  const { data, loading, error, reload } = useAsync(getPanelUsageQuotaApi);
+  // 数据源用 /panel/overview 的 quota 字段（QuotaService 窗口版：5h/周/月+倒计时）。
+  // /panel/usage/quota 为旧版扁平汇总（无 windows/planName），QuotaCard 无法展示窗口。
+  const { data, loading, error, reload } = useAsync(getPanelOverviewApi);
+  const quota: UserQuota | null = data ? { role: 'user', plans: data.quota } : null;
   return (
     <div className="space-y-3">
       <div className="flex justify-end">
         <Button variant="outline" size="sm" onClick={reload} disabled={loading}><RefreshCw className={`mr-1.5 h-4 w-4 ${loading ? 'animate-spin' : ''}`} />刷新</Button>
       </div>
       {error && <Card className="border-destructive"><CardContent className="py-3 text-sm text-destructive">{error}</CardContent></Card>}
-      {loading ? <Skeleton className="h-48 w-full" /> : data?.role === 'user' ? <UserQuotaView data={data} /> : null}
+      {loading ? <Skeleton className="h-48 w-full" /> : quota ? <UserQuotaView data={quota} /> : null}
     </div>
   );
 }

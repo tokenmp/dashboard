@@ -4,7 +4,7 @@ import { ShieldCheck, Megaphone, Gift, BookOpen, UserCircle, Gauge, LogOut, Chev
 import { useAsync } from '@/hooks/useAsync';
 import { useRole } from '@/hooks/useRole';
 import { useAuthStore } from '@/store/auth';
-import { getPanelNoticesApi, getPanelPlansApi, getPanelUsageQuotaApi } from '@/api/panel';
+import { getPanelNoticesApi, getPanelPlansApi, getPanelOverviewApi } from '@/api/panel';
 import { Skeleton } from '@/components/ui/skeleton';
 import { formatCompact, formatNumber } from '@/utils/format';
 import { cn } from '@/lib/utils';
@@ -84,15 +84,18 @@ function PanelMe() {
   // 我的套餐（身份卡下方展示）。收起态固定单行高度：加载中占位、多套餐合并 +N、
   // 空时也是一行提示——高度恒定，加载完成不会推挤下方入口（避免误触公告/兑换码）。
   const { data: plans, loading: plansLoading } = useAsync(getPanelPlansApi, []);
-  const activePlans = (plans ?? []).filter((p) => p.status === 'active');
+  const activePlans = (plans ?? []).filter(
+    (p) => p.status === 'active' && (!p.expires_at || new Date(p.expires_at).getTime() > Date.now()),
+  );
   const firstPlan = activePlans[0];
   const firstPlanMeta = firstPlan
     ? PLAN_TYPE_META[firstPlan.plan?.plan_type ?? ''] ?? { label: firstPlan.plan?.plan_type ?? '套餐', cls: 'bg-muted text-muted-foreground' }
     : null;
 
-  // 套餐用量（与「账单·额度总览」同源 getPanelUsageQuotaApi），展开时按套餐名/类型匹配展示
-  const { data: quota } = useAsync(getPanelUsageQuotaApi, []);
-  const quotaPlans = quota?.role === 'user' ? quota.plans : [];
+  // 套餐用量：取 /panel/overview 的 quota 字段（QuotaService 窗口版，含 5h/周/月与倒计时）。
+  // 注意 /panel/usage/quota 是旧版扁平汇总（无 windows/planName），不适合本展示。
+  const { data: overview } = useAsync(getPanelOverviewApi, []);
+  const quotaPlans = overview?.quota ?? [];
   const quotaFor = (up: (typeof activePlans)[number]) =>
     quotaPlans.find((q) => q.planName && q.planName === up.plan?.name) ??
     quotaPlans.find((q) => q.billingPlan === up.plan_type);
@@ -164,7 +167,12 @@ function PanelMe() {
                   </div>
                   {/* 用量（与额度总览同源）：次卡=各窗口进度条（5h/周/月由套餐配置决定，全量渲染）；
                       Token 卡=余额。进度条 ≥70% 琥珀、≥90% 红。 */}
-                  {q && q.unit === 'requests'
+                  {q && q.unit === 'requests' && !(q.windows ?? []).length && (
+                    <div className="mt-1 pl-1 text-[10.5px] text-muted-foreground">
+                      已用 <span className="font-semibold tabular-nums text-foreground">{formatNumber(q.used ?? Math.max(0, -(q.balance ?? 0)))}</span> 次
+                    </div>
+                  )}
+                  {q && q.unit === 'requests' && (q.windows ?? []).length > 0
                     ? (q.windows ?? []).map((w) => {
                         const used = w.used ?? 0;
                         const limit = w.limit;
@@ -201,11 +209,24 @@ function PanelMe() {
                           </div>
                         );
                       })
-                    : q && (
+                    : q && q.unit !== 'requests' && q.mode === 'balance' ? (
+                        /* 纯计量预付费：余额 = 充值 − 已用（后端 balance 分支） */
                         <div className="mt-1 flex flex-wrap gap-x-3 gap-y-0.5 pl-1 text-[10.5px] text-muted-foreground">
                           <span>
-                            余额 <span className="font-medium tabular-nums text-foreground">{formatCompact(q.balance)}</span> {q.unit}
-                            {q.reserved ? <span className="ml-1">（占用 {formatCompact(q.reserved)}）</span> : null}
+                            余额 <span className="font-medium tabular-nums text-foreground">{formatCompact(q.balance ?? q.available ?? 0)}</span> {q.unit}
+                            {q.reserved ? <span className="ml-1">（预扣 {formatCompact(q.reserved)}）</span> : null}
+                          </span>
+                        </div>
+                      ) : q && q.unit !== 'requests' && (
+                        /* 固定额度套餐（token/image 带 token_limit，后端 capped 分支，无 balance 字段） */
+                        <div className="mt-1 flex flex-wrap gap-x-3 gap-y-0.5 pl-1 text-[10.5px] text-muted-foreground">
+                          <span>
+                            剩余 <span className="font-medium tabular-nums text-foreground">{formatCompact(q.available ?? 0)}</span>
+                            <span className="ml-1">/ 总量 {formatCompact(q.total ?? q.limit ?? 0)}</span>
+                          </span>
+                          <span>
+                            已用 <span className="tabular-nums text-foreground">{formatCompact(q.used ?? 0)}</span>
+                            {q.reserved ? <span className="ml-1 text-muted-foreground">（预扣 {formatCompact(q.reserved)}）</span> : null}
                           </span>
                         </div>
                       )}
