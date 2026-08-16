@@ -201,11 +201,24 @@ function PanelMe() {
                           </div>
                         );
                       })
-                    : q && (
+                    : q && q.mode === 'balance' ? (
+                        /* 纯计量预付费：余额 = 充值 − 已用（后端 balance 分支） */
                         <div className="mt-1 flex flex-wrap gap-x-3 gap-y-0.5 pl-1 text-[10.5px] text-muted-foreground">
                           <span>
-                            余额 <span className="font-medium tabular-nums text-foreground">{formatCompact(q.balance)}</span> {q.unit}
-                            {q.reserved ? <span className="ml-1">（占用 {formatCompact(q.reserved)}）</span> : null}
+                            余额 <span className="font-medium tabular-nums text-foreground">{formatCompact(q.balance ?? q.available ?? 0)}</span> {q.unit}
+                            {q.reserved ? <span className="ml-1">（预扣 {formatCompact(q.reserved)}）</span> : null}
+                          </span>
+                        </div>
+                      ) : q && (
+                        /* 固定额度套餐（token/image 带 token_limit，后端 capped 分支，无 balance 字段） */
+                        <div className="mt-1 flex flex-wrap gap-x-3 gap-y-0.5 pl-1 text-[10.5px] text-muted-foreground">
+                          <span>
+                            剩余 <span className="font-medium tabular-nums text-foreground">{formatCompact(q.available ?? 0)}</span>
+                            <span className="ml-1">/ 总量 {formatCompact(q.total ?? q.limit ?? 0)}</span>
+                          </span>
+                          <span>
+                            已用 <span className="tabular-nums text-foreground">{formatCompact(q.used ?? 0)}</span>
+                            {q.reserved ? <span className="ml-1 text-muted-foreground">（预扣 {formatCompact(q.reserved)}）</span> : null}
                           </span>
                         </div>
                       )}
