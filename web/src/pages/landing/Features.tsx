@@ -1,5 +1,6 @@
 import { Check, BarChart3, KeyRound, Percent, Shield, Shuffle, Ticket } from 'lucide-react';
-import { CtaBand } from './components';
+import { useIsMobile } from '@/hooks/use-is-mobile';
+import { CtaBand, CtaBandMobile } from './components';
 
 /**
  * 功能特性页：六组能力，左右交替、顶线对齐（首组为纯文字版式）。
@@ -74,6 +75,11 @@ const FEATURES = [
 ];
 
 export default function Features() {
+  const isMobile = useIsMobile();
+
+  // 移动端专属分支：桌面交替双栏版式完全不渲染（视觉零变化）
+  if (isMobile) return <FeaturesMobile />;
+
   return (
     <main>
       <section className="mx-auto max-w-6xl divide-y divide-zinc-100 px-6">
@@ -102,6 +108,35 @@ export default function Features() {
         )}
       </section>
       <CtaBand title="想立即体验这些能力？" sub="注册即可获得体验额度。" />
+    </main>
+  );
+}
+
+/**
+ * 移动端功能页（v3 ⑮ 定稿）：桌面交替双栏改为单列特性卡列表
+ * （32px 圆角图标底 + 标题 + 11px 描述），要点与示意图不随卡片展示，详情进桌面版。
+ */
+function FeaturesMobile() {
+  return (
+    <main className="pb-1">
+      <h1 className="px-4 pt-4 text-[19px] font-extrabold tracking-tight text-zinc-900">功能特性</h1>
+      <div className="mt-2.5 flex flex-col gap-[7px] px-4">
+        {FEATURES.map((f) => (
+          <div
+            key={f.title}
+            className="rounded-[12px] border border-zinc-100 bg-gradient-to-b from-zinc-50 to-white p-3"
+          >
+            <div className="flex items-center gap-2.5">
+              <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-[9px] bg-blue-600/10 text-blue-600">
+                <f.icon className="h-4 w-4" />
+              </span>
+              <h2 className="text-[13px] font-bold text-zinc-900">{f.title}</h2>
+            </div>
+            <p className="mt-2 text-[11px] leading-[1.55] text-zinc-500">{f.desc}</p>
+          </div>
+        ))}
+      </div>
+      <CtaBandMobile title="想立即体验这些能力？" sub="注册即可获得体验额度。" />
     </main>
   );
 }

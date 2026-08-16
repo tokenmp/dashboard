@@ -40,6 +40,8 @@ import { type ColumnDef } from '@tanstack/react-table';
 import { DataTable } from '@/components/ui/data-table';
 import { DataTableColumnHeader } from '@/components/ui/data-table-column-header';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { useIsMobile } from '@/hooks/use-is-mobile';
+import { KeysMobile } from './Keys.mobile';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -65,8 +67,8 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
 
-type Kind = 'api' | 'bot';
-type KeyRow = {
+export type Kind = 'api' | 'bot';
+export type KeyRow = {
   id: string;
   name: string;
   scope?: string | null;
@@ -77,7 +79,8 @@ type KeyRow = {
   createdAt: string;
 };
 
-function Keys() {
+/** 「我的密钥」桌面视图 */
+function KeysDesktop() {
   const { data, loading, error, reload } = useAsync(async () => {
     const [apiKeys, botKeys] = await Promise.all([getPanelKeysApi(), getPanelBotKeysApi()]);
     return { apiKeys, botKeys };
@@ -244,14 +247,15 @@ function KeyTable({
   return <DataTable columns={columns} data={rows} />;
 }
 
-/** 新建密钥弹窗（输入名称） */
-function CreateKeyDialog({ open, kind, submitting, onClose, onSubmit }: {
+/** 新建密钥弹窗（输入名称），桌面/移动共用 */
+export function CreateKeyDialog({ open, kind, submitting, onClose, onSubmit }: {
   open: boolean;
   kind: Kind;
   submitting: boolean;
   onClose: () => void;
   onSubmit: (name: string) => Promise<unknown>;
 }) {
+  const isMobile = useIsMobile();
   const [name, setName] = useState('');
   useEffect(() => { if (open) setName(''); }, [open]);
   const submit = (e: React.FormEvent) => {
@@ -268,7 +272,7 @@ function CreateKeyDialog({ open, kind, submitting, onClose, onSubmit }: {
         <form onSubmit={submit} className="space-y-3">
           <div className="space-y-1.5">
             <Label htmlFor="k-name">名称</Label>
-            <Input id="k-name" value={name} onChange={(e) => setName(e.target.value)} placeholder="可选" autoFocus />
+            <Input id="k-name" value={name} onChange={(e) => setName(e.target.value)} placeholder="可选" autoFocus={!isMobile} />
           </div>
           <DialogFooter>
             <Button type="button" variant="outline" onClick={onClose}>取消</Button>
@@ -280,8 +284,8 @@ function CreateKeyDialog({ open, kind, submitting, onClose, onSubmit }: {
   );
 }
 
-/** 创建成功后明文一次性展示（仅此一次 + 复制） */
-function RevealKeyDialog({ data, onClose }: { data: CreatedKey | null; onClose: () => void }) {
+/** 创建成功后明文一次性展示（仅此一次 + 复制），桌面/移动共用 */
+export function RevealKeyDialog({ data, onClose }: { data: CreatedKey | null; onClose: () => void }) {
   const [copied, setCopied] = useState(false);
   const [importApp, setImportApp] = useState<CCSwitchApp>('claude');
   const [importExpanded, setImportExpanded] = useState(false);
@@ -348,8 +352,8 @@ function RevealKeyDialog({ data, onClose }: { data: CreatedKey | null; onClose: 
           </div>
         </div>
 
-        {/* 导入到指定工具（CC Switch）*/}
-        <div className="rounded-lg border">
+        {/* 导入到指定工具（CC Switch，桌面端专属：移动端无 CC Switch 唤起能力，隐藏） */}
+        <div className="hidden rounded-lg border md:block">
           <button
             type="button"
             onClick={() => setImportExpanded((v) => !v)}
@@ -416,13 +420,14 @@ function RevealKeyDialog({ data, onClose }: { data: CreatedKey | null; onClose: 
   );
 }
 
-/** 改名弹窗 */
-function RenameDialog({ state, submitting, onClose, onSubmit }: {
+/** 改名弹窗，桌面/移动共用 */
+export function RenameDialog({ state, submitting, onClose, onSubmit }: {
   state: { kind: Kind; row: KeyRow } | null;
   submitting: boolean;
   onClose: () => void;
   onSubmit: (row: KeyRow, name: string) => Promise<unknown>;
 }) {
+  const isMobile = useIsMobile();
   const [name, setName] = useState('');
   const open = state !== null;
   useEffect(() => { if (open && state) setName(state.row.name); }, [open, state]);
@@ -438,7 +443,7 @@ function RenameDialog({ state, submitting, onClose, onSubmit }: {
         <form onSubmit={submit} className="space-y-3">
           <div className="space-y-1.5">
             <Label htmlFor="r-name">名称</Label>
-            <Input id="r-name" value={name} onChange={(e) => setName(e.target.value)} autoFocus />
+            <Input id="r-name" value={name} onChange={(e) => setName(e.target.value)} autoFocus={!isMobile} />
           </div>
           <DialogFooter>
             <Button type="button" variant="outline" onClick={onClose}>取消</Button>
@@ -450,4 +455,8 @@ function RenameDialog({ state, submitting, onClose, onSubmit }: {
   );
 }
 
-export default Keys;
+/** 「我的密钥」页：按视口分发桌面表格 / 移动卡片流 */
+export default function Keys() {
+  const isMobile = useIsMobile();
+  return isMobile ? <KeysMobile /> : <KeysDesktop />;
+}

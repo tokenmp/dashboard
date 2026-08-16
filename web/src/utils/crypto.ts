@@ -27,6 +27,14 @@ export async function rsaOaepEncrypt(
   spkiBase64: string,
   plaintext: string,
 ): Promise<string> {
+  // secure context 守卫：http + 非 localhost 访问时 crypto.subtle 不存在，
+  // 直接抛可读错误，避免 "Cannot read properties of undefined (reading 'importKey')"
+  if (typeof crypto === 'undefined' || !crypto.subtle) {
+    throw new Error(
+      '当前访问不是安全上下文（HTTPS 或 localhost），浏览器禁用了密码加密所需的 WebCrypto。请通过 HTTPS 或 localhost 访问后重试。',
+    );
+  }
+
   // base64 → DER bytes
   const der = Uint8Array.from(atob(spkiBase64), (c) => c.charCodeAt(0));
 

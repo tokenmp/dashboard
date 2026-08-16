@@ -1,8 +1,9 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { getSitePlansApi } from '@/api/site';
+import { useIsMobile } from '@/hooks/use-is-mobile';
 import type { SitePlan } from '@/types/site';
-import { PlanCard } from './Home';
+import { PlanCard, PlanCardMobile } from './Home';
 
 /**
  * 套餐页：数据来自公开接口 /api/v1/site/plans。
@@ -42,6 +43,7 @@ function categoryKey(category: string | null): string {
 }
 
 export default function Plans() {
+  const isMobile = useIsMobile();
   const [plans, setPlans] = useState<SitePlan[] | null>(null);
   const [type, setType] = useState('');
   /** 每个计费类型各自选中的分类 key（切换类型后回到该类型的首个分类） */
@@ -88,6 +90,90 @@ export default function Plans() {
         .sort((a, b) => a.price - b.price),
     [plans, type, activeCategory],
   );
+
+  // 移动端专属分支（v3 ⑰ 定稿）：筛选改紧凑分段控件 + 横滑分类 chips，套餐卡单列纵向（推荐蓝描边 + 角标 + 全宽 CTA），桌面网格不渲染
+  if (isMobile) {
+    return (
+      <main className="pb-1">
+        {plans === null ? (
+          <p className="mx-3.5 mt-4 rounded-[12px] border border-dashed border-zinc-200 px-4 py-8 text-center text-xs text-zinc-400">
+            加载中…
+          </p>
+        ) : typeTabs.length === 0 ? (
+          <p className="mx-3.5 mt-4 rounded-[12px] border border-dashed border-zinc-200 px-4 py-8 text-center text-xs text-zinc-400">
+            暂无在售套餐
+          </p>
+        ) : (
+          <>
+            {/* 页头：标题 + 副文（与首页套餐区块口径一致） */}
+            <div className="px-4 pt-4">
+              <h1 className="text-[19px] font-extrabold tracking-tight text-zinc-900">简单透明的定价</h1>
+              <p className="mt-1.5 text-[12.5px] text-zinc-500">套餐额度随周期自动重置，随时可用兑换码补充。</p>
+            </div>
+
+            {/* 计费方式：全宽分段控件 */}
+            <div className="mt-3 px-4">
+              <div className="flex rounded-[10px] bg-zinc-100 p-[3px]">
+                {typeTabs.map((t) => (
+                  <button
+                    key={t.type}
+                    type="button"
+                    onClick={() => setType(t.type)}
+                    className={`flex-1 cursor-pointer rounded-[8px] py-[6px] text-xs font-medium transition ${
+                      type === t.type ? 'bg-white text-zinc-900 shadow-sm' : 'text-zinc-500'
+                    }`}
+                  >
+                    {t.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* 分类 chips：横滑，隐藏滚动条 */}
+            {categories.length > 1 && (
+              <div className="mt-2.5 flex gap-1.5 overflow-x-auto px-4 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+                {categories.map(([key, label]) => (
+                  <button
+                    key={key}
+                    type="button"
+                    onClick={() => setCategoryByType((prev) => ({ ...prev, [type]: key }))}
+                    className={`h-[26px] shrink-0 cursor-pointer rounded-full px-2.5 text-[11.5px] transition ${
+                      activeCategory === key
+                        ? 'bg-zinc-900 font-medium text-white'
+                        : 'border border-zinc-200 bg-white text-zinc-500'
+                    }`}
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
+            )}
+
+            {activeMeta && <p className="px-4 pt-2 text-[11px] text-zinc-400">{activeMeta.sub}</p>}
+
+            {/* 套餐卡片：单列纵向 */}
+            <div className="mt-2.5 flex flex-col gap-2 px-4">
+              {visible.map((plan, i) => (
+                <PlanCardMobile key={plan.id} plan={plan} featured={visible.length >= 3 && i === 1} />
+              ))}
+            </div>
+            {visible.length === 0 && (
+              <p className="mx-3.5 mt-2.5 rounded-[12px] border border-dashed border-zinc-200 px-4 py-8 text-center text-xs text-zinc-400">
+                该分类暂无套餐
+              </p>
+            )}
+
+            <p className="mt-6 border-t border-zinc-100 px-4 pt-5 text-center text-xs text-zinc-500">
+              额度怎么算？{' '}
+              <Link to="/faq#billing" className="font-medium text-blue-600">
+                计费规则与换算示例见常见问题 →
+              </Link>
+            </p>
+          </>
+        )}
+      </main>
+    );
+  }
 
   return (
     <main className="mx-auto max-w-6xl px-6 py-14">

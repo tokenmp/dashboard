@@ -12,6 +12,7 @@ import {
 } from 'lucide-react';
 import { getPanelOverviewApi, getPanelOverviewModelsApi } from '@/api/panel';
 import { useAsync } from '@/hooks/useAsync';
+import { useIsMobile } from '@/hooks/use-is-mobile';
 import { StatCard } from '@/components/StatCard';
 import { QuotaCard } from '@/components/QuotaCards';
 import { TrendChart } from '@/components/TrendChart';
@@ -22,6 +23,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
 import { formatCompact, formatNumber, formatPercent } from '@/utils/format';
 import type { UserOverview, TrendPoint, QuotaItem } from '@/types/dashboard';
+import { OverviewMobile } from './Overview.mobile';
 
 /** 概览页始终保证渲染的两个核心套餐槽位（编程 / Token） */
 type CorePlanType = 'coding' | 'token';
@@ -40,17 +42,17 @@ const CORE_PLAN_META: Record<CorePlanType, { name: string; icon: typeof Code2; d
 };
 
 /**
- * 用户面·概览：个人视角的今日 KPI、各计费类型额度（套餐感知）与 30 天趋势。
- * 始终是用户视角（panel 永远只取自己的数据）。
+ * 用户面·概览（桌面视图）：个人视角的今日 KPI、各计费类型额度（套餐感知）与 30 天趋势。
+ * 始终是用户视角（panel 永远只取自己的数据）；移动端走 Overview.mobile 专属布局。
  */
-function Overview() {
+export function PanelOverviewDesktop() {
   const { data, loading, error, reload } = useAsync(getPanelOverviewApi);
 
   return (
     <div className="space-y-6">
-      {/* 标题区 */}
-      <div className="flex items-center justify-between gap-4">
-        <div className="flex items-center gap-2">
+      {/* 标题区：窄屏放不下时允许换行，避免挤压 */}
+      <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
+        <div className="flex min-w-0 items-center gap-2">
           <h1 className="text-2xl font-bold">概览</h1>
           <Badge variant="secondary">用户</Badge>
         </div>
@@ -133,8 +135,8 @@ function OverviewView({ data }: { data: UserOverview }) {
       {/* 我的套餐：恒展示「编程 + Token」两个槽位，已开通渲染额度卡，未开通渲染占位 CTA 卡，
           确保无套餐 / 单套餐场景下界面充实且有明确下一步。 */}
       <section className="space-y-3">
-        <div className="flex items-center justify-between gap-4">
-          <div>
+        <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
+          <div className="min-w-0">
             <h2 className="text-base font-semibold">我的套餐</h2>
             <p className="text-xs text-muted-foreground">额度使用与开通情况</p>
           </div>
@@ -294,4 +296,8 @@ function OverviewSkeleton() {
   );
 }
 
-export default Overview;
+/** 概览页薄壳：按视口分发桌面视图 / 移动专属视图（v3 移动定稿，不共用布局）。 */
+export default function PanelOverview() {
+  const isMobile = useIsMobile();
+  return isMobile ? <OverviewMobile /> : <PanelOverviewDesktop />;
+}

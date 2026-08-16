@@ -36,7 +36,10 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
+import { Sheet, SheetHeader, SheetTitle } from '@/components/ui/sheet';
+import { DetailSheetContent } from '@/components/mobile';
+import { useIsMobile } from '@/hooks/use-is-mobile';
+import { UsersAdminMobile } from './index.mobile';
 import { type ColumnDef } from '@tanstack/react-table';
 import { DataTable } from '@/components/ui/data-table';
 import { DataTableColumnHeader } from '@/components/ui/data-table-column-header';
@@ -69,7 +72,8 @@ import { toast } from 'sonner';
 import { getApiError } from '@/utils/error';
 import type { UserBasic, UserListQuery, UserUpdatePayload } from '@/types/user';
 
-function Users() {
+/** 管理端·用户管理（桌面视图）：筛选表格 + 行内操作 + 用户详情抽屉。 */
+function UsersAdminDesktop() {
   const [detailId, setDetailId] = useState<string | null>(null);
   const { initial: urlInit, write } = useUrlQueryState([
     { name: 'q', key: 'keyword' },
@@ -273,7 +277,7 @@ function Users() {
 }
 
 /** 新建用户弹窗 */
-function CreateUserDialog({ open, submitting, onClose, onSubmit }: {
+export function CreateUserDialog({ open, submitting, onClose, onSubmit }: {
   open: boolean;
   submitting: boolean;
   onClose: () => void;
@@ -321,7 +325,7 @@ function CreateUserDialog({ open, submitting, onClose, onSubmit }: {
 }
 
 /** 编辑用户弹窗（角色 / 首选计费 / 回退） */
-function EditUserDialog({ user, submitting, onClose, onSubmit }: {
+export function EditUserDialog({ user, submitting, onClose, onSubmit }: {
   user: UserBasic | null;
   submitting: boolean;
   onClose: () => void;
@@ -377,7 +381,7 @@ function EditUserDialog({ user, submitting, onClose, onSubmit }: {
 }
 
 /** 一次性明文密码展示（新建/重置后，仅显示一次 + 复制） */
-function RevealPasswordDialog({ data, onClose }: { data: { email: string; password: string } | null; onClose: () => void }) {
+export function RevealPasswordDialog({ data, onClose }: { data: { email: string; password: string } | null; onClose: () => void }) {
   const [copied, setCopied] = useState(false);
   const copy = async () => {
     if (!data) return;
@@ -532,7 +536,11 @@ function RenewPlanDialog({ userId, target, onOpenChange, onDone }: {
   );
 }
 
-function GrantPlanButton({ userId, onDone }: { userId: string; onDone?: () => void }) {
+/**
+ * 发放套餐按钮 + 弹窗（用户详情抽屉与移动卡片共用）。
+ * className 透传给触发按钮（移动端用于缩小到 28px），桌面不传保持原样。
+ */
+export function GrantPlanButton({ userId, onDone, className }: { userId: string; onDone?: () => void; className?: string }) {
   const { mutate, loading: submitting } = useMutation();
   const [open, setOpen] = useState(false);
   const [planId, setPlanId] = useState('');
@@ -578,7 +586,7 @@ function GrantPlanButton({ userId, onDone }: { userId: string; onDone?: () => vo
 
   return (
     <>
-      <Button size="sm" variant="outline" onClick={openDialog}><Plus className="mr-1 h-3 w-3" />发放套餐</Button>
+      <Button size="sm" variant="outline" className={className} onClick={openDialog}><Plus className="mr-1 h-3 w-3" />发放套餐</Button>
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogContent className="max-w-md">
           <DialogHeader>
@@ -653,7 +661,7 @@ function planQuotaHint(quota: QuotaItem[], plan: UserPlanItem): string | null {
   return null;
 }
 
-function DetailDrawer({ id, onClose }: { id: string | null; onClose: () => void }) {  const { data, loading, error, reload } = useAsync(
+export function DetailDrawer({ id, onClose }: { id: string | null; onClose: () => void }) {  const { data, loading, error, reload } = useAsync(
     () => (id ? getDashboardUserDetailApi(id) : Promise.resolve(null)),
     [id],
   );
@@ -668,7 +676,7 @@ function DetailDrawer({ id, onClose }: { id: string | null; onClose: () => void 
   const effectiveCount = activePlans.filter((p) => !isPlanExpired(p.expires_at)).length;
   return (
     <Sheet open={id !== null} onOpenChange={(open) => !open && onClose()}>
-      <SheetContent side="right" className="w-full overflow-y-auto sm:max-w-2xl">
+      <DetailSheetContent>
         <SheetHeader><SheetTitle>用户详情</SheetTitle></SheetHeader>
         {id === null ? null : loading ? (
           <div className="space-y-3 p-4">{Array.from({ length: 6 }).map((_, i) => <Skeleton key={i} className="h-12 w-full" />)}</div>
@@ -819,7 +827,7 @@ function DetailDrawer({ id, onClose }: { id: string | null; onClose: () => void 
             </AlertDialog>
           </div>
         ) : null}
-      </SheetContent>
+      </DetailSheetContent>
     </Sheet>
   );
 }
@@ -854,4 +862,8 @@ function KeySection({ icon, title, items }: { icon: React.ReactNode; title: stri
   );
 }
 
-export default Users;
+/** 薄壳：按视口分流——移动端渲染卡片视图（index.mobile.tsx），桌面渲染原表格视图。 */
+export default function Users() {
+  const isMobile = useIsMobile();
+  return isMobile ? <UsersAdminMobile /> : <UsersAdminDesktop />;
+}

@@ -32,6 +32,7 @@ import PanelRedemptions from '@/pages/panel/Redemptions';
 import PanelNotices from '@/pages/panel/Notices';
 import PanelReleases from '@/pages/panel/Releases';
 import PanelAccount from '@/pages/panel/Account';
+import PanelMe from '@/pages/panel/Me';
 
 // Landing 公开页（游客可见，数据来自 @/api/site）
 import LandingLayout from '@/pages/landing/LandingLayout';
@@ -121,6 +122,7 @@ export const router = createBrowserRouter([
       { path: 'notices', element: <PanelNotices /> },
       { path: 'releases', element: <PanelReleases /> },
       { path: 'account', element: <PanelAccount /> },
+      { path: 'me', element: <PanelMe /> },
     ],
   },
 

@@ -2,8 +2,9 @@ import { useEffect, useMemo, useState } from 'react';
 import { ChevronDown } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { getSiteModelsApi, getSitePlansApi } from '@/api/site';
+import { useIsMobile } from '@/hooks/use-is-mobile';
 import type { SiteModel, SitePlan } from '@/types/site';
-import { CtaBand, formatCount, formatMultiplier } from './components';
+import { CtaBand, CtaBandMobile, formatCount, formatMultiplier } from './components';
 import { cycleLimitLabel } from './Home';
 
 /**
@@ -54,6 +55,60 @@ const GROUPS: Array<{ label: string; items: Array<{ q: string; a: React.ReactNod
 ];
 
 export default function Faq() {
+  const isMobile = useIsMobile();
+
+  // 移动端专属分支（v3 ⑱ 定稿）：手风琴独立卡片（问句 12.5px / 答案 11.5px），计费规则紧凑化，桌面排版不渲染
+  if (isMobile) {
+    return (
+      <>
+        <main className="pb-1">
+          <h1 className="px-4 pt-4 text-[19px] font-extrabold tracking-tight text-zinc-900">常见问题</h1>
+          {GROUPS.map((group, gi) => (
+            <div key={group.label} className={gi > 0 ? 'mt-5' : 'mt-3'}>
+              <h2 className="px-4 pb-1.5 text-[11px] font-semibold uppercase tracking-wide text-zinc-400">
+                {group.label}
+              </h2>
+              <div className="flex flex-col gap-[7px] px-4">
+                {group.items.map((item, ii) => (
+                  <details
+                    key={item.q}
+                    className="group overflow-hidden rounded-[11px] border border-zinc-100 bg-white"
+                    open={gi === 0 && ii === 0}
+                  >
+                    <summary className="flex cursor-pointer list-none items-center justify-between gap-2 px-3 py-[11px] text-[12.5px] font-semibold text-zinc-700">
+                      {item.q}
+                      <ChevronDown className="h-3.5 w-3.5 shrink-0 text-zinc-400 transition group-open:rotate-180" />
+                    </summary>
+                    <p className="border-t border-dashed border-zinc-100 px-3 pb-[11px] pt-[9px] text-[11.5px] leading-[1.65] text-zinc-500">
+                      {item.a}
+                    </p>
+                  </details>
+                ))}
+              </div>
+            </div>
+          ))}
+
+          <div id="billing" className="mt-5 scroll-mt-20" />
+          <h2 className="px-4 pb-1.5 text-[11px] font-semibold uppercase tracking-wide text-zinc-400">计费规则</h2>
+          <BillingRules compact />
+
+          <p className="mt-4 px-4 text-[11.5px] leading-relaxed text-zinc-500">
+            查看在售套餐与价格见
+            <Link to="/plans" className="mx-1 font-medium text-blue-600">
+              套餐
+            </Link>
+            ，各模型倍率见
+            <Link to="/models" className="mx-1 font-medium text-blue-600">
+              模型广场
+            </Link>
+            。
+          </p>
+        </main>
+        <CtaBandMobile title="还有其他问题？" sub="注册后可在控制台查看公告与更新日志，或联系我们。" />
+      </>
+    );
+  }
+
   return (
     <>
       <main className="mx-auto max-w-6xl px-6 py-16">
@@ -95,8 +150,8 @@ export default function Faq() {
   );
 }
 
-/** 计费规则：额度计算说明 + 用真实套餐额度 × 真实模型倍率动态生成的换算示例 */
-function BillingRules() {
+/** 计费规则：额度计算说明 + 用真实套餐额度 × 真实模型倍率动态生成的换算示例；compact 为移动端紧凑版式 */
+function BillingRules({ compact }: { compact?: boolean }) {
   const [plans, setPlans] = useState<SitePlan[] | null>(null);
   const [models, setModels] = useState<SiteModel[]>([]);
 
@@ -129,8 +184,25 @@ function BillingRules() {
     return { plan: featured, rows };
   }, [plans, models]);
 
+  const wrapCls = compact
+    ? 'mx-3.5 space-y-3 rounded-[12px] border border-zinc-100 bg-white p-3 text-[11.5px] leading-[1.65] text-zinc-500'
+    : 'mt-4 space-y-5 rounded-2xl border border-zinc-200 bg-white px-6 py-6 text-sm leading-relaxed text-zinc-500';
+  const boxCls = compact
+    ? 'rounded-[10px] border border-zinc-100 bg-zinc-50/60 p-3'
+    : 'rounded-xl border border-zinc-100 bg-zinc-50/60 p-5';
+  const labelCls = compact
+    ? 'text-[10px] font-medium uppercase tracking-wide text-zinc-400'
+    : 'text-xs font-medium uppercase tracking-wide text-zinc-400';
+  const nameCls = compact ? 'font-mono text-[11.5px]' : 'font-mono text-[13px]';
+  const badgeCls = compact
+    ? 'ml-1.5 rounded-md bg-white px-1.5 py-0.5 font-mono text-[10.5px] text-zinc-500'
+    : 'ml-1.5 rounded-md bg-white px-1.5 py-0.5 font-mono text-xs text-zinc-500';
+  const rowCls = compact ? 'py-1.5 text-zinc-600' : 'py-2.5 text-zinc-600';
+  const valCls = compact ? 'py-1.5 text-right font-mono font-medium text-zinc-900' : 'py-2.5 text-right font-mono font-medium text-zinc-900';
+  const footCls = compact ? 'mt-2 text-[10px] text-zinc-400' : 'mt-3 text-xs text-zinc-400';
+
   return (
-    <div className="mt-4 space-y-5 rounded-2xl border border-zinc-200 bg-white px-6 py-6 text-sm leading-relaxed text-zinc-500">
+    <div className={wrapCls}>
       <p>
         每次调用扣减<span className="font-medium text-zinc-900">「模型倍率 × 1 次」</span>
         额度。例如调用倍率 ×0.1 的模型十次共扣 1 次；调用倍率 ×3 的模型一次扣 3 次。
@@ -146,26 +218,24 @@ function BillingRules() {
       <p>额度不足时可使用兑换码即时补充，或在模型市场购买其他用户转让的额度；下个周期开始时套餐额度自动重置。</p>
 
       {example && (
-        <div className="rounded-xl border border-zinc-100 bg-zinc-50/60 p-5">
-          <div className="text-xs font-medium uppercase tracking-wide text-zinc-400">
+        <div className={boxCls}>
+          <div className={labelCls}>
             示例 · {example.plan.name}（{cycleLimitLabel(example.plan.category)} {formatCount(planQuota(example.plan))} 次）
           </div>
-          <table className="mt-4 w-full text-sm">
+          <table className={compact ? 'mt-2 w-full text-[11.5px]' : 'mt-4 w-full text-sm'}>
             <tbody>
               {example.rows.map((r) => (
                 <tr key={r.name}>
-                  <td className="py-2.5 text-zinc-600">
-                    <span className="font-mono text-[13px]">{r.name}</span>{' '}
-                    <span className="ml-1.5 rounded-md bg-white px-1.5 py-0.5 font-mono text-xs text-zinc-500">
-                      ×{formatMultiplier(r.multiplier)}
-                    </span>
+                  <td className={rowCls}>
+                    <span className={nameCls}>{r.name}</span>{' '}
+                    <span className={badgeCls}>×{formatMultiplier(r.multiplier)}</span>
                   </td>
-                  <td className="py-2.5 text-right font-mono font-medium text-zinc-900">{formatCount(r.calls)} 次</td>
+                  <td className={valCls}>{formatCount(r.calls)} 次</td>
                 </tr>
               ))}
             </tbody>
           </table>
-          <p className="mt-3 text-xs text-zinc-400">按各模型当前倍率换算，实际以调用时刻的生效倍率为准。</p>
+          <p className={footCls}>按各模型当前倍率换算，实际以调用时刻的生效倍率为准。</p>
         </div>
       )}
     </div>

@@ -1,6 +1,7 @@
 import { defineConfig, loadEnv } from 'vite';
 import react from '@vitejs/plugin-react';
 import path from 'node:path';
+import fs from 'node:fs';
 
 // https://vite.dev/config/
 export default defineConfig(({ mode }) => {
@@ -19,6 +20,16 @@ export default defineConfig(({ mode }) => {
     server: {
       port: 5173,
       host: true,
+      // 手机/局域网真机预览需 HTTPS（WebCrypto 要求 secure context，见 src/utils/crypto.ts）。
+      // 证书为自签名（scripts 里 openssl 生成，见 .cert/，已 gitignore）；
+      // 仅当 VITE_DEV_HTTPS=1 时启用，本地 localhost 开发保持默认 http。
+      ...(env.VITE_DEV_HTTPS === '1' &&
+        fs.existsSync(path.resolve(import.meta.dirname, '.cert/dev-key.pem')) && {
+          https: {
+            key: fs.readFileSync(path.resolve(import.meta.dirname, '.cert/dev-key.pem')),
+            cert: fs.readFileSync(path.resolve(import.meta.dirname, '.cert/dev-cert.pem')),
+          },
+        }),
       proxy: {
         '/api': {
           target: env.VITE_API_TARGET || 'http://localhost:8000',

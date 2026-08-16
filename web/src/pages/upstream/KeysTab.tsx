@@ -17,7 +17,8 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { DebouncedInput } from '@/components/DebouncedInput';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
+import { Sheet, SheetHeader, SheetTitle } from '@/components/ui/sheet';
+import { DetailSheetContent } from '@/components/mobile';
 import { formatCompact, formatDate, formatDateTime, formatNumber } from '@/utils/format';
 import { type ColumnDef } from '@tanstack/react-table';
 import { DataTable } from '@/components/ui/data-table';
@@ -335,7 +336,7 @@ function KeyDetailDrawer({ id, onClose, onProbed }: { id: string | null; onClose
   ], []);
   return (
     <Sheet open={id !== null} onOpenChange={(open) => !open && onClose()}>
-      <SheetContent side="right" className="w-full overflow-y-auto sm:max-w-2xl">
+      <DetailSheetContent>
         <SheetHeader>
           <div className="flex items-center justify-between gap-2">
             <SheetTitle>上游 Key 详情</SheetTitle>
@@ -425,7 +426,7 @@ function KeyDetailDrawer({ id, onClose, onProbed }: { id: string | null; onClose
             )}
           </div>
         ) : null}
-      </SheetContent>
+      </DetailSheetContent>
       <ConfirmDialog
         open={pendingDisable}
         onOpenChange={setPendingDisable}

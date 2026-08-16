@@ -1,6 +1,7 @@
 import { RefreshCw } from 'lucide-react';
 import { getPanelNoticesApi } from '@/api/panel';
 import { usePagedQuery } from '@/hooks/usePagedQuery';
+import { useIsMobile } from '@/hooks/use-is-mobile';
 import { SeverityChip } from '@/components/SeverityChip';
 import { Markdown } from '@/components/Markdown';
 import { EmptyState } from '@/components/EmptyState';
@@ -8,9 +9,10 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
 import { formatNumber } from '@/utils/format';
+import { NoticesMobile } from './Notices.mobile';
 import type { SystemQuery, AnnouncementItem } from '@/types/system';
 
-function Notices() {
+function NoticesDesktop() {
   const { list, total, page, size, loading, error, reload, setPage } = usePagedQuery(getNoticesApiLazy, { initial: { size: 10, sort: '-publish_from' } as SystemQuery });
 
   return (
@@ -33,7 +35,7 @@ function Notices() {
         )}
 
       {total > 0 && (
-        <div className="flex items-center justify-between text-sm text-muted-foreground">
+        <div className="flex flex-wrap items-center justify-between gap-2 text-sm text-muted-foreground">
           <span>第 {page} / {Math.max(1, Math.ceil(total / size))} 页 · 共 {formatNumber(total)} 条</span>
           <div className="flex gap-2">
             <Button variant="outline" size="sm" disabled={page <= 1 || loading} onClick={() => setPage(page - 1)}>上一页</Button>
@@ -50,13 +52,14 @@ const getNoticesApiLazy = (p: SystemQuery) => getPanelNoticesApi(p);
 function NoticeRow({ item }: { item: AnnouncementItem }) {
   return (
     <Card>
-      <CardContent className="p-4">
+      {/* 移动端收窄内边距（375px 下更舒适），sm 起恢复桌面密度 */}
+      <CardContent className="p-3.5 sm:p-4">
         <div className="flex items-start justify-between gap-2">
-          <div className="flex flex-wrap items-center gap-2">
+          <div className="flex min-w-0 flex-1 flex-wrap items-center gap-2">
             <SeverityChip severity={item.severity} />
-            <span className="font-medium">{item.title}</span>
+            <span className="min-w-0 font-medium">{item.title}</span>
           </div>
-          <span className="font-mono text-xs text-muted-foreground">{item.publish_from?.slice(0, 10)}</span>
+          <span className="shrink-0 font-mono text-xs text-muted-foreground">{item.publish_from?.slice(0, 10)}</span>
         </div>
         {item.body && <Markdown className="mt-2 text-muted-foreground">{item.body}</Markdown>}
       </CardContent>
@@ -64,4 +67,10 @@ function NoticeRow({ item }: { item: AnnouncementItem }) {
   );
 }
 
-export default Notices;
+/**
+ * 公告页：按视口切换桌面视图 / 移动卡片视图（同一份数据 API 与分页模型）。
+ */
+export default function Notices() {
+  const isMobile = useIsMobile();
+  return isMobile ? <NoticesMobile /> : <NoticesDesktop />;
+}

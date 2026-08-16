@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import type { ReactNode } from 'react';
-import { BatteryMedium, BookOpen, CalendarClock, ChevronDown, Gauge, GripVertical, History, Info, Pencil, Plus, RefreshCw, RotateCcw, X } from 'lucide-react';
+import { BatteryMedium, BookOpen, CalendarClock, ChevronDown, ChevronUp, Gauge, GripVertical, History, Info, Pencil, Plus, RefreshCw, RotateCcw, X } from 'lucide-react';
 import { toast } from 'sonner';
 import { DndContext, KeyboardSensor, PointerSensor, closestCenter, useSensor, useSensors } from '@dnd-kit/core';
 import type { DragEndEvent } from '@dnd-kit/core';
@@ -11,6 +11,7 @@ import { cn } from '@/lib/utils';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { useAsync } from '@/hooks/useAsync';
+import { useIsMobile } from '@/hooks/use-is-mobile';
 import { StatusBadge } from '@/components/StatusBadge';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -18,8 +19,10 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
 import { formatDateTime } from '@/utils/format';
 import type { CodingPlanStrategyKey, UserBasic } from '@/types/user';
+import { AccountMobile } from './Account.mobile';
 
-function Account() {
+/** 账户页·桌面视图（>=768px）：资料卡 + 计费策略卡（DnD 拖拽调序） */
+function AccountDesktop() {
   // 自取数据：资料
   const { data, loading, error, reload } = useAsync(async () => {
     const profile = await getPanelProfileApi();
@@ -138,6 +141,64 @@ function SortableStrategySlot({ rank, meta, visibleGroups, onSet, onRemove }: {
   );
 }
 
+/** 移动端策略槽位（v3 ⑩ .slot 样式）：以「上移/下移」按钮替代拖拽调序（触屏 DnD 易误触），
+ *  卡片主体点击仍弹菜单切换策略，✕ 移除——交互语义与桌面槽位一致 */
+function MobileStrategySlot({ rank, meta, visibleGroups, isFirst, isLast, onSet, onMoveUp, onMoveDown, onRemove }: {
+  rank: number;
+  meta: (typeof STRATEGY_META)[number];
+  visibleGroups: string[];
+  isFirst: boolean;
+  isLast: boolean;
+  onSet: (key: CodingPlanStrategyKey) => void;
+  onMoveUp: () => void;
+  onMoveDown: () => void;
+  onRemove: () => void;
+}) {
+  return (
+    <div className="flex items-center gap-1.5 rounded-[10px] border bg-card px-1.5 py-1">
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <button type="button" className="flex h-8 min-w-0 flex-1 items-center gap-2 rounded-lg pl-1 text-left">
+            <span className="grid h-5 w-5 shrink-0 place-items-center rounded-md bg-muted text-[10.5px] font-bold text-muted-foreground">{rank}</span>
+            <span className="min-w-0 flex-1 truncate text-[12.5px] font-medium" title={meta.hint}>{meta.label}</span>
+            <ChevronDown className="h-3.5 w-3.5 shrink-0 text-muted-foreground/60" />
+          </button>
+        </DropdownMenuTrigger>
+        <StrategyMenuContent visibleGroups={visibleGroups} onSelect={onSet} />
+      </DropdownMenu>
+      <button
+        type="button"
+        className="flex h-[26px] w-[26px] shrink-0 items-center justify-center rounded-[7px] border text-muted-foreground transition-colors hover:bg-muted disabled:pointer-events-none disabled:opacity-30"
+        title="上移"
+        aria-label="上移"
+        disabled={isFirst}
+        onClick={onMoveUp}
+      >
+        <ChevronUp className="h-3.5 w-3.5" />
+      </button>
+      <button
+        type="button"
+        className="flex h-[26px] w-[26px] shrink-0 items-center justify-center rounded-[7px] border text-muted-foreground transition-colors hover:bg-muted disabled:pointer-events-none disabled:opacity-30"
+        title="下移"
+        aria-label="下移"
+        disabled={isLast}
+        onClick={onMoveDown}
+      >
+        <ChevronDown className="h-3.5 w-3.5" />
+      </button>
+      {/* X 与菜单触发器为兄弟节点：嵌套在 trigger 内会导致点击冒泡误开菜单 */}
+      <button
+        type="button"
+        className="flex h-[26px] w-[26px] shrink-0 items-center justify-center rounded-[7px] text-muted-foreground/60 transition-colors hover:bg-muted hover:text-destructive"
+        title="移除此策略"
+        onClick={onRemove}
+      >
+        <X className="h-3.5 w-3.5" />
+      </button>
+    </div>
+  );
+}
+
 /** 策略下拉菜单内容：只展示「本槽位维度 + 未被占用的维度」，已占用的整组隐藏。
  *  分组头带图标；条目差异关键词（emph）主色加粗聚焦视觉；限高滚动防溢出。 */
 function StrategyMenuContent({ visibleGroups, onSelect }: {
@@ -172,7 +233,9 @@ function StrategyMenuContent({ visibleGroups, onSelect }: {
   );
 }
 
-function PlanStrategyCard({ stored, onSaved }: { stored: string; onSaved: () => void }) {
+/** 计费策略卡：stored 解析为有序启用列表后编辑/保存。
+ *  桌面端用 dnd-kit 拖拽调序；移动端（isMobile）改用槽位右侧「上移/下移」按钮，状态语义完全一致。 */
+export function PlanStrategyCard({ stored, onSaved, isMobile }: { stored: string; onSaved: () => void; isMobile?: boolean }) {
   // 解析为有序启用列表；非法内容回退默认（与后端 lenient 解析一致）
   const initial = useMemo(() => {
     const parts = (stored ?? '').split(',').map((k) => k.trim()).filter(Boolean);
@@ -205,6 +268,12 @@ function PlanStrategyCard({ stored, onSaved }: { stored: string; onSaved: () => 
     if (!over || active.id === over.id) return;
     setDirty(true);
     setEnabled((prev) => arrayMove(prev, prev.indexOf(active.id as CodingPlanStrategyKey), prev.indexOf(over.id as CodingPlanStrategyKey)));
+  };
+  /** 上移/下移调序（移动端按钮入口）：与 handleDragEnd 相同的 arrayMove 重排语义 */
+  const moveSlot = (index: number, to: number) => {
+    if (to < 0 || to >= enabled.length || to === index) return;
+    setDirty(true);
+    setEnabled((prev) => arrayMove(prev, index, to));
   };
   // 4px 激活距离：点击（弹菜单）不触发拖拽
   const sensors = useSensors(
@@ -245,25 +314,71 @@ function PlanStrategyCard({ stored, onSaved }: { stored: string; onSaved: () => 
 
   return (
     <Card>
-      <CardHeader className="flex-row items-center justify-between space-y-0 pb-3">
-        <CardTitle className="text-sm">扣费套餐策略</CardTitle>
+      <CardHeader className={cn('flex-row items-center justify-between space-y-0', isMobile ? 'pb-2' : 'pb-3')}>
+        <CardTitle className={isMobile ? 'text-[13px] font-semibold' : 'text-sm'}>{isMobile ? '扣费套餐顺序' : '扣费套餐策略'}</CardTitle>
         <div className="flex items-center gap-1.5">
-          <Button size="sm" variant="ghost" onClick={() => setDetailOpen(true)}>
-            <Info className="mr-1 h-3.5 w-3.5" />详情
-          </Button>
-          {editing ? (
-            <Button size="sm" variant="ghost" disabled={saving} onClick={() => { setEnabled(initial); setDirty(false); setEditing(false); }}>
-              取消编辑
-            </Button>
+          {isMobile ? (
+            /* 移动入口（v3 ⑩）：说明弹窗沿用桌面逻辑，右侧「编辑」为蓝色文字入口，紧凑 h-7 */
+            <>
+              <Button size="sm" variant="ghost" className="h-7 px-2 text-[11px] text-muted-foreground" onClick={() => setDetailOpen(true)}>
+                <Info className="mr-1 h-3.5 w-3.5" />说明
+              </Button>
+              {editing ? (
+                <Button size="sm" variant="ghost" className="h-7 px-2 text-[11px]" disabled={saving} onClick={() => { setEnabled(initial); setDirty(false); setEditing(false); }}>
+                  取消
+                </Button>
+              ) : (
+                <Button size="sm" variant="ghost" className="h-7 px-2 text-[11px] font-medium text-blue-600" onClick={() => setEditing(true)}>
+                  编辑
+                </Button>
+              )}
+            </>
           ) : (
-            <Button size="sm" variant="outline" onClick={() => setEditing(true)}>
-              <Pencil className="mr-1 h-3.5 w-3.5" />编辑
-            </Button>
+            <>
+              <Button size="sm" variant="ghost" onClick={() => setDetailOpen(true)}>
+                <Info className="mr-1 h-3.5 w-3.5" />详情
+              </Button>
+              {editing ? (
+                <Button size="sm" variant="ghost" disabled={saving} onClick={() => { setEnabled(initial); setDirty(false); setEditing(false); }}>
+                  取消编辑
+                </Button>
+              ) : (
+                <Button size="sm" variant="outline" onClick={() => setEditing(true)}>
+                  <Pencil className="mr-1 h-3.5 w-3.5" />编辑
+                </Button>
+              )}
+            </>
           )}
         </div>
       </CardHeader>
-      <CardContent className="space-y-4">
+      <CardContent className={isMobile ? 'space-y-2.5' : 'space-y-4'}>
         {editing ? (
+          isMobile ? (
+            /* 移动编辑态（v3 ⑩）：仅 ▲▼ 槽位列表；「＋ 添加策略」与「保存」在底部操作行 */
+            <div className="space-y-1.5">
+              {enabled.map((key, index) => {
+                const meta = metaOf(key);
+                const free = freeGroupsFor(index);
+                const visibleGroups = free.includes(meta.group)
+                  ? [meta.group, ...free.filter((g) => g !== meta.group)]
+                  : free;
+                return (
+                  <MobileStrategySlot
+                    key={key}
+                    rank={index + 1}
+                    meta={meta}
+                    visibleGroups={visibleGroups}
+                    isFirst={index === 0}
+                    isLast={index === enabled.length - 1}
+                    onSet={(k) => setSlot(index, k)}
+                    onMoveUp={() => moveSlot(index, index - 1)}
+                    onMoveDown={() => moveSlot(index, index + 1)}
+                    onRemove={() => removeSlot(index)}
+                  />
+                );
+              })}
+            </div>
+          ) : (
         <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
           <SortableContext items={enabled} strategy={rectSortingStrategy}>
             <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
@@ -304,8 +419,22 @@ function PlanStrategyCard({ stored, onSaved }: { stored: string; onSaved: () => 
             </div>
           </SortableContext>
         </DndContext>
+          )
+        ) : isMobile ? (
+          /* 移动只读态：槽位序号列表（数字块 + 弱化文案），视觉与编辑态槽位同构但不带操作 */
+          <div className="space-y-1.5">
+            {enabled.map((key, i) => {
+              const meta = metaOf(key);
+              return (
+                <div key={key} className="flex items-center gap-2 rounded-[10px] border bg-muted/30 py-1.5 pl-1.5 pr-2.5" title={meta.hint}>
+                  <span className="grid h-5 w-5 shrink-0 place-items-center rounded-md bg-muted text-[10.5px] font-bold text-muted-foreground">{i + 1}</span>
+                  <span className="min-w-0 flex-1 truncate text-[12.5px] text-muted-foreground">{meta.label}</span>
+                </div>
+              );
+            })}
+          </div>
         ) : (
-          <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+          <div className="grid grid-cols-1 gap-2 sm:grid-cols-4">
             {enabled.map((key, i) => {
               const meta = metaOf(key);
               return (
@@ -318,7 +447,7 @@ function PlanStrategyCard({ stored, onSaved }: { stored: string; onSaved: () => 
           </div>
         )}
 
-        {editing && (
+        {editing && !isMobile && (
           <div className="flex flex-wrap items-center gap-3 border-t pt-3">
             <Button size="sm" disabled={saving || !dirty || enabled.length === 0} onClick={save}>{saving ? '保存中…' : '保存策略'}</Button>
             <Button
@@ -331,6 +460,45 @@ function PlanStrategyCard({ stored, onSaved }: { stored: string; onSaved: () => 
               <RotateCcw className="mr-1 h-3.5 w-3.5" />还原默认
             </Button>
             {dirty && <span className="text-xs text-amber-600">有未保存的修改</span>}
+          </div>
+        )}
+
+        {editing && isMobile && (
+          /* 移动底部操作行（v3 ⑩ card-actions）：「＋ 添加策略」与「保存」并排等宽；
+             可选维度用尽时添加钮禁用占位，保持两列对齐 */
+          <div className="space-y-2 border-t pt-2.5">
+            <div className="flex gap-1.5">
+              {freeGroupsFor().length > 0 ? (
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <button type="button" className="flex h-8 flex-1 items-center justify-center gap-1 rounded-lg border text-[11.5px] text-muted-foreground transition-colors hover:border-primary/50 hover:bg-primary/5">
+                      <Plus className="h-3.5 w-3.5" />添加策略
+                    </button>
+                  </DropdownMenuTrigger>
+                  <StrategyMenuContent visibleGroups={freeGroupsFor()} onSelect={addSlot} />
+                </DropdownMenu>
+              ) : (
+                <div className="flex h-8 flex-1 items-center justify-center gap-1 rounded-lg border border-dashed text-[11.5px] text-muted-foreground opacity-40">
+                  <Plus className="h-3.5 w-3.5" />添加策略
+                </div>
+              )}
+              <Button size="sm" className="h-8 flex-1 rounded-lg px-0 text-xs" disabled={saving || !dirty || enabled.length === 0} onClick={save}>
+                {saving ? '保存中…' : '保存'}
+              </Button>
+            </div>
+            <div className="flex items-center justify-between">
+              <Button
+                size="sm"
+                variant="ghost"
+                className="h-7 px-2 text-[11px] text-muted-foreground"
+                disabled={saving || (enabled.length === DEFAULT_ORDER.length && DEFAULT_ORDER.every((k, i) => enabled[i] === k))}
+                title="恢复为系统默认策略顺序"
+                onClick={() => { setDirty(true); setEnabled([...DEFAULT_ORDER]); }}
+              >
+                <RotateCcw className="mr-1 h-3 w-3" />还原默认
+              </Button>
+              {dirty && <span className="text-[10.5px] text-amber-600">有未保存的修改</span>}
+            </div>
           </div>
         )}
       </CardContent>
@@ -371,7 +539,7 @@ function PlanStrategyCard({ stored, onSaved }: { stored: string; onSaved: () => 
               </p>
               <table className="w-full text-xs">
                 <tbody className="[&_td]:border-b [&_td]:py-1.5">
-                  <tr><td className="w-20 text-muted-foreground">调整顺序</td><td>按住卡片左侧 ⠿ 拖动，拖到哪就排到哪</td></tr>
+                  <tr><td className="w-20 text-muted-foreground">调整顺序</td><td>{isMobile ? '点击卡片右侧的 ▲▼ 按钮上下移动' : '按住卡片左侧 ⠿ 拖动，拖到哪就排到哪'}</td></tr>
                   <tr><td className="text-muted-foreground">更换规则</td><td>点击卡片，从弹出菜单里选一条新规则</td></tr>
                   <tr><td className="text-muted-foreground">移除规则</td><td>点击卡片上的 ✕</td></tr>
                   <tr><td className="text-muted-foreground">增加规则</td><td>点击「＋ 添加策略」虚线卡</td></tr>
@@ -428,12 +596,13 @@ function PlanStrategyCard({ stored, onSaved }: { stored: string; onSaved: () => 
 
 /* ------------------------------- 资料 ------------------------------- */
 
-function ProfileCard({ profile }: { profile: UserBasic }) {
+/** 资料卡：移动端单列铺满（长邮箱/时间更从容），sm 起恢复双列（桌面视觉不变） */
+export function ProfileCard({ profile }: { profile: UserBasic }) {
   return (
     <Card>
       <CardHeader className="pb-2"><CardTitle className="text-sm">我的资料</CardTitle></CardHeader>
       <CardContent>
-        <dl className="grid grid-cols-2 gap-x-4 gap-y-2 text-sm">
+        <dl className="grid grid-cols-1 gap-x-4 gap-y-2 text-sm sm:grid-cols-2">
           <Row label="邮箱" value={profile.email} />
           <Row label="角色" value={<Badge variant={profile.role === 'admin' ? 'default' : 'secondary'} className="text-[10px]">{profile.role}</Badge>} />
           <Row label="状态" value={<StatusBadge status={profile.status} />} />
@@ -455,6 +624,12 @@ function Row({ label, value }: { label: string; value: ReactNode }) {
       <dd className="text-right">{value}</dd>
     </div>
   );
+}
+
+/** 账户页入口：按视口分发桌面/移动视图（移动视图见 Account.mobile.tsx，槽位调序用按钮替代拖拽） */
+function Account() {
+  const isMobile = useIsMobile();
+  return isMobile ? <AccountMobile /> : <AccountDesktop />;
 }
 
 export default Account;

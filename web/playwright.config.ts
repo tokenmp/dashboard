@@ -9,5 +9,19 @@ export default defineConfig({
     headless: true,
     screenshot: 'only-on-failure',
   },
-  projects: [{ name: 'chromium', use: { browserName: 'chromium' } }],
+  projects: [
+    // 桌面视口：跑除 mobile.spec.ts 外的全部用例
+    { name: 'chromium', use: { browserName: 'chromium' }, testIgnore: /mobile\.spec\.ts$/ },
+    // 移动视口（375×667，触屏）：只跑 mobile.spec.ts
+    {
+      name: 'mobile',
+      use: {
+        browserName: 'chromium',
+        viewport: { width: 375, height: 667 },
+        isMobile: true,
+        hasTouch: true,
+      },
+      testMatch: /mobile\.spec\.ts$/,
+    },
+  ],
 });

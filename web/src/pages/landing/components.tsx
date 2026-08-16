@@ -32,6 +32,24 @@ export function CtaBand({ title, sub }: { title: string; sub: string }) {
   );
 }
 
+/** 移动端页尾深色 CTA 卡：zinc-900 → blue-900 渐变，标题/副文/白底按钮居中竖排 */
+export function CtaBandMobile({ title, sub }: { title: string; sub: string }) {
+  return (
+    <section className="px-4 pb-5 pt-3.5">
+      <div className="rounded-[14px] bg-gradient-to-br from-zinc-900 to-blue-900 px-4 py-[15px] text-center text-white">
+        <h2 className="text-[15px] font-extrabold tracking-tight">{title}</h2>
+        <p className="mt-[5px] text-[11px] text-white/70">{sub}</p>
+        <a
+          href="/register"
+          className="mx-auto mt-3 flex h-[38px] w-[150px] items-center justify-center rounded-[10px] bg-white text-[13px] font-bold text-zinc-900 transition hover:bg-zinc-200"
+        >
+          免费注册 →
+        </a>
+      </div>
+    </section>
+  );
+}
+
 /** 深色终端窗口：Hero 代码示例 */
 export function CodeWindow() {
   return (
