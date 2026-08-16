@@ -236,7 +236,7 @@ function DetailBasic({ log }: { log: import('@/types/request-log').RequestLogDet
   ];
 
   const failed = log.success === false;
-  const tps = log.ttft_ms !== null && log.latency_ms !== null && log.latency_ms > log.ttft_ms && log.output_tokens
+  const tps = log.stream && log.ttft_ms && log.latency_ms !== null && log.latency_ms > log.ttft_ms && log.output_tokens
     ? Math.round((log.output_tokens / (log.latency_ms - log.ttft_ms)) * 1000)
     : null;
 
@@ -317,7 +317,7 @@ function DetailBasic({ log }: { log: import('@/types/request-log').RequestLogDet
         <div className="grid grid-cols-3 gap-3">
           <div className="rounded-lg border p-3">
             <div className="flex items-center gap-1 text-sm text-muted-foreground"><Activity className="h-3 w-3" />首字输出</div>
-            <div className="mt-1 text-lg font-semibold tabular-nums">{log.ttft_ms !== null ? `${formatNumber(log.ttft_ms)}ms` : '—'}</div>
+            <div className="mt-1 text-lg font-semibold tabular-nums">{log.stream && log.ttft_ms ? `${formatNumber(log.ttft_ms)}ms` : '—'}</div>
           </div>
           <div className="rounded-lg border p-3">
             <div className="flex items-center gap-1 text-sm text-muted-foreground"><Zap className="h-3 w-3" />推理速度</div>
