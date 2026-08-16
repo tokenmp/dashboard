@@ -92,7 +92,7 @@ export const REQUEST_LOG_COLUMNS: RequestLogColumn[] = [
     label: '推理速度',
     headClass: 'w-[90px] text-right',
     cellClass: 'text-right tabular-nums text-sm text-muted-foreground',
-    cell: (r) => r.ttft_ms !== null && r.latency_ms !== null && r.latency_ms > r.ttft_ms && r.output_tokens
+    cell: (r) => r.stream && r.ttft_ms && r.latency_ms !== null && r.latency_ms > r.ttft_ms && r.output_tokens
       ? formatNumber(Math.round((r.output_tokens / (r.latency_ms - r.ttft_ms)) * 1000))
       : '—',
   },
@@ -101,7 +101,8 @@ export const REQUEST_LOG_COLUMNS: RequestLogColumn[] = [
     label: '首字输出',
     headClass: 'w-[90px] text-right',
     cellClass: 'text-right tabular-nums text-sm text-muted-foreground',
-    cell: (r) => r.ttft_ms !== null ? `${formatNumber(r.ttft_ms)}ms` : '—',
+    // 非流式没有首 token 概念；流式但值为 0/null（首包前失败/存量 0）同样视为无值
+    cell: (r) => (r.stream && r.ttft_ms ? `${formatNumber(r.ttft_ms)}ms` : '—'),
   },
   {
     key: 'latency',
