@@ -4,8 +4,9 @@ import { ShieldCheck, Megaphone, Gift, BookOpen, UserCircle, Gauge, LogOut, Chev
 import { useAsync } from '@/hooks/useAsync';
 import { useRole } from '@/hooks/useRole';
 import { useAuthStore } from '@/store/auth';
-import { getPanelNoticesApi, getPanelPlansApi } from '@/api/panel';
+import { getPanelNoticesApi, getPanelPlansApi, getPanelUsageQuotaApi } from '@/api/panel';
 import { Skeleton } from '@/components/ui/skeleton';
+import { formatCompact, formatNumber } from '@/utils/format';
 import { cn } from '@/lib/utils';
 
 /** 「我的」页入口行（icon 底色 + 标题/副标题 + 右箭头） */
@@ -67,7 +68,7 @@ function PanelMe() {
   const { data: notices } = useAsync(() => getPanelNoticesApi({ page: 1, size: 1, sort: '-created_at' }), []);
   const latestNotice = notices?.list?.[0];
 
-  // 我的套餐（身份卡下方展示）。区块为固定单行高度：加载中占位、多套餐合并 +N、
+  // 我的套餐（身份卡下方展示）。收起态固定单行高度：加载中占位、多套餐合并 +N、
   // 空时也是一行提示——高度恒定，加载完成不会推挤下方入口（避免误触公告/兑换码）。
   const { data: plans, loading: plansLoading } = useAsync(getPanelPlansApi, []);
   const activePlans = (plans ?? []).filter((p) => p.status === 'active');
@@ -75,6 +76,13 @@ function PanelMe() {
   const firstPlanMeta = firstPlan
     ? PLAN_TYPE_META[firstPlan.plan?.plan_type ?? ''] ?? { label: firstPlan.plan?.plan_type ?? '套餐', cls: 'bg-muted text-muted-foreground' }
     : null;
+
+  // 套餐用量（与「账单·额度总览」同源 getPanelUsageQuotaApi），展开时按套餐名/类型匹配展示
+  const { data: quota } = useAsync(getPanelUsageQuotaApi, []);
+  const quotaPlans = quota?.role === 'user' ? quota.plans : [];
+  const quotaFor = (up: (typeof activePlans)[number]) =>
+    quotaPlans.find((q) => q.planName && q.planName === up.plan?.name) ??
+    quotaPlans.find((q) => q.billingPlan === up.plan_type);
 
   const handleLogout = () => {
     logout();
@@ -126,21 +134,49 @@ function PanelMe() {
             <span className="text-[11.5px] text-muted-foreground">暂无生效套餐 · 可通过兑换码获取</span>
           </div>
         ) : plansExpanded ? (
-          <div className="mt-1.5 space-y-2">
+          <div className="mt-1.5 space-y-2.5">
             {activePlans.map((up) => {
               const meta = PLAN_TYPE_META[up.plan?.plan_type ?? ''] ?? { label: up.plan?.plan_type ?? '套餐', cls: 'bg-muted text-muted-foreground' };
+              const q = quotaFor(up);
               return (
-                <div key={up.id} className="flex items-center gap-2">
-                  <span className={cn('shrink-0 rounded-full px-2 py-0.5 text-[10px] font-medium', meta.cls)}>{meta.label}</span>
-                  <div className="min-w-0 flex-1">
-                    <div className="truncate text-[12.5px] font-medium">{up.plan?.name ?? '未命名套餐'}</div>
-                    <div className="truncate text-[10px] text-muted-foreground">
-                      {up.expires_at ? `有效期至 ${up.expires_at.slice(0, 10)}` : '长期有效'}
+                <div key={up.id}>
+                  <div className="flex items-center gap-2">
+                    <span className={cn('shrink-0 rounded-full px-2 py-0.5 text-[10px] font-medium', meta.cls)}>{meta.label}</span>
+                    <div className="min-w-0 flex-1">
+                      <div className="truncate text-[12.5px] font-medium">{up.plan?.name ?? '未命名套餐'}</div>
+                      <div className="truncate text-[10px] text-muted-foreground">
+                        {up.expires_at ? `有效期至 ${up.expires_at.slice(0, 10)}` : '长期有效'}
+                      </div>
                     </div>
                   </div>
+                  {/* 用量摘要（与额度总览同源）：次卡显示各窗口 已用/限额，Token 卡显示余额 */}
+                  {q && (
+                    <div className="mt-1 flex flex-wrap gap-x-3 gap-y-0.5 pl-1 text-[10.5px] text-muted-foreground">
+                      {q.unit === 'requests' ? (
+                        (q.windows ?? []).map((w) => (
+                          <span key={w.key}>
+                            {w.label ?? w.key}{' '}
+                            <span className="font-medium tabular-nums text-foreground">
+                              {formatNumber(w.used ?? 0)}
+                            </span>
+                            {w.limit != null ? ` / ${formatNumber(w.limit)}` : ' / 不限'}
+                          </span>
+                        ))
+                      ) : (
+                        <span>
+                          余额 <span className="font-medium tabular-nums text-foreground">{formatCompact(q.balance)}</span> {q.unit}
+                          {q.reserved ? <span className="ml-1">（占用 {formatCompact(q.reserved)}）</span> : null}
+                        </span>
+                      )}
+                    </div>
+                  )}
                 </div>
               );
             })}
+            <NavLink to="/panel/usage" className="flex items-center justify-between border-t pt-2 text-[11px] font-medium text-muted-foreground">
+              查看额度总览
+              <ChevronRight className="h-3 w-3" />
+            </NavLink>
           </div>
         ) : (
           <div className="mt-1 flex h-7 items-center gap-2">
