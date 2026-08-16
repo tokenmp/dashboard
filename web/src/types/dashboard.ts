@@ -77,6 +77,8 @@ export interface QuotaItem {
   used?: number;
   /** capped / balance 模式：可用 / 剩余 */
   available?: number;
+  /** 窗口重置倒计时（秒）；仅 window 模式 */
+  chargedIn?: number;
 }
 
 export interface AdminOverview {

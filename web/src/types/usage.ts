@@ -44,18 +44,12 @@ export interface ModelRankItem {
   tokens: number;
 }
 
-/** 额度项（平台/用户共用） */
-export interface QuotaItem {
-  billingPlan: string;
-  /** 套餐名；coding 多套餐时用于区分各卡（与 key 生成相关） */
-  planName?: string | null;
-  unit: string;
-  balance: number;
-  reserved: number;
-  available: number;
-  chargedIn?: number;
-  used?: number;
-}
+/**
+ * 额度项（平台/用户共用）——与 types/dashboard.ts 的完整定义统一
+ * （含 mode/windows/total 等；此前这里是缺字段的简化版，导致移动端无法取 windows 用量）。
+ */
+export type { QuotaItem } from './dashboard';
+import type { QuotaItem } from './dashboard';
 
 /** Top 用户（admin） */
 export interface TopUser {
