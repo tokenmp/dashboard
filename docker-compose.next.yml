@@ -1,0 +1,54 @@
+# ============================================================
+# TokenMP Dashboard —— 预览栈编排（tokenmp 服务器 / next.tokenmp.cn）
+# 来源: github.com/tokenmp/dashboard
+# 运行时: FrankenPHP(Caddy+PHP 8.4),容器内 80（/api/v1 与 SPA 同端口）
+# 数据库: 同机 postgres 容器（postgres-redis_default 网络内主机名 postgres）
+#         的 tokenmp_next 库 —— 预览栈独立库, v* 发布的 migrate 不碰正式库 tokenmp
+# 端口:   仅绑 127.0.0.1:18280 —— 只供同机 host 级 Caddy 反代 next.tokenmp.cn
+#         （正式栈 18180；18280/18281 为预览栈专用段）
+#
+# 密钥与版本(单一来源, 详见 docs/deployment.md):
+#   - env_file: /opt/tokenmp/secrets.env   注入容器内密钥（与正式栈同一份）
+#   - image tag: tokenmp-dashboard:${DASHBOARD_VERSION}
+#     版本号由 `docker compose --env-file /opt/tokenmp/versions-next.env` 插值提供。
+#
+# 部署: v* 标签 → 预览栈（本文件）；发布正式栈 = executor 仓库 prod-v*（promote.yml）
+# ============================================================
+services:
+  tokenmp-next-dashboard:
+    image: tokenmp-dashboard:${DASHBOARD_VERSION:-latest}
+    container_name: tokenmp-next-dashboard
+    restart: always
+    networks:
+      - pgnet
+    ports:
+      - "127.0.0.1:18280:80"
+    # 共享密钥 (JWT_SECRET / API_KEY_PEPPER / MASTER_ENCRYPTION_KEY / PG_PASS 等)
+    # 统一来自宿主机 /opt/tokenmp/secrets.env —— 单一来源, 与正式栈保持一致。
+    env_file:
+      - /opt/tokenmp/secrets.env
+    environment:
+      JWT_EXPIRE: "604800"
+      JWT_PREFIX: "Bearer"
+      APP_DEBUG: "false"
+      PG_HOST: "${PG_HOST:-postgres}"
+      PG_PORT: "${PG_PORT:-5432}"
+      # 预览栈独立库：目录/用户数据来自正式库快照, 之后各自演化
+      PG_DB: "tokenmp_next"
+      PG_USER: "${PG_USER:-tokenmp}"
+      PG_CHARSET: "utf8"
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fs -o /dev/null http://localhost/ || wget -q -O /dev/null http://localhost/ || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+    volumes:
+      # 预览栈独立 runtime（日志/缓存）, 不与正式栈共享
+      - ./data-next:/app/runtime
+    labels:
+      createdBy: "Apps"
+networks:
+  pgnet:
+    # postgres + redis 容器所在的既有网络；dashboard 经容器网直连 PG
+    name: postgres-redis_default
+    external: true
