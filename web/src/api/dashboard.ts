@@ -204,7 +204,7 @@ export async function createDashboardProviderApi(body: { name: string; display_n
 /** 编辑供应商品牌 Logo（外链 / 上传 SVG，两者传 null 即清除） */
 export async function updateDashboardProviderApi(
   id: string,
-  body: { logo_url: string | null; logo_svg: string | null },
+  body: { name?: string; display_name?: string | null; base_url?: string; logo_url?: string | null; logo_svg?: string | null },
 ): Promise<{ id: string }> {
   const res = await client.put<ApiResponse<{ id: string }>>(`/dashboard/upstream/providers/${id}`, body);
   return res.data.data;

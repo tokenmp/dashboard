@@ -15,6 +15,8 @@ export interface ProviderItem {
   logo_svg: string | null;
   endpoint_count: number;
   key_count: number;
+  /** 已配置端点的协议（去重；列表标签展示用） */
+  protocols?: string[];
   /** 供应商级思考深度配置;null = 未配置 */
   thinking: { supported_efforts?: string[] | null; default_effort?: string | null } | null;
   created_at: string;

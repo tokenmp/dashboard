@@ -22,6 +22,7 @@ import { DataTable } from '@/components/ui/data-table';
 import { DataTableColumnHeader } from '@/components/ui/data-table-column-header';
 import { formatCompact, formatNumber } from '@/utils/format';
 import { ProviderCreateDialog } from './ProviderCreateDialog';
+import { ProviderEditDialog } from './ProviderEditDialog';
 import { findModelIcon } from '@/components/ModelIcon';
 import { ProviderLogo } from '@/components/ProviderLogo';
 import { ProviderLogoDialog } from './ProviderLogoDialog';
@@ -99,6 +100,19 @@ function Pager({ page, size, total, loading, setPage }: { page: number; size: nu
 }
 
 /* ----------------------------- 供应商 ----------------------------- */
+
+/** 端点协议 → 标签文案 */
+const PROTOCOL_LABELS: Record<string, string> = {
+  openai_chat: 'OpenAI Chat',
+  anthropic_messages: 'Anthropic Messages',
+  openai_responses: 'OpenAI Responses',
+  image_generation: 'Image',
+  tokenmp_gateway: 'Gateway',
+  custom: 'Custom',
+  openai: 'OpenAI',
+  anthropic: 'Anthropic',
+};
+
 function ProvidersTab() {
   const { initial: urlInit, write } = useUrlQueryState([
     { name: 'q', key: 'keyword' },
@@ -107,6 +121,7 @@ function ProvidersTab() {
   ]);
   const [thinkingProvider, setThinkingProvider] = useState<ProviderItem | null>(null);
   const [logoProvider, setLogoProvider] = useState<ProviderItem | null>(null);
+  const [editProvider, setEditProvider] = useState<ProviderItem | null>(null);
   const { list, total, page, size, loading, error, params, reload, setPage, setFilters } =
     usePagedQuery(getProvidersApiLazy, { initial: { size: 20, sort: '-created_at', ...urlInit } as UpstreamQuery });
   useEffect(() => { write(params); }, [params]);
@@ -139,57 +154,66 @@ function ProvidersTab() {
       },
     },
     {
-      id: 'status',
-      meta: { className: 'w-[90px]' },
-      header: () => <span className="text-xs font-medium text-muted-foreground">状态</span>,
-      cell: ({ row }) => <StatusBadge status={row.original.status} />,
-    },
-    {
       id: 'baseUrl',
-      header: () => <span className="text-xs font-medium text-muted-foreground">base_url</span>,
-      cell: ({ row }) => <span className="block max-w-[300px] truncate font-mono text-xs text-muted-foreground">{row.original.base_url}</span>,
+      header: () => <span className="text-xs font-medium text-muted-foreground">Base URL</span>,
+      cell: ({ row }) => <span className="block max-w-[300px] truncate font-mono text-xs text-muted-foreground">{row.original.base_url || '—'}</span>,
     },
     {
       id: 'endpoints',
-      meta: { className: 'w-[80px] text-right' },
       header: () => <span className="text-xs font-medium text-muted-foreground">端点</span>,
-      cell: ({ row }) => (
-        <button
-          type="button"
-          className="inline-flex items-center gap-1 rounded text-muted-foreground hover:text-foreground"
-          onClick={() => setEndpointsProvider({ id: row.original.id, name: row.original.display_name || row.original.name })}
-        >
-          <Plug className="h-3.5 w-3.5" />
-          <span className="tabular-nums text-xs">{row.original.endpoint_count}</span>
-        </button>
-      ),
+      cell: ({ row }) => {
+        const p = row.original;
+        const protocols = p.protocols ?? [];
+        return (
+          <button
+            type="button"
+            className="flex max-w-[320px] flex-wrap items-center gap-1 rounded text-left hover:opacity-80"
+            title={`管理端点（共 ${p.endpoint_count} 个）`}
+            onClick={() => setEndpointsProvider({ id: p.id, name: p.display_name || p.name })}
+          >
+            {protocols.length === 0
+              ? <span className="inline-flex items-center gap-1 text-xs text-muted-foreground"><Plug className="h-3.5 w-3.5" />未配置</span>
+              : protocols.map((proto) => (
+                <Badge key={proto} variant="secondary" className="text-[10px]">
+                  {PROTOCOL_LABELS[proto] ?? proto}
+                </Badge>
+              ))}
+          </button>
+        );
+      },
     },
     {
       id: 'action',
-      meta: { className: 'w-[50px] text-right' },
-      header: () => null,
-      cell: ({ row }) => (
-        <div className="flex justify-end gap-1">
-          <Button
-            variant="ghost"
-            size="icon"
-            className={`h-7 w-7 ${row.original.logo_url || row.original.logo_svg ? 'text-primary' : ''}`}
-            title="品牌 Logo（前台模型广场筛选展示）"
-            onClick={() => setLogoProvider(row.original)}
-          >
-            <Image className="h-4 w-4" />
-          </Button>
-          <Button
-            variant="ghost"
-            size="icon"
-            className={`h-7 w-7 ${row.original.thinking ? 'text-primary' : ''}`}
-            title="思考配置（供应商级，模型/映射未配置时继承此处）"
-            onClick={() => setThinkingProvider(row.original)}
-          >
-            <Brain className="h-4 w-4" />
-          </Button>
-        </div>
-      ),
+      meta: { className: 'w-[280px] text-right' },
+      header: () => <span className="text-xs font-medium text-muted-foreground">操作</span>,
+      cell: ({ row }) => {
+        const p = row.original;
+        return (
+          <div className="flex justify-end gap-1.5">
+            <Button variant="outline" size="sm" className="h-7 px-2 text-xs" onClick={() => setEditProvider(p)}>
+              <Pencil className="mr-1 h-3.5 w-3.5" />编辑
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              className={`h-7 px-2 text-xs ${p.logo_url || p.logo_svg ? 'text-primary' : ''}`}
+              title="品牌 Logo（前台模型广场筛选展示）"
+              onClick={() => setLogoProvider(p)}
+            >
+              <Image className="mr-1 h-3.5 w-3.5" />修改 Logo
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              className={`h-7 px-2 text-xs ${p.thinking ? 'text-primary' : ''}`}
+              title="思考配置（供应商级，模型/映射未配置时继承此处）"
+              onClick={() => setThinkingProvider(p)}
+            >
+              <Brain className="mr-1 h-3.5 w-3.5" />思考配置
+            </Button>
+          </div>
+        );
+      },
     },
   ], []);
   return (
@@ -214,6 +238,7 @@ function ProvidersTab() {
       </CardContent></Card>
       <Pager page={page} size={size} total={total} loading={loading} setPage={setPage} />
       <ProviderCreateDialog open={createOpen} onOpenChange={setCreateOpen} onCreated={reload} />
+      <ProviderEditDialog provider={editProvider} onClose={() => setEditProvider(null)} onSaved={reload} />
       <ProviderLogoDialog provider={logoProvider} onClose={() => setLogoProvider(null)} onSaved={reload} />
       <ProviderEndpointsDialog open={!!endpointsProvider} onOpenChange={(o) => !o && setEndpointsProvider(null)} providerId={endpointsProvider?.id ?? null} providerName={endpointsProvider?.name} />
       <ThinkingConfigDialog
