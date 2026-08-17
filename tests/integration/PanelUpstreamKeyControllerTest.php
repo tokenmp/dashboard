@@ -395,4 +395,78 @@ final class PanelUpstreamKeyControllerTest extends IntegrationTestCase
             $this->assertSame(400, $e->getStatusCode());
         }
     }
+
+    public function testCreateKeyWithCustomUpstreamNames(): void
+    {
+        $cat = $this->seedCatalog();
+        $user = $this->uuid();
+        $this->seedUser($user);
+        $this->actingAs($user);
+
+        // 覆盖转发名；另带一个空串覆盖（应回落模板值）
+        $this->postRequest([
+            'provider_id' => $cat['providerId'], 'name' => 'k', 'key' => 'sk-user-own-1234',
+            'billing_mode' => 'plan', 'model_ids' => [$cat['modelId']],
+            'upstream_names' => [$cat['modelId'] => '  my-custom-model '],
+        ]);
+        $keyId = $this->body($this->controller()->createKey())['data']['id'];
+
+        $m = $this->rows("select upstream_model_name from upstream_model_mappings where upstream_key_id = ? and status <> 'deleted'", [$keyId]);
+        $this->assertSame('my-custom-model', $m[0]['upstream_model_name'], '用户指定名应清洗后覆盖模板值');
+
+        // 超长拒绝
+        $this->postRequest([
+            'provider_id' => $cat['providerId'], 'name' => 'k2', 'key' => 'sk-user-own-5678',
+            'billing_mode' => 'plan', 'model_ids' => [$cat['modelId']],
+            'upstream_names' => [$cat['modelId'] => str_repeat('a', 201)],
+        ]);
+        try {
+            $this->controller()->createKey();
+            $this->fail('超长上游模型名应 400');
+        } catch (HttpException $e) {
+            $this->assertSame(400, $e->getStatusCode());
+        }
+    }
+
+    public function testUpdateModelRenamesUpstreamName(): void
+    {
+        $cat = $this->seedCatalog();
+        $user = $this->uuid();
+        $this->seedUser($user);
+        $this->actingAs($user);
+        $this->postRequest([
+            'provider_id' => $cat['providerId'], 'name' => 'k', 'key' => 'sk-user-own-1234',
+            'billing_mode' => 'plan', 'model_ids' => [$cat['modelId']],
+        ]);
+        $keyId = $this->body($this->controller()->createKey())['data']['id'];
+        $mapping = $this->rows("select id from upstream_model_mappings where upstream_key_id = ? and status <> 'deleted'", [$keyId])[0];
+
+        $this->postRequest(['upstream_model_name' => 'renamed-model']);
+        $result = $this->body($this->controller()->updateModel($keyId, $mapping['id']))['data'];
+        $this->assertSame('renamed-model', $result['upstream_model_name']);
+
+        $m = $this->rows("select upstream_model_name from upstream_model_mappings where id = ?", [$mapping['id']])[0];
+        $this->assertSame('renamed-model', $m['upstream_model_name']);
+
+        // 空名拒绝
+        $this->postRequest(['upstream_model_name' => '  ']);
+        try {
+            $this->controller()->updateModel($keyId, $mapping['id']);
+            $this->fail('空转发名应 400');
+        } catch (HttpException $e) {
+            $this->assertSame(400, $e->getStatusCode());
+        }
+
+        // 他人映射 404
+        $mallory = $this->uuid();
+        $this->seedUser($mallory);
+        $this->actingAs($mallory);
+        $this->postRequest(['upstream_model_name' => 'hijack']);
+        try {
+            $this->controller()->updateModel($keyId, $mapping['id']);
+            $this->fail('跨用户改映射应 404');
+        } catch (HttpException $e) {
+            $this->assertSame(404, $e->getStatusCode());
+        }
+    }
 }
