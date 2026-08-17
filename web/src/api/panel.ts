@@ -196,6 +196,8 @@ export interface CreateUpstreamKeyPayload {
   key: string;
   billing_mode: 'plan' | 'free';
   model_ids: string[];
+  /** model_id → 上游侧真实模型名（不填用平台模板值） */
+  upstream_names?: Record<string, string>;
 }
 export async function createPanelUpstreamKeyApi(
   payload: CreateUpstreamKeyPayload,
@@ -205,7 +207,7 @@ export async function createPanelUpstreamKeyApi(
 }
 export async function updatePanelUpstreamKeyApi(
   id: string,
-  payload: { name?: string; billing_mode?: 'plan' | 'free'; key?: string; provider_id?: string; model_ids?: string[] },
+  payload: { name?: string; billing_mode?: 'plan' | 'free'; key?: string; provider_id?: string; model_ids?: string[]; upstream_names?: Record<string, string> },
 ): Promise<{ id: string }> {
   const res = await client.put<ApiResponse<{ id: string }>>(`/panel/upstream/keys/${id}`, payload);
   return res.data.data;
@@ -230,8 +232,22 @@ export async function probePanelUpstreamKeyApi(
 export async function addPanelUpstreamKeyModelsApi(
   id: string,
   modelIds: string[],
+  upstreamNames?: Record<string, string>,
 ): Promise<{ id: string }> {
-  const res = await client.post<ApiResponse<{ id: string }>>(`/panel/upstream/keys/${id}/models`, { model_ids: modelIds });
+  const res = await client.post<ApiResponse<{ id: string }>>(`/panel/upstream/keys/${id}/models`, {
+    model_ids: modelIds,
+    ...(upstreamNames && Object.keys(upstreamNames).length > 0 ? { upstream_names: upstreamNames } : {}),
+  });
+  return res.data.data;
+}
+export async function updatePanelUpstreamKeyModelApi(
+  id: string,
+  mappingId: string,
+  upstreamModelName: string,
+): Promise<{ id: string; upstream_model_name: string }> {
+  const res = await client.put<ApiResponse<{ id: string; upstream_model_name: string }>>(`/panel/upstream/keys/${id}/models/${mappingId}`, {
+    upstream_model_name: upstreamModelName,
+  });
   return res.data.data;
 }
 export async function removePanelUpstreamKeyModelApi(

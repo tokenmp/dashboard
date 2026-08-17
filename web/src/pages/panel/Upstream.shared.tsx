@@ -10,6 +10,7 @@ import {
   probePanelUpstreamKeyApi,
   addPanelUpstreamKeyModelsApi,
   removePanelUpstreamKeyModelApi,
+  updatePanelUpstreamKeyModelApi,
 } from '@/api/panel';
 import { useAsync } from '@/hooks/useAsync';
 import { useMutation } from '@/hooks/useMutation';
@@ -30,6 +31,40 @@ import {
 } from '@/components/ui/dialog';
 
 /** 「我的上游」桌面/移动共享件：计费徽标、探测单元格与三个对话框。 */
+
+/**
+ * 已选模型的「转发到上游模型名」编辑行（默认=平台模板值，可改成上游真实模型名）。
+ * models 提供模板名兜底；values 为用户覆盖（model_id → 名）；onChange 回写。
+ */
+export function UpstreamNameRows({ models, selectedIds, values, onChange }: {
+  models: UpstreamModelOption[];
+  selectedIds: string[];
+  values: Record<string, string>;
+  onChange: (next: Record<string, string>) => void;
+}) {
+  const selected = selectedIds
+    .map((id) => models.find((m) => m.id === id))
+    .filter((m): m is UpstreamModelOption => m !== undefined);
+  if (selected.length === 0) return null;
+  return (
+    <div className="space-y-1.5">
+      <Label>转发到上游模型名（默认用平台模板值，可改）</Label>
+      <div className="space-y-1.5">
+        {selected.map((m) => (
+          <div key={m.id} className="flex items-center gap-2">
+            <span className="w-2/5 shrink-0 truncate text-xs text-muted-foreground" title={m.name}>{m.display_name || m.name}</span>
+            <Input
+              value={values[m.id] ?? m.upstream_model_name ?? m.name}
+              onChange={(e) => onChange({ ...values, [m.id]: e.target.value })}
+              placeholder={m.upstream_model_name || m.name}
+              className="h-8 flex-1 font-mono text-xs"
+            />
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
 
 /** 计费模式徽标：free = 免扣套餐（走自有 key 不耗额度） */
 export function BillingModeBadge({ mode }: { mode: string }) {
@@ -63,6 +98,7 @@ export function CreateUpstreamKeyDialog({ open, submitting, onClose, onDone }: {
   const [name, setName] = useState('');
   const [providerId, setProviderId] = useState('');
   const [modelIds, setModelIds] = useState<string[]>([]);
+  const [nameOverrides, setNameOverrides] = useState<Record<string, string>>({});
   const [billingMode, setBillingMode] = useState<'plan' | 'free'>('plan');
   const [keyText, setKeyText] = useState('');
   const { mutate } = useMutation();
@@ -80,17 +116,22 @@ export function CreateUpstreamKeyDialog({ open, submitting, onClose, onDone }: {
   const models: UpstreamModelOption[] = modelsData?.models ?? [];
 
   useEffect(() => {
-    if (open) { setName(''); setProviderId(''); setModelIds([]); setBillingMode('plan'); setKeyText(''); }
+    if (open) { setName(''); setProviderId(''); setModelIds([]); setNameOverrides({}); setBillingMode('plan'); setKeyText(''); }
   }, [open]);
 
   const submit = (e: React.FormEvent) => {
     e.preventDefault();
+    // 只送非空覆盖（空串=用模板值）
+    const upstreamNames = Object.fromEntries(
+      modelIds.map((id) => [id, (nameOverrides[id] ?? '').trim()]).filter(([, v]) => v !== ''),
+    );
     mutate(() => createPanelUpstreamKeyApi({
       provider_id: providerId,
       name: name.trim(),
       key: keyText.trim(),
       billing_mode: billingMode,
       model_ids: modelIds,
+      ...(Object.keys(upstreamNames).length > 0 ? { upstream_names: upstreamNames } : {}),
     }), { successMsg: '已创建，约 30 秒后生效', onSuccess: onDone }).catch(() => {});
   };
 
@@ -104,7 +145,7 @@ export function CreateUpstreamKeyDialog({ open, submitting, onClose, onDone }: {
         <form onSubmit={submit} className="space-y-4">
           <div className="space-y-1.5">
             <Label>供应商</Label>
-            <Select value={providerId} onValueChange={(v) => { setProviderId(v); setModelIds([]); }} disabled={optionsLoading || providers.length === 0}>
+            <Select value={providerId} onValueChange={(v) => { setProviderId(v); setModelIds([]); setNameOverrides({}); }} disabled={optionsLoading || providers.length === 0}>
               <SelectTrigger className="w-full"><SelectValue placeholder={optionsLoading ? '加载中…' : providers.length === 0 ? '暂无可选供应商' : '选择供应商'} /></SelectTrigger>
               <SelectContent>
                 {providers.map((p) => (
@@ -123,6 +164,7 @@ export function CreateUpstreamKeyDialog({ open, submitting, onClose, onDone }: {
               disabled={providerId === '' || modelsLoading || models.length === 0}
             />
           </div>
+          <UpstreamNameRows models={models} selectedIds={modelIds} values={nameOverrides} onChange={setNameOverrides} />
           <div className="space-y-1.5">
             <Label>计费模式</Label>
             <div className="grid gap-2 sm:grid-cols-2">
@@ -177,6 +219,7 @@ export function EditUpstreamKeyDialog({ row, submitting, onClose, onDone }: {
   const [keyText, setKeyText] = useState('');
   const [providerId, setProviderId] = useState('');
   const [modelIds, setModelIds] = useState<string[]>([]);
+  const [nameOverrides, setNameOverrides] = useState<Record<string, string>>({});
   const { mutate } = useMutation();
   const open = row !== null;
   useEffect(() => {
@@ -186,6 +229,7 @@ export function EditUpstreamKeyDialog({ row, submitting, onClose, onDone }: {
       setKeyText('');
       setProviderId(row.provider_id);
       setModelIds([]);
+      setNameOverrides({});
     }
   }, [open, row]);
 
@@ -206,11 +250,18 @@ export function EditUpstreamKeyDialog({ row, submitting, onClose, onDone }: {
   const submit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!row) return;
+    const upstreamNames = Object.fromEntries(
+      modelIds.map((id) => [id, (nameOverrides[id] ?? '').trim()]).filter(([, v]) => v !== ''),
+    );
     mutate(() => updatePanelUpstreamKeyApi(row.id, {
       ...(name.trim() !== row.name ? { name: name.trim() } : {}),
       ...(billingMode !== row.billing_mode ? { billing_mode: billingMode } : {}),
       ...(keyText.trim() !== '' ? { key: keyText.trim() } : {}),
-      ...(switching ? { provider_id: providerId, model_ids: modelIds } : {}),
+      ...(switching ? {
+        provider_id: providerId,
+        model_ids: modelIds,
+        ...(Object.keys(upstreamNames).length > 0 ? { upstream_names: upstreamNames } : {}),
+      } : {}),
     }), { successMsg: switching ? '已保存，模型映射已按新供应商重建' : '已保存', onSuccess: onDone }).catch(() => {});
   };
 
@@ -225,7 +276,7 @@ export function EditUpstreamKeyDialog({ row, submitting, onClose, onDone }: {
           </div>
           <div className="space-y-1.5">
             <Label>供应商</Label>
-            <Select value={providerId} onValueChange={(v) => { setProviderId(v); setModelIds([]); }} disabled={providersLoading || providers.length === 0}>
+            <Select value={providerId} onValueChange={(v) => { setProviderId(v); setModelIds([]); setNameOverrides({}); }} disabled={providersLoading || providers.length === 0}>
               <SelectTrigger className="w-full"><SelectValue placeholder={providersLoading ? '加载中…' : '选择供应商'} /></SelectTrigger>
               <SelectContent>
                 {providers.map((p) => (
@@ -244,6 +295,7 @@ export function EditUpstreamKeyDialog({ row, submitting, onClose, onDone }: {
                 placeholder={modelsLoading ? '加载中…' : '选择要开通的模型'}
                 disabled={modelsLoading || switchModels.length === 0}
               />
+              <UpstreamNameRows models={switchModels} selectedIds={modelIds} values={nameOverrides} onChange={setNameOverrides} />
               <p className="text-xs text-muted-foreground">更换供应商会清空现有模型映射并按新供应商重建。</p>
             </div>
           )}
@@ -284,10 +336,13 @@ export function UpstreamKeyDetailDialog({ keyId, onClose, onChanged }: {
   );
   const [probe, setProbe] = useState<UpstreamProbeResult | null>(null);
   const [addModels, setAddModels] = useState<string[]>([]);
+  const [addNameOverrides, setAddNameOverrides] = useState<Record<string, string>>({});
   const [providerId, setProviderId] = useState('');
+  // 行内改转发名：mappingId → 编辑中的名字（null=未编辑）
+  const [renaming, setRenaming] = useState<Record<string, string>>({});
   const { loading: probing, mutate: runProbe } = useMutation();
   const { loading: mutating, mutate } = useMutation();
-  useEffect(() => { setProbe(null); setAddModels([]); setProviderId(''); }, [keyId]);
+  useEffect(() => { setProbe(null); setAddModels([]); setAddNameOverrides({}); setProviderId(''); setRenaming({}); }, [keyId]);
 
   // 增模型所需的可选列表（当前 key 的供应商）
   const key = data?.key;
@@ -305,7 +360,22 @@ export function UpstreamKeyDetailDialog({ keyId, onClose, onChanged }: {
   };
   const onAddModels = () => {
     if (!keyId || addModels.length === 0) return;
-    mutate(() => addPanelUpstreamKeyModelsApi(keyId, addModels), { successMsg: '已添加', onSuccess: () => { setAddModels([]); reload(); onChanged(); } }).catch(() => {});
+    const upstreamNames = Object.fromEntries(
+      addModels.map((id) => [id, (addNameOverrides[id] ?? '').trim()]).filter(([, v]) => v !== ''),
+    );
+    mutate(() => addPanelUpstreamKeyModelsApi(keyId, addModels, Object.keys(upstreamNames).length > 0 ? upstreamNames : undefined), {
+      successMsg: '已添加',
+      onSuccess: () => { setAddModels([]); setAddNameOverrides({}); reload(); onChanged(); },
+    }).catch(() => {});
+  };
+  const onRenameModel = (mappingId: string) => {
+    if (!keyId) return;
+    const next = (renaming[mappingId] ?? '').trim();
+    if (next === '') return;
+    mutate(() => updatePanelUpstreamKeyModelApi(keyId, mappingId, next), {
+      successMsg: '转发名已更新',
+      onSuccess: () => { setRenaming((r) => { const n = { ...r }; delete n[mappingId]; return n; }); reload(); },
+    }).catch(() => {});
   };
   const onRemoveModel = (mappingId: string) => {
     if (!keyId) return;
@@ -352,14 +422,33 @@ export function UpstreamKeyDetailDialog({ keyId, onClose, onChanged }: {
               <span className="text-sm font-medium">已开通模型（{data.mappings.filter((m) => m.status !== 'deleted').length}）</span>
               <div className="divide-y rounded-md border">
                 {data.mappings.filter((m) => m.status !== 'deleted').map((m) => (
-                  <div key={m.id} className="flex items-center justify-between gap-2 px-3 py-2">
-                    <div className="min-w-0">
-                      <div className="truncate text-sm font-medium">{m.model?.name ?? m.model_id}</div>
-                      <div className="truncate font-mono text-xs text-muted-foreground">→ {m.upstream_model_name ?? m.model?.name ?? '—'}</div>
+                  <div key={m.id} className="px-3 py-2">
+                    <div className="flex items-center justify-between gap-2">
+                      <div className="min-w-0">
+                        <div className="truncate text-sm font-medium">{m.model?.name ?? m.model_id}</div>
+                        <div className="truncate font-mono text-xs text-muted-foreground">→ {m.upstream_model_name ?? m.model?.name ?? '—'}</div>
+                      </div>
+                      <div className="flex shrink-0 gap-1">
+                        <Button type="button" size="sm" variant="ghost" className="h-7" onClick={() => setRenaming((r) => ({ ...r, [m.id]: r[m.id] ?? (m.upstream_model_name ?? m.model?.name ?? '') }))} disabled={mutating}>
+                          改转发名
+                        </Button>
+                        <Button type="button" size="sm" variant="ghost" className="h-7 text-destructive hover:text-destructive" onClick={() => onRemoveModel(m.id)} disabled={mutating}>
+                          移除
+                        </Button>
+                      </div>
                     </div>
-                    <Button type="button" size="sm" variant="ghost" className="h-7 text-destructive hover:text-destructive" onClick={() => onRemoveModel(m.id)} disabled={mutating}>
-                      移除
-                    </Button>
+                    {renaming[m.id] !== undefined && (
+                      <div className="mt-2 flex items-center gap-2">
+                        <Input
+                          value={renaming[m.id]}
+                          onChange={(e) => setRenaming((r) => ({ ...r, [m.id]: e.target.value }))}
+                          placeholder="上游侧真实模型名"
+                          className="h-8 flex-1 font-mono text-xs"
+                        />
+                        <Button type="button" size="sm" className="h-8" onClick={() => onRenameModel(m.id)} disabled={mutating || (renaming[m.id] ?? '').trim() === ''}>保存</Button>
+                        <Button type="button" size="sm" variant="ghost" className="h-8" onClick={() => setRenaming((r) => { const n = { ...r }; delete n[m.id]; return n; })}>取消</Button>
+                      </div>
+                    )}
                   </div>
                 ))}
                 {data.mappings.filter((m) => m.status !== 'deleted').length === 0 && (
@@ -367,15 +456,18 @@ export function UpstreamKeyDetailDialog({ keyId, onClose, onChanged }: {
                 )}
               </div>
               {addableModels.length > 0 && (
-                <div className="flex items-center gap-2">
-                  <MultiSelect
-                    options={addableModels.map((m) => ({ value: m.id, label: m.display_name || m.name, hint: m.name }))}
-                    value={addModels}
-                    onChange={setAddModels}
-                    placeholder="添加模型"
-                    disabled={mutating}
-                  />
-                  <Button type="button" size="sm" variant="outline" onClick={onAddModels} disabled={addModels.length === 0 || mutating}>添加</Button>
+                <div className="space-y-1.5">
+                  <div className="flex items-center gap-2">
+                    <MultiSelect
+                      options={addableModels.map((m) => ({ value: m.id, label: m.display_name || m.name, hint: m.name }))}
+                      value={addModels}
+                      onChange={setAddModels}
+                      placeholder="添加模型"
+                      disabled={mutating}
+                    />
+                    <Button type="button" size="sm" variant="outline" onClick={onAddModels} disabled={addModels.length === 0 || mutating}>添加</Button>
+                  </div>
+                  <UpstreamNameRows models={addableModels} selectedIds={addModels} values={addNameOverrides} onChange={setAddNameOverrides} />
                 </div>
               )}
             </div>

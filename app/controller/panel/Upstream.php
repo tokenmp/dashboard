@@ -244,15 +244,16 @@ class Upstream extends BaseController
 
         $keyId = UpstreamKeyService::genUuid();
         $encrypted = UpstreamKeyService::encryptKey($rawKey);
+        $upstreamNames = $this->upstreamNamesInput();
 
-        $pg->transaction(function () use ($pg, $keyId, $providerId, $name, $rawKey, $encrypted, $billingMode, $userId, $modelIds) {
+        $pg->transaction(function () use ($pg, $keyId, $providerId, $name, $rawKey, $encrypted, $billingMode, $userId, $modelIds, $upstreamNames) {
             $pg->execute(
                 "INSERT INTO upstream_keys (id, provider_id, name, key_prefix, key_suffix, encrypted_key, encryption_version, "
                 . "max_concurrency, priority, quota_type, status, source_type, owner_user_id, visibility, review_status, market_status, billing_mode, created_at, updated_at) "
                 . "VALUES (?,?,?,?,?,?,1,10,0,'token_plan','active','user',?,'private','approved','offline',?, NOW(), NOW())",
                 [$keyId, $providerId, $name, substr($rawKey, 0, 4), substr($rawKey, -4), $encrypted, $userId, $billingMode]
             );
-            $this->cloneTemplateMappings($pg, $keyId, $providerId, $modelIds);
+            $this->cloneTemplateMappings($pg, $keyId, $providerId, $modelIds, $upstreamNames);
         });
 
         return success(['id' => $keyId]);
@@ -341,7 +342,8 @@ class Upstream extends BaseController
         }
         $sets[] = 'updated_at = NOW()';
         $args[] = $id;
-        $pg->transaction(function () use ($pg, $sets, $args, $id, $ctx, $switchingProvider, $providerId, $modelIds) {
+        $upstreamNames = $switchingProvider ? $this->upstreamNamesInput() : [];
+        $pg->transaction(function () use ($pg, $sets, $args, $id, $ctx, $switchingProvider, $providerId, $modelIds, $upstreamNames) {
             $pg->execute(
                 "UPDATE upstream_keys SET " . implode(', ', $sets) . " WHERE id = ? AND owner_user_id = ? AND status <> 'deleted'",
                 array_merge($args, [$ctx->userId()])
@@ -351,7 +353,7 @@ class Upstream extends BaseController
                     "UPDATE upstream_model_mappings SET status = 'deleted', updated_at = NOW() WHERE upstream_key_id = ? AND status <> 'deleted'",
                     [$id]
                 );
-                $this->cloneTemplateMappings($pg, $id, $providerId, $modelIds);
+                $this->cloneTemplateMappings($pg, $id, $providerId, $modelIds, $upstreamNames);
             }
         });
         return success(['id' => $id, 'billing_mode' => $billingMode !== '' ? $billingMode : $own['billing_mode']]);
@@ -452,10 +454,37 @@ class Upstream extends BaseController
             throw new HttpException(400, '模型映射数量已达上限（' . self::MAX_MAPPINGS_PER_KEY . ' 个）');
         }
 
-        $pg->transaction(function () use ($pg, $id, $own, $modelIds) {
-            $this->cloneTemplateMappings($pg, $id, $own['provider_id'], $modelIds);
+        $upstreamNames = $this->upstreamNamesInput();
+        $pg->transaction(function () use ($pg, $id, $own, $modelIds, $upstreamNames) {
+            $this->cloneTemplateMappings($pg, $id, $own['provider_id'], $modelIds, $upstreamNames);
         });
         return success(['id' => $id]);
+    }
+
+    /**
+     * PUT /api/v1/panel/upstream/keys/:id/models/:mid —— 修改单条映射的转发目标
+     * body: { upstream_model_name }（必填；即上游侧真实模型名）
+     */
+    public function updateModel($id, $mid)
+    {
+        $ctx = DataScope::forSelf(app('user'));
+        $pg = Db::connect('pgsql');
+        $this->requireOwnKey($pg, $id, $ctx->userId());
+
+        $upstreamName = self::sanitizeUpstreamModelName((string) $this->request->post('upstream_model_name', ''));
+        if ($upstreamName === null) {
+            throw new HttpException(400, 'upstream_model_name 必填');
+        }
+        $n = $pg->execute(
+            "UPDATE upstream_model_mappings SET upstream_model_name = ?, updated_at = NOW()"
+            . " WHERE id = ? AND upstream_key_id = ? AND status <> 'deleted'"
+            . " AND EXISTS (SELECT 1 FROM upstream_keys uk WHERE uk.id = upstream_model_mappings.upstream_key_id AND uk.owner_user_id = ?)",
+            [$upstreamName, $mid, $id, $ctx->userId()]
+        );
+        if ($n === 0) {
+            throw new HttpException(404, '映射不存在');
+        }
+        return success(['id' => $mid, 'upstream_model_name' => $upstreamName]);
     }
 
     /** DELETE /api/v1/panel/upstream/keys/:id/models/:mid —— 移除模型映射 */
@@ -494,11 +523,48 @@ class Upstream extends BaseController
     }
 
     /**
+     * 校验/清洗用户指定的上游模型名（转发目标）：去空白与控制符，1-200 字符。
+     * 空串返回 null（= 未指定，回落模板值）；非法长度抛 400。
+     */
+    private static function sanitizeUpstreamModelName(string $raw): ?string
+    {
+        $name = trim(preg_replace('/[\x00-\x1F\x7F]/u', '', $raw) ?? '');
+        if ($name === '') {
+            return null;
+        }
+        if (mb_strlen($name) > 200) {
+            throw new HttpException(400, '上游模型名过长（≤200 字符）');
+        }
+        return $name;
+    }
+
+    /** 读取并校验 upstream_names（model_id → 上游模型名）映射；恒返回 string 键数组 */
+    private function upstreamNamesInput(): array
+    {
+        $raw = $this->request->post('upstream_names', []);
+        if (!is_array($raw)) {
+            throw new HttpException(400, 'upstream_names 格式非法');
+        }
+        $out = [];
+        foreach ($raw as $modelId => $name) {
+            if (!is_string($name)) {
+                continue;
+            }
+            $clean = self::sanitizeUpstreamModelName($name);
+            if ($clean !== null) {
+                $out[(string) $modelId] = $clean;
+            }
+        }
+        return $out;
+    }
+
+    /**
      * 以同供应商平台 key 的 active mapping 为模板克隆映射到自有 key：
      * 复制 upstream_model_name/端点/定价/上下文窗/思考配置，并克隆模板的路由组归属
      * （无归属时兜底加入 default 组）。重复模型（该 key 已有未删映射）自动跳过。
+     * $upstreamNames：model_id → 用户指定的上游模型名（覆盖模板值；空串=用模板）。
      */
-    private function cloneTemplateMappings($pg, string $keyId, string $providerId, array $modelIds): void
+    private function cloneTemplateMappings($pg, string $keyId, string $providerId, array $modelIds, array $upstreamNames = []): void
     {
         $defaultGroup = $pg->query("select id from route_groups where name = 'default' and status <> 'deleted' limit 1");
         $defaultGroupId = $defaultGroup[0]['id'] ?? null;
@@ -525,12 +591,14 @@ class Upstream extends BaseController
                 throw new HttpException(400, '所选模型在该供应商下无平台模板映射');
             }
             $t = $tpl[0];
+            // 转发名：用户指定 > 模板值
+            $upstreamName = self::sanitizeUpstreamModelName($upstreamNames[$modelId] ?? '') ?? $t['upstream_model_name'];
             $mappingId = UpstreamKeyService::genUuid();
             $pg->execute(
                 "INSERT INTO upstream_model_mappings (id, upstream_key_id, model_id, upstream_model_name, "
                 . "input_price_per_token, output_price_per_token, max_tokens, context_window_tokens, thinking_config, status, provider_endpoint_id, created_at, updated_at) "
                 . "VALUES (?,?,?,?,?,?,?,?,?::jsonb,'active',?,NOW(),NOW())",
-                [$mappingId, $keyId, $modelId, $t['upstream_model_name'], $t['input_price_per_token'], $t['output_price_per_token'],
+                [$mappingId, $keyId, $modelId, $upstreamName, $t['input_price_per_token'], $t['output_price_per_token'],
                     $t['max_tokens'], $t['context_window_tokens'], $t['thinking_config'] !== '' ? $t['thinking_config'] : null, $t['provider_endpoint_id']]
             );
             // 路由组：克隆模板 mapping 的组；无则兜底 default 组

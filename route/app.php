@@ -104,6 +104,7 @@ Route::group('api/v1', function () {
                     Route::delete(':id', 'panel/Upstream/deleteKey')->pattern(['id' => '[\w\-]+']);
                     Route::post(':id/probe', 'panel/Upstream/probeKey')->pattern(['id' => '[\w\-]+']);
                     Route::post(':id/models', 'panel/Upstream/addModels')->pattern(['id' => '[\w\-]+']);
+                    Route::put(':id/models/:mid', 'panel/Upstream/updateModel')->pattern(['id' => '[\w\-]+', 'mid' => '[\w\-]+']);
                     Route::delete(':id/models/:mid', 'panel/Upstream/removeModel')->pattern(['id' => '[\w\-]+', 'mid' => '[\w\-]+']);
                 });
                 Route::get('models', 'panel/Upstream/models');
