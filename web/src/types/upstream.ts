@@ -244,11 +244,12 @@ export interface UpstreamQuery {
   sort?: string;
 }
 
-/** 自建上游 create-options：可选供应商（带模板模型数） */
+/** 自建上游 create-options：可选供应商（带 base_url 与模板模型数） */
 export interface UpstreamProviderOption {
   id: string;
   name: string;
   display_name: string | null;
+  base_url: string | null;
   logo_url: string | null;
   logo_svg: string | null;
   model_count: number;
