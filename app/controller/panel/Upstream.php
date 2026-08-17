@@ -145,7 +145,7 @@ class Upstream extends BaseController
 
         if ($providerId === '') {
             $providers = $pg->query(
-                "select p.id, p.name, p.display_name, p.logo_url, p.logo_svg,"
+                "select p.id, p.name, p.display_name, p.base_url, p.logo_url, p.logo_svg,"
                 . " (select count(distinct x.model_id) from ("
                 . "   select t.model_id from provider_model_templates t"
                 . "   where t.provider_id = p.id and t.status = 'active'"

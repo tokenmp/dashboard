@@ -160,7 +160,12 @@ export function CreateUpstreamKeyDialog({ open, submitting, onClose, onDone }: {
               <SelectTrigger className="w-full"><SelectValue placeholder={optionsLoading ? '加载中…' : providers.length === 0 ? '暂无可选供应商' : '选择供应商'} /></SelectTrigger>
               <SelectContent>
                 {providers.map((p) => (
-                  <SelectItem key={p.id} value={p.id}>{p.display_name || p.name}（{p.model_count} 模型）</SelectItem>
+                  <SelectItem key={p.id} value={p.id}>
+                    <span className="flex items-baseline gap-2">
+                      <span>{p.display_name || p.name}</span>
+                      {p.base_url && <span className="font-mono text-xs text-muted-foreground">{p.base_url}</span>}
+                    </span>
+                  </SelectItem>
                 ))}
               </SelectContent>
             </Select>
@@ -292,7 +297,12 @@ export function EditUpstreamKeyDialog({ row, submitting, onClose, onDone }: {
               <SelectTrigger className="w-full"><SelectValue placeholder={providersLoading ? '加载中…' : '选择供应商'} /></SelectTrigger>
               <SelectContent>
                 {providers.map((p) => (
-                  <SelectItem key={p.id} value={p.id}>{p.display_name || p.name}（{p.model_count} 模型）</SelectItem>
+                  <SelectItem key={p.id} value={p.id}>
+                    <span className="flex items-baseline gap-2">
+                      <span>{p.display_name || p.name}</span>
+                      {p.base_url && <span className="font-mono text-xs text-muted-foreground">{p.base_url}</span>}
+                    </span>
+                  </SelectItem>
                 ))}
               </SelectContent>
             </Select>
