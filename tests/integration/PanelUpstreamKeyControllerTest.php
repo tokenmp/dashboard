@@ -316,4 +316,83 @@ final class PanelUpstreamKeyControllerTest extends IntegrationTestCase
         $this->assertSame('free', $key['billing_mode']);
         $this->assertSame('sk-rotated-987654', UpstreamKeyService::decryptKey($key['encrypted_key']));
     }
+
+    public function testUpdateKeySwitchesProviderAndRebuildsMappings(): void
+    {
+        $cat = $this->seedCatalog();
+        // 第二个供应商 + 端点 + 模板（模型复用同一个）
+        $provider2 = $this->uuid();
+        $endpoint2 = $this->uuid();
+        $platformKey2 = $this->uuid();
+        $mapping2 = $this->uuid();
+        $c = $this->conn();
+        $c->execute("insert into providers (id, name, base_url, status) values (?, 'prov-two', 'http://127.0.0.1:9', 'active')", [$provider2]);
+        $c->execute("insert into provider_endpoints (id, provider_id, protocol, path, kind, status, created_at) values (?, ?, 'openai_chat', '/v1/chat/completions', 'llm.chat', 'active', NOW())", [$endpoint2, $provider2]);
+        $c->execute(
+            "insert into upstream_keys (id, provider_id, name, key_prefix, key_suffix, encrypted_key, encryption_version, status, source_type, billing_mode, created_at, updated_at) "
+            . "values (?, ?, 'platform-key-2', 'sk-b', '-0002', ?, 1, 'active', 'platform', 'plan', NOW(), NOW())",
+            [$platformKey2, $provider2, UpstreamKeyService::encryptKey('platform-secret-key-0002')]
+        );
+        $c->execute(
+            "insert into upstream_model_mappings (id, upstream_key_id, model_id, upstream_model_name, status, provider_endpoint_id, created_at) values (?, ?, ?, 'up-two-model', 'active', ?, NOW())",
+            [$mapping2, $platformKey2, $cat['modelId'], $endpoint2]
+        );
+
+        $user = $this->uuid();
+        $this->seedUser($user);
+        $this->actingAs($user);
+        $this->postRequest([
+            'provider_id' => $cat['providerId'], 'name' => 'k', 'key' => 'sk-user-own-1234',
+            'billing_mode' => 'plan', 'model_ids' => [$cat['modelId']],
+        ]);
+        $keyId = $this->body($this->controller()->createKey())['data']['id'];
+
+        // 换供应商：必须带 model_ids
+        $this->postRequest(['provider_id' => $provider2]);
+        try {
+            $this->controller()->updateKey($keyId);
+            $this->fail('换供应商缺 model_ids 应 400');
+        } catch (HttpException $e) {
+            $this->assertSame(400, $e->getStatusCode());
+        }
+
+        $this->postRequest(['provider_id' => $provider2, 'model_ids' => [$cat['modelId']]]);
+        $this->controller()->updateKey($keyId);
+
+        $key = $this->rows("select provider_id, verified_at from upstream_keys where id = ?", [$keyId])[0];
+        $this->assertSame($provider2, $key['provider_id']);
+        $this->assertNull($key['verified_at'], '换供应商后探测结论应重置');
+        // 旧映射软删，新映射按 provider2 模板克隆
+        $active = $this->rows("select upstream_model_name, provider_endpoint_id from upstream_model_mappings where upstream_key_id = ? and status <> 'deleted'", [$keyId]);
+        $this->assertCount(1, $active);
+        $this->assertSame('up-two-model', $active[0]['upstream_model_name']);
+        $this->assertSame($endpoint2, $active[0]['provider_endpoint_id']);
+        $deleted = $this->rows("select count(*) as c from upstream_model_mappings where upstream_key_id = ? and status = 'deleted'", [$keyId])[0]['c'];
+        $this->assertSame(1, (int) $deleted);
+    }
+
+    public function testUpdateKeyRejectsProviderWithoutTemplates(): void
+    {
+        $cat = $this->seedCatalog();
+        // 无模板的供应商（active 但无平台 key 映射）
+        $provider3 = $this->uuid();
+        $this->conn()->execute("insert into providers (id, name, base_url, status) values (?, 'prov-empty', 'http://127.0.0.1:9', 'active')", [$provider3]);
+
+        $user = $this->uuid();
+        $this->seedUser($user);
+        $this->actingAs($user);
+        $this->postRequest([
+            'provider_id' => $cat['providerId'], 'name' => 'k', 'key' => 'sk-user-own-1234',
+            'billing_mode' => 'plan', 'model_ids' => [$cat['modelId']],
+        ]);
+        $keyId = $this->body($this->controller()->createKey())['data']['id'];
+
+        $this->postRequest(['provider_id' => $provider3, 'model_ids' => [$cat['modelId']]]);
+        try {
+            $this->controller()->updateKey($keyId);
+            $this->fail('目标供应商无模板应 400');
+        } catch (HttpException $e) {
+            $this->assertSame(400, $e->getStatusCode());
+        }
+    }
 }

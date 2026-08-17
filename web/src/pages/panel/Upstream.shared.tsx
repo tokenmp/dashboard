@@ -175,11 +175,33 @@ export function EditUpstreamKeyDialog({ row, submitting, onClose, onDone }: {
   const [name, setName] = useState('');
   const [billingMode, setBillingMode] = useState<'plan' | 'free'>('plan');
   const [keyText, setKeyText] = useState('');
+  const [providerId, setProviderId] = useState('');
+  const [modelIds, setModelIds] = useState<string[]>([]);
   const { mutate } = useMutation();
   const open = row !== null;
   useEffect(() => {
-    if (open && row) { setName(row.name); setBillingMode(row.billing_mode === 'free' ? 'free' : 'plan'); setKeyText(''); }
+    if (open && row) {
+      setName(row.name);
+      setBillingMode(row.billing_mode === 'free' ? 'free' : 'plan');
+      setKeyText('');
+      setProviderId(row.provider_id);
+      setModelIds([]);
+    }
   }, [open, row]);
+
+  // 可选供应商（换供应商用）
+  const { data: optionsData, loading: providersLoading } = useAsync(
+    () => (open ? getPanelUpstreamCreateOptionsApi() : Promise.resolve(null)),
+    [open],
+  );
+  const providers = optionsData?.providers ?? [];
+  // 换了供应商时，加载新供应商的可选模型（须重选）
+  const switching = open && row !== null && providerId !== '' && providerId !== row.provider_id;
+  const { data: modelsData, loading: modelsLoading } = useAsync(
+    () => (switching && providerId ? getPanelUpstreamCreateOptionsApi(providerId) : Promise.resolve(null)),
+    [switching, providerId],
+  );
+  const switchModels = modelsData?.models ?? [];
 
   const submit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -188,7 +210,8 @@ export function EditUpstreamKeyDialog({ row, submitting, onClose, onDone }: {
       ...(name.trim() !== row.name ? { name: name.trim() } : {}),
       ...(billingMode !== row.billing_mode ? { billing_mode: billingMode } : {}),
       ...(keyText.trim() !== '' ? { key: keyText.trim() } : {}),
-    }), { successMsg: '已保存', onSuccess: onDone }).catch(() => {});
+      ...(switching ? { provider_id: providerId, model_ids: modelIds } : {}),
+    }), { successMsg: switching ? '已保存，模型映射已按新供应商重建' : '已保存', onSuccess: onDone }).catch(() => {});
   };
 
   return (
@@ -200,6 +223,30 @@ export function EditUpstreamKeyDialog({ row, submitting, onClose, onDone }: {
             <Label htmlFor="e-name">名称</Label>
             <Input id="e-name" value={name} onChange={(e) => setName(e.target.value)} autoFocus={!isMobile} />
           </div>
+          <div className="space-y-1.5">
+            <Label>供应商</Label>
+            <Select value={providerId} onValueChange={(v) => { setProviderId(v); setModelIds([]); }} disabled={providersLoading || providers.length === 0}>
+              <SelectTrigger className="w-full"><SelectValue placeholder={providersLoading ? '加载中…' : '选择供应商'} /></SelectTrigger>
+              <SelectContent>
+                {providers.map((p) => (
+                  <SelectItem key={p.id} value={p.id}>{p.display_name || p.name}（{p.model_count} 模型）</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          {switching && (
+            <div className="space-y-1.5">
+              <Label>模型（换供应商后须重选）</Label>
+              <MultiSelect
+                options={switchModels.map((m) => ({ value: m.id, label: m.display_name || m.name, hint: m.name }))}
+                value={modelIds}
+                onChange={setModelIds}
+                placeholder={modelsLoading ? '加载中…' : '选择要开通的模型'}
+                disabled={modelsLoading || switchModels.length === 0}
+              />
+              <p className="text-xs text-muted-foreground">更换供应商会清空现有模型映射并按新供应商重建。</p>
+            </div>
+          )}
           <div className="space-y-1.5">
             <Label>计费模式</Label>
             <Select value={billingMode} onValueChange={(v) => setBillingMode(v as 'plan' | 'free')}>
@@ -216,7 +263,7 @@ export function EditUpstreamKeyDialog({ row, submitting, onClose, onDone }: {
           </div>
           <DialogFooter>
             <Button type="button" variant="outline" onClick={onClose}>取消</Button>
-            <Button type="submit" disabled={submitting}>{submitting ? '保存中…' : '保存'}</Button>
+            <Button type="submit" disabled={submitting || (switching && modelIds.length === 0)}>{submitting ? '保存中…' : '保存'}</Button>
           </DialogFooter>
         </form>
       </DialogContent>

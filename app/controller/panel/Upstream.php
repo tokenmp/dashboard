@@ -258,7 +258,11 @@ class Upstream extends BaseController
         return success(['id' => $keyId]);
     }
 
-    /** PUT /api/v1/panel/upstream/keys/:id —— 改名 / 切换 billing_mode / 换 key */
+    /**
+     * PUT /api/v1/panel/upstream/keys/:id —— 改名 / 切换 billing_mode / 换 key / 换供应商。
+     * 换供应商（provider_id ≠ 当前）：必须同时携带 model_ids（新供应商下要开通的模型），
+     * 事务内软删旧映射 → 按新供应商平台模板重克隆；端点随之变化，verified_at 重置。
+     */
     public function updateKey($id)
     {
         $ctx = DataScope::forSelf(app('user'));
@@ -294,17 +298,62 @@ class Upstream extends BaseController
             $args[] = substr($rawKey, 0, 4);
             $sets[] = 'key_suffix = ?';
             $args[] = substr($rawKey, -4);
-            $sets[] = 'verified_at = NULL';
         }
+
+        // 换供应商：校验新供应商有模板 + 必须重选模型（映射按新模板整体重建）
+        $providerId = trim((string) $this->request->post('provider_id', ''));
+        $switchingProvider = $providerId !== '' && $providerId !== $own['provider_id'];
+        $modelIds = [];
+        if ($switchingProvider) {
+            $provider = $pg->query("select id from providers where id = ? and status = 'active' limit 1", [$providerId]);
+            if (empty($provider)) {
+                throw new HttpException(404, '供应商不存在');
+            }
+            $modelIds = $this->request->post('model_ids', []);
+            if (!is_array($modelIds) || $modelIds === []) {
+                throw new HttpException(400, '更换供应商时必须重新选择模型');
+            }
+            $modelIds = array_values(array_unique(array_map('strval', $modelIds)));
+            $placeholders = implode(',', array_fill(0, count($modelIds), '?'));
+            $validIds = $pg->query(
+                "select distinct umm.model_id from upstream_model_mappings umm"
+                . " " . self::PLATFORM_TEMPLATE_JOIN
+                . " where uk.provider_id = ? and umm.status = 'active' and umm.model_id in ($placeholders)",
+                array_merge([$providerId], $modelIds)
+            );
+            $validIdMap = array_flip(array_column($validIds, 'model_id'));
+            foreach ($modelIds as $mid) {
+                if (!isset($validIdMap[$mid])) {
+                    throw new HttpException(400, '所选模型在该供应商下不可用（无平台模板映射）');
+                }
+            }
+            $sets[] = 'provider_id = ?';
+            $args[] = $providerId;
+        }
+
         if ($sets === []) {
             throw new HttpException(400, '没有可更新字段');
         }
+        // 换 key 或换供应商都会使既有探测结论失效
+        if ($rawKey !== '' || $switchingProvider) {
+            $sets[] = 'verified_at = NULL';
+            $sets[] = 'last_validation_error = NULL';
+        }
         $sets[] = 'updated_at = NOW()';
         $args[] = $id;
-        $pg->execute(
-            "UPDATE upstream_keys SET " . implode(', ', $sets) . " WHERE id = ? AND owner_user_id = ? AND status <> 'deleted'",
-            array_merge($args, [$ctx->userId()])
-        );
+        $pg->transaction(function () use ($pg, $sets, $args, $id, $ctx, $switchingProvider, $providerId, $modelIds) {
+            $pg->execute(
+                "UPDATE upstream_keys SET " . implode(', ', $sets) . " WHERE id = ? AND owner_user_id = ? AND status <> 'deleted'",
+                array_merge($args, [$ctx->userId()])
+            );
+            if ($switchingProvider) {
+                $pg->execute(
+                    "UPDATE upstream_model_mappings SET status = 'deleted', updated_at = NOW() WHERE upstream_key_id = ? AND status <> 'deleted'",
+                    [$id]
+                );
+                $this->cloneTemplateMappings($pg, $id, $providerId, $modelIds);
+            }
+        });
         return success(['id' => $id, 'billing_mode' => $billingMode !== '' ? $billingMode : $own['billing_mode']]);
     }
 

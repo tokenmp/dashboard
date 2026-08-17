@@ -205,7 +205,7 @@ export async function createPanelUpstreamKeyApi(
 }
 export async function updatePanelUpstreamKeyApi(
   id: string,
-  payload: { name?: string; billing_mode?: 'plan' | 'free'; key?: string },
+  payload: { name?: string; billing_mode?: 'plan' | 'free'; key?: string; provider_id?: string; model_ids?: string[] },
 ): Promise<{ id: string }> {
   const res = await client.put<ApiResponse<{ id: string }>>(`/panel/upstream/keys/${id}`, payload);
   return res.data.data;
