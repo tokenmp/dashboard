@@ -10,6 +10,7 @@ import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Switch } from '@/components/ui/switch';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { MultiSelect } from '@/components/ui/multi-select';
 import { EmptyState } from '@/components/EmptyState';
 import { ProviderLogo } from '@/components/ProviderLogo';
 import { toast } from 'sonner';
@@ -66,7 +67,9 @@ export function ProviderTemplatesSection({ modelId, model }: { modelId: string; 
                   <span className="truncate">{t.provider_display_name || t.provider_name}</span>
                 </span>
                 <span className="truncate font-mono text-xs text-muted-foreground">→ {t.upstream_model_name}</span>
-                {t.endpoint_protocol && <Badge variant="secondary" className="text-[10px]">{t.endpoint_protocol}</Badge>}
+                {t.endpoint_protocol
+                  ? <Badge variant="secondary" className="text-[10px]">{t.endpoint_protocol}</Badge>
+                  : <Badge variant="outline" className="text-[10px] text-muted-foreground">全部端点</Badge>}
               </div>
               <div className="flex shrink-0 items-center gap-2">
                 <div className="flex items-center gap-1.5" title={t.status === 'active' ? '点击禁用该模板' : '点击启用该模板'}>
@@ -126,7 +129,7 @@ function TemplateEditDialog({ state, model, existing, onClose, onSaved }: {
   const [endpoints, setEndpoints] = useState<ProviderEndpointItem[]>([]);
   const [providerId, setProviderId] = useState('');
   const [upstreamName, setUpstreamName] = useState('');
-  const [endpointId, setEndpointId] = useState('');
+  const [endpointIds, setEndpointIds] = useState<string[]>([]);
   const [maxTokens, setMaxTokens] = useState('');
   const [contextTokens, setContextTokens] = useState('');
   const [inPrice, setInPrice] = useState('');
@@ -141,7 +144,7 @@ function TemplateEditDialog({ state, model, existing, onClose, onSaved }: {
     if (state === null) return;
     setUpstreamName(editing ? editing.upstream_model_name : (model?.name ?? ''));
     setProviderId(editing ? editing.provider_id : '');
-    setEndpointId(editing?.provider_endpoint_id ?? '');
+    setEndpointIds(editing?.provider_endpoint_id ? [editing.provider_endpoint_id] : []);
     setMaxTokens(editing?.max_tokens != null ? String(editing.max_tokens) : '');
     setContextTokens(editing?.context_window_tokens != null ? String(editing.context_window_tokens) : '');
     setInPrice(editing?.input_price_per_token != null ? String(editing.input_price_per_token) : '');
@@ -149,25 +152,32 @@ function TemplateEditDialog({ state, model, existing, onClose, onSaved }: {
     setError('');
   }, [state]);
   useEffect(() => {
-    if (!providerId) { setEndpoints([]); return; }
-    getProviderEndpointsApi(providerId).then(setEndpoints).catch(() => setEndpoints([]));
-    setEndpointId((cur) => (endpoints.some((e) => e.id === cur) ? cur : ''));
+    if (!providerId) { setEndpoints([]); setEndpointIds([]); return; }
+    getProviderEndpointsApi(providerId).then((list) => {
+      setEndpoints(list);
+      setEndpointIds((cur) => cur.filter((id) => list.some((e) => e.id === id)));
+    }).catch(() => { setEndpoints([]); setEndpointIds([]); });
   }, [providerId]);
-  useEffect(() => { setEndpointId((cur) => (endpoints.some((e) => e.id === cur) ? cur : '')); }, [endpoints]);
 
   const dup = useMemo(
     () => existing.some((t) => t.provider_id === providerId && t.id !== editing?.id && t.status !== 'deleted'),
     [existing, providerId, editing],
   );
 
+  // 端点多选语义：不选/全选 = 全部活跃端点（按请求协议自动匹配，存 NULL）；
+  // 选 1 个 = 锁定该端点；部分选择不支持（底层映射只能表达「单端点或全部」）
+  const partialEndpoints = endpointIds.length > 1 && endpointIds.length < endpoints.filter((e) => e.status !== 'deleted').length;
+  const resolvedEndpointId = endpointIds.length === 1 ? endpointIds[0] : null;
+
   const submit = async () => {
     if (!providerId) { setError('请选择供应商'); return; }
     if (!upstreamName.trim()) { setError('上游模型名必填'); return; }
     if (dup) { setError('该供应商对此模型已有模板'); return; }
+    if (partialEndpoints) { setError('端点仅支持「全部（不选）」或「锁定一个」，不支持部分多选'); return; }
     const payload: TemplatePayload = {
       provider_id: providerId,
       upstream_model_name: upstreamName.trim(),
-      provider_endpoint_id: endpointId || null,
+      provider_endpoint_id: resolvedEndpointId,
       max_tokens: maxTokens.trim() === '' ? null : Number(maxTokens),
       context_window_tokens: contextTokens.trim() === '' ? null : Number(contextTokens),
       input_price_per_token: inPrice.trim() === '' ? null : Number(inPrice),
@@ -208,13 +218,18 @@ function TemplateEditDialog({ state, model, existing, onClose, onSaved }: {
             <p className="text-xs text-muted-foreground">用户自带 Key 的请求会改写为这个名字发往上游。</p>
           </div>
           <div className="space-y-1">
-            <Label>端点（可选）</Label>
-            <Select value={endpointId} onValueChange={setEndpointId}>
-              <SelectTrigger className="w-full"><SelectValue placeholder="未指定（任选该供应商活跃端点）" /></SelectTrigger>
-              <SelectContent>
-                {endpoints.map((e) => <SelectItem key={e.id} value={e.id}>{e.protocol}{e.path ? ` · ${e.path}` : ''}</SelectItem>)}
-              </SelectContent>
-            </Select>
+            <Label>端点（可多选）</Label>
+            <MultiSelect
+              options={endpoints.filter((e) => e.status !== 'deleted').map((e) => ({ value: e.id, label: e.protocol, hint: e.path ?? undefined }))}
+              value={endpointIds}
+              onChange={setEndpointIds}
+              placeholder="全部端点（按请求协议自动匹配）"
+            />
+            <p className={`text-xs ${partialEndpoints ? 'text-destructive' : 'text-muted-foreground'}`}>
+              {partialEndpoints
+                ? '仅支持「全部（不选）」或「锁定一个」端点'
+                : '不选 = 全部端点（Chat/Messages 请求按协议自动匹配）；选 1 个 = 锁定该端点'}
+            </p>
           </div>
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1">
@@ -238,7 +253,7 @@ function TemplateEditDialog({ state, model, existing, onClose, onSaved }: {
         </div>
         <DialogFooter>
           <Button variant="outline" onClick={onClose}>取消</Button>
-          <Button onClick={submit} disabled={saving || dup}>{saving ? '保存中…' : '保存'}</Button>
+          <Button onClick={submit} disabled={saving || dup || partialEndpoints}>{saving ? '保存中…' : '保存'}</Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>
