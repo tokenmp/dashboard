@@ -91,11 +91,20 @@ Route::group('api/v1', function () {
                 Route::post('redeem', 'panel/Redeem/redeem');
             });
 
-            // 我持有的上游 Key
+            // 我持有的上游 Key（自建：自带 key + 选模型 + 计费模式）
             Route::group('upstream', function () {
                 Route::group('keys', function () {
                     Route::get('', 'panel/Upstream/keys');
+                    // 静态路由必须先于 :id 注册（create-options 会被 [\w\-]+ 吃掉）
+                    Route::get('create-options', 'panel/Upstream/createOptions');
+                    Route::post('', 'panel/Upstream/createKey');
                     Route::get(':id', 'panel/Upstream/keyDetail')->pattern(['id' => '[\w\-]+']);
+                    Route::put(':id', 'panel/Upstream/updateKey')->pattern(['id' => '[\w\-]+']);
+                    Route::post(':id/status', 'panel/Upstream/updateKeyStatus')->pattern(['id' => '[\w\-]+']);
+                    Route::delete(':id', 'panel/Upstream/deleteKey')->pattern(['id' => '[\w\-]+']);
+                    Route::post(':id/probe', 'panel/Upstream/probeKey')->pattern(['id' => '[\w\-]+']);
+                    Route::post(':id/models', 'panel/Upstream/addModels')->pattern(['id' => '[\w\-]+']);
+                    Route::delete(':id/models/:mid', 'panel/Upstream/removeModel')->pattern(['id' => '[\w\-]+', 'mid' => '[\w\-]+']);
                 });
                 Route::get('models', 'panel/Upstream/models');
                 Route::get('models/:id/success-buckets', 'panel/Upstream/successBuckets')->pattern(['id' => '[\w\-]+']);

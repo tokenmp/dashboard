@@ -29,6 +29,8 @@ $app->env->set([
     'JWT_PREFIX'          => 'Bearer',
     'AUTH_KEY_TTL'        => '300',
     'AUTH_KEY_RATE_LIMIT' => '20',
+    // 上游 key 加解密（UpstreamKeyService，AES-256-GCM；测试只求可复现 roundtrip）
+    'MASTER_ENCRYPTION_KEY' => 'phpunit-test-master-encryption-key-not-for-production',
     // 集成测试用 PG 连接(默认指向本地 executor-test-pg 容器里的独立库;
     // 可用 TEST_PG_* 环境变量覆盖;不可达时集成测试会自动跳过)
     'PG_HOST'             => getenv('TEST_PG_HOST') ?: '127.0.0.1',

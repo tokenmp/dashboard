@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { NavLink, useNavigate } from 'react-router-dom';
-import { ShieldCheck, Megaphone, Gift, BookOpen, UserCircle, Gauge, LogOut, ChevronRight, ChevronDown } from 'lucide-react';
+import { ShieldCheck, Megaphone, Gift, BookOpen, UserCircle, Gauge, LogOut, ChevronRight, ChevronDown, Cloud } from 'lucide-react';
 import { useAsync } from '@/hooks/useAsync';
 import { useRole } from '@/hooks/useRole';
 import { useAuthStore } from '@/store/auth';
@@ -277,6 +277,7 @@ function PanelMe() {
           title="公告"
           subtitle={latestNotice ? latestNotice.title : '暂无公告'}
         />
+        <MeCell to="/panel/upstream" icon={Cloud} iconClass="bg-sky-100 text-sky-600" title="我的上游" subtitle="自带 API Key 出流量" />
         <MeCell to="/panel/redemptions" icon={Gift} iconClass="bg-green-100 text-green-600" title="兑换码" />
         <MeCell to="/panel/releases" icon={BookOpen} iconClass="bg-indigo-100 text-indigo-600" title="更新日志" />
       </div>

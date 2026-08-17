@@ -22,6 +22,8 @@ import type {
   UpstreamKeyItem,
   UpstreamKeyDetailResult,
   UpstreamQuery,
+  UpstreamCreateOptionsResult,
+  UpstreamProbeResult,
 } from '@/types/upstream';
 import type { UsageLedgerItem, QuotaResult, UsageQuery, UsageTimelineItem, UsageByModelItem, ModelRankItem, ModelRankPeriod } from '@/types/usage';
 import type {
@@ -176,6 +178,67 @@ export async function getPanelUpstreamKeyDetailApi(
   id: string,
 ): Promise<UpstreamKeyDetailResult> {
   const res = await client.get<ApiResponse<UpstreamKeyDetailResult>>(`/panel/upstream/keys/${id}`);
+  return res.data.data;
+}
+
+// ── 自建上游 Key（自带 key + 选模型 + 计费模式）──
+export async function getPanelUpstreamCreateOptionsApi(
+  providerId?: string,
+): Promise<UpstreamCreateOptionsResult> {
+  const res = await client.get<ApiResponse<UpstreamCreateOptionsResult>>('/panel/upstream/keys/create-options', {
+    params: providerId ? { provider_id: providerId } : undefined,
+  });
+  return res.data.data;
+}
+export interface CreateUpstreamKeyPayload {
+  provider_id: string;
+  name: string;
+  key: string;
+  billing_mode: 'plan' | 'free';
+  model_ids: string[];
+}
+export async function createPanelUpstreamKeyApi(
+  payload: CreateUpstreamKeyPayload,
+): Promise<{ id: string }> {
+  const res = await client.post<ApiResponse<{ id: string }>>('/panel/upstream/keys', payload);
+  return res.data.data;
+}
+export async function updatePanelUpstreamKeyApi(
+  id: string,
+  payload: { name?: string; billing_mode?: 'plan' | 'free'; key?: string },
+): Promise<{ id: string }> {
+  const res = await client.put<ApiResponse<{ id: string }>>(`/panel/upstream/keys/${id}`, payload);
+  return res.data.data;
+}
+export async function updatePanelUpstreamKeyStatusApi(
+  id: string,
+  status: 'active' | 'disabled',
+): Promise<{ id: string }> {
+  const res = await client.post<ApiResponse<{ id: string }>>(`/panel/upstream/keys/${id}/status`, { status });
+  return res.data.data;
+}
+export async function deletePanelUpstreamKeyApi(id: string): Promise<{ id: string }> {
+  const res = await client.delete<ApiResponse<{ id: string }>>(`/panel/upstream/keys/${id}`);
+  return res.data.data;
+}
+export async function probePanelUpstreamKeyApi(
+  id: string,
+): Promise<UpstreamProbeResult> {
+  const res = await client.post<ApiResponse<UpstreamProbeResult>>(`/panel/upstream/keys/${id}/probe`);
+  return res.data.data;
+}
+export async function addPanelUpstreamKeyModelsApi(
+  id: string,
+  modelIds: string[],
+): Promise<{ id: string }> {
+  const res = await client.post<ApiResponse<{ id: string }>>(`/panel/upstream/keys/${id}/models`, { model_ids: modelIds });
+  return res.data.data;
+}
+export async function removePanelUpstreamKeyModelApi(
+  id: string,
+  mappingId: string,
+): Promise<{ id: string }> {
+  const res = await client.delete<ApiResponse<{ id: string }>>(`/panel/upstream/keys/${id}/models/${mappingId}`);
   return res.data.data;
 }
 export async function getPanelModelsApi(
