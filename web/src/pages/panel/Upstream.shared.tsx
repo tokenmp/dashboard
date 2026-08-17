@@ -33,35 +33,46 @@ import {
 /** 「我的上游」桌面/移动共享件：计费徽标、探测单元格与三个对话框。 */
 
 /**
- * 已选模型的「转发到上游模型名」编辑行（默认=平台模板值，可改成上游真实模型名）。
- * models 提供模板名兜底；values 为用户覆盖（model_id → 名）；onChange 回写。
+ * 模型多选 + 行内「转发到上游模型名」编辑：
+ * 下拉每项右侧输入框直接改转发名（placeholder=平台模板值，留空即用默认）；
+ * 选中标签显示 `平台模型名（转发名）`，实时反映当前生效值。
  */
-export function UpstreamNameRows({ models, selectedIds, values, onChange }: {
+export function UpstreamModelSelect({ models, selectedIds, onChange, names, onNamesChange, placeholder, disabled }: {
   models: UpstreamModelOption[];
   selectedIds: string[];
-  values: Record<string, string>;
-  onChange: (next: Record<string, string>) => void;
+  onChange: (ids: string[]) => void;
+  names: Record<string, string>;
+  onNamesChange: (next: Record<string, string>) => void;
+  placeholder?: string;
+  disabled?: boolean;
 }) {
-  const selected = selectedIds
-    .map((id) => models.find((m) => m.id === id))
-    .filter((m): m is UpstreamModelOption => m !== undefined);
-  if (selected.length === 0) return null;
+  const modelOf = (id: string) => models.find((m) => m.id === id);
+  const defaultName = (id: string) => {
+    const m = modelOf(id);
+    return m ? (m.upstream_model_name || m.name) : '';
+  };
+  const effectiveName = (id: string) => (names[id] ?? '').trim() || defaultName(id);
   return (
-    <div className="space-y-1.5">
-      <Label>转发到上游模型名（默认用平台模板值，可改）</Label>
-      <div className="space-y-1.5">
-        {selected.map((m) => (
-          <div key={m.id} className="flex items-center gap-2">
-            <span className="w-2/5 shrink-0 truncate text-xs text-muted-foreground" title={m.name}>{m.display_name || m.name}</span>
-            <Input
-              value={values[m.id] ?? m.upstream_model_name ?? m.name}
-              onChange={(e) => onChange({ ...values, [m.id]: e.target.value })}
-              placeholder={m.upstream_model_name || m.name}
-              className="h-8 flex-1 font-mono text-xs"
-            />
-          </div>
-        ))}
-      </div>
+    <div className="space-y-1">
+      <MultiSelect
+        options={models.map((m) => ({ value: m.id, label: m.display_name || m.name, hint: m.name }))}
+        value={selectedIds}
+        onChange={onChange}
+        placeholder={placeholder}
+        disabled={disabled}
+        nameEditable
+        names={names}
+        namePlaceholderOf={defaultName}
+        onNameChange={(v, n) => onNamesChange({ ...names, [v]: n })}
+        tagLabelOf={(v) => {
+          const m = modelOf(v);
+          if (!m) return '';
+          return `${m.display_name || m.name}（${effectiveName(v)}）`;
+        }}
+      />
+      {selectedIds.length > 0 && (
+        <p className="text-xs text-muted-foreground">括号内为转发到上游的模型名；在下拉框右侧输入框修改，留空用平台默认。</p>
+      )}
     </div>
   );
 }
@@ -155,16 +166,17 @@ export function CreateUpstreamKeyDialog({ open, submitting, onClose, onDone }: {
             </Select>
           </div>
           <div className="space-y-1.5">
-            <Label>模型（可多选）</Label>
-            <MultiSelect
-              options={models.map((m) => ({ value: m.id, label: m.display_name || m.name, hint: m.name }))}
-              value={modelIds}
+            <Label>模型（可多选，括号内为转发名）</Label>
+            <UpstreamModelSelect
+              models={models}
+              selectedIds={modelIds}
               onChange={setModelIds}
+              names={nameOverrides}
+              onNamesChange={setNameOverrides}
               placeholder={providerId === '' ? '先选择供应商' : modelsLoading ? '加载中…' : '选择要开通的模型'}
               disabled={providerId === '' || modelsLoading || models.length === 0}
             />
           </div>
-          <UpstreamNameRows models={models} selectedIds={modelIds} values={nameOverrides} onChange={setNameOverrides} />
           <div className="space-y-1.5">
             <Label>计费模式</Label>
             <div className="grid gap-2 sm:grid-cols-2">
@@ -287,15 +299,16 @@ export function EditUpstreamKeyDialog({ row, submitting, onClose, onDone }: {
           </div>
           {switching && (
             <div className="space-y-1.5">
-              <Label>模型（换供应商后须重选）</Label>
-              <MultiSelect
-                options={switchModels.map((m) => ({ value: m.id, label: m.display_name || m.name, hint: m.name }))}
-                value={modelIds}
+              <Label>模型（换供应商后须重选，括号内为转发名）</Label>
+              <UpstreamModelSelect
+                models={switchModels}
+                selectedIds={modelIds}
                 onChange={setModelIds}
+                names={nameOverrides}
+                onNamesChange={setNameOverrides}
                 placeholder={modelsLoading ? '加载中…' : '选择要开通的模型'}
                 disabled={modelsLoading || switchModels.length === 0}
               />
-              <UpstreamNameRows models={switchModels} selectedIds={modelIds} values={nameOverrides} onChange={setNameOverrides} />
               <p className="text-xs text-muted-foreground">更换供应商会清空现有模型映射并按新供应商重建。</p>
             </div>
           )}
@@ -456,18 +469,19 @@ export function UpstreamKeyDetailDialog({ keyId, onClose, onChanged }: {
                 )}
               </div>
               {addableModels.length > 0 && (
-                <div className="space-y-1.5">
-                  <div className="flex items-center gap-2">
-                    <MultiSelect
-                      options={addableModels.map((m) => ({ value: m.id, label: m.display_name || m.name, hint: m.name }))}
-                      value={addModels}
+                <div className="flex items-start gap-2">
+                  <div className="min-w-0 flex-1">
+                    <UpstreamModelSelect
+                      models={addableModels}
+                      selectedIds={addModels}
                       onChange={setAddModels}
+                      names={addNameOverrides}
+                      onNamesChange={setAddNameOverrides}
                       placeholder="添加模型"
                       disabled={mutating}
                     />
-                    <Button type="button" size="sm" variant="outline" onClick={onAddModels} disabled={addModels.length === 0 || mutating}>添加</Button>
                   </div>
-                  <UpstreamNameRows models={addableModels} selectedIds={addModels} values={addNameOverrides} onChange={setAddNameOverrides} />
+                  <Button type="button" size="sm" variant="outline" className="mt-1" onClick={onAddModels} disabled={addModels.length === 0 || mutating}>添加</Button>
                 </div>
               )}
             </div>
