@@ -1,6 +1,7 @@
-# TokenMP Dashboard 部署（蓝绿·绿栈）—— 推 v* 标签时, GitHub 托管 runner 通过 SSH 连到
-# tokenmp 生产服务器, 在 /opt/tokenmp-dashboard 本地 build + 重建容器 + 写回 versions.env。
-# 绿栈只服务 next.tokenmp.cn；api.tokenmp.cn 的切流由 executor 仓库 prod-v* 标签的 promote.yml 负责。
+# TokenMP Dashboard 部署（预览栈 next.tokenmp.cn）—— 推 v* 标签时, GitHub 托管 runner
+# 通过 SSH 连到 tokenmp 生产服务器, 在 /opt/tokenmp-dashboard 本地 build + 重建预览容器
+# + 写回 versions-next.env。正式栈(api.tokenmp.cn, 18180)不受影响；
+# 把预览栈已验证版本发布到正式栈由 executor 仓库 prod-v* 标签的 promote.yml 负责。
 # 不使用 self-hosted runner, 无需在服务器常驻 runner 进程。
 #
 # 所需 GitHub Secrets (见 docs/deployment.md):
@@ -41,11 +42,11 @@ jobs:
             git fetch --tags --force origin
             git checkout "$TAG"
             docker build -t tokenmp-dashboard:"$TAG" -t tokenmp-dashboard:latest .
-            sed -i "s/^DASHBOARD_VERSION=.*/DASHBOARD_VERSION=$TAG/" /opt/tokenmp/versions.env
-            docker compose --env-file /opt/tokenmp/versions.env \
-              -f docker-compose.1panel.yml up -d --no-deps --no-build --force-recreate
+            sed -i "s/^DASHBOARD_VERSION=.*/DASHBOARD_VERSION=$TAG/" /opt/tokenmp/versions-next.env
+            docker compose --env-file /opt/tokenmp/versions-next.env \
+              -f docker-compose.next.yml up -d --no-deps --no-build --force-recreate
             sleep 5
-            # 冒烟：首页(SPA) + 公开 API
-            curl -fsS "http://127.0.0.1:${DASHBOARD_PORT:-18180}/" >/dev/null
-            curl -fsS "http://127.0.0.1:${DASHBOARD_PORT:-18180}/api/v1/site/overview" >/dev/null
-            echo "✓ dashboard $TAG deployed (绿栈 next.tokenmp.cn)"
+            # 冒烟：首页(SPA) + 公开 API（预览栈固定 18280）
+            curl -fsS "http://127.0.0.1:18280/" >/dev/null
+            curl -fsS "http://127.0.0.1:18280/api/v1/site/overview" >/dev/null
+            echo "✓ dashboard $TAG deployed (预览栈 next.tokenmp.cn)"
