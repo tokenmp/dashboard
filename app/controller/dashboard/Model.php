@@ -388,6 +388,127 @@ class Model extends BaseController
         return success($rows);
     }
 
+    // ─────────────────── 供应商模型模板（无 Key 映射定义） ───────────────────
+    // 管理端只定义目录（供应商×模型×上游模型名/端点），不持有 Key；
+    // 用户「自建上游」自带 Key 时按模板克隆映射。路由不读本表。
+
+    /** GET /api/v1/dashboard/models/:id/templates —— 该模型的供应商模板列表 */
+    public function templates($id)
+    {
+        $model = AiModel::where('id', $id)->where('status', '<>', 'deleted')->find();
+        if ($model === null) {
+            throw new HttpException(404, '模型不存在');
+        }
+        $rows = Db::connect('pgsql')->query(
+            "select t.id, t.provider_id, t.model_id, t.upstream_model_name, t.provider_endpoint_id,"
+            . " t.input_price_per_token, t.output_price_per_token, t.max_tokens, t.context_window_tokens,"
+            . " t.thinking_config::text as thinking_config, t.status, t.created_at, t.updated_at,"
+            . " p.name as provider_name, p.display_name as provider_display_name, p.logo_url as provider_logo_url, p.logo_svg as provider_logo_svg,"
+            . " pe.protocol as endpoint_protocol, pe.path as endpoint_path"
+            . " from provider_model_templates t"
+            . " join providers p on p.id = t.provider_id"
+            . " left join provider_endpoints pe on pe.id = t.provider_endpoint_id"
+            . " where t.model_id = ? and t.status <> 'deleted'"
+            . " order by p.name, t.created_at",
+            [$id]
+        );
+        foreach ($rows as &$r) {
+            $r['thinking'] = ThinkingConfig::parse($r['thinking_config'] ?? null);
+            unset($r['thinking_config']);
+        }
+        unset($r);
+        return success($rows);
+    }
+
+    /** POST /api/v1/dashboard/models/:id/templates —— body: provider_id, upstream_model_name, ... */
+    public function createTemplate($id)
+    {
+        $model = AiModel::where('id', $id)->where('status', '<>', 'deleted')->find();
+        if ($model === null) {
+            throw new HttpException(404, '模型不存在');
+        }
+        $providerId = trim((string) $this->request->post('provider_id', ''));
+        $upstreamName = trim((string) $this->request->post('upstream_model_name', ''));
+        if ($providerId === '' || $upstreamName === '') {
+            throw new HttpException(400, 'provider_id 与 upstream_model_name 必填');
+        }
+        $exists = Db::connect('pgsql')->query("select 1 from providers where id = ? and status <> 'deleted' limit 1", [$providerId]);
+        if (empty($exists)) {
+            throw new HttpException(404, '供应商不存在');
+        }
+        $dup = Db::connect('pgsql')->query(
+            "select 1 from provider_model_templates where provider_id = ? and model_id = ? and status <> 'deleted' limit 1",
+            [$providerId, $id]
+        );
+        if (!empty($dup)) {
+            throw new HttpException(400, '该供应商对此模型已有模板');
+        }
+        [$endpointId, $maxTokens, $contextTokens, $inPrice, $outPrice, $thinkingJson] = $this->templateInput();
+        $tid = $this->genUuid();
+        Db::connect('pgsql')->execute(
+            "INSERT INTO provider_model_templates (id, provider_id, model_id, upstream_model_name, provider_endpoint_id,"
+            . " input_price_per_token, output_price_per_token, max_tokens, context_window_tokens, thinking_config, status, created_at, updated_at)"
+            . " VALUES (?,?,?,?,?,?,?,?,?,?::jsonb,'active',NOW(),NOW())",
+            [$tid, $providerId, $id, $upstreamName, $endpointId, $inPrice, $outPrice, $maxTokens, $contextTokens, $thinkingJson]
+        );
+        return success(['id' => $tid]);
+    }
+
+    /** PUT /api/v1/dashboard/upstream/templates/:tid —— 编辑模板（upstream_model_name/端点/限参等） */
+    public function updateTemplate($tid)
+    {
+        $row = Db::connect('pgsql')->query(
+            "select id, provider_id, model_id from provider_model_templates where id = ? and status <> 'deleted' limit 1",
+            [$tid]
+        );
+        if (empty($row)) {
+            throw new HttpException(404, '模板不存在');
+        }
+        [$endpointId, $maxTokens, $contextTokens, $inPrice, $outPrice, $thinkingJson] = $this->templateInput();
+        $upstreamName = trim((string) $this->request->post('upstream_model_name', ''));
+        if ($upstreamName === '') {
+            throw new HttpException(400, 'upstream_model_name 必填');
+        }
+        $status = trim((string) $this->request->post('status', '')) ?: 'active';
+        if (!in_array($status, ['active', 'disabled'], true)) {
+            throw new HttpException(400, 'status 非法');
+        }
+        Db::connect('pgsql')->execute(
+            "UPDATE provider_model_templates SET upstream_model_name = ?, provider_endpoint_id = ?,"
+            . " input_price_per_token = ?, output_price_per_token = ?, max_tokens = ?, context_window_tokens = ?,"
+            . " thinking_config = ?::jsonb, status = ?, updated_at = NOW() WHERE id = ?",
+            [$upstreamName, $endpointId, $inPrice, $outPrice, $maxTokens, $contextTokens, $thinkingJson, $status, $tid]
+        );
+        return success(['id' => $tid]);
+    }
+
+    /** DELETE /api/v1/dashboard/upstream/templates/:tid —— 软删模板 */
+    public function deleteTemplate($tid)
+    {
+        $n = Db::connect('pgsql')->execute(
+            "UPDATE provider_model_templates SET status = 'deleted', updated_at = NOW() WHERE id = ? AND status <> 'deleted'",
+            [$tid]
+        );
+        if ($n === 0) {
+            throw new HttpException(404, '模板不存在');
+        }
+        return success(['id' => $tid]);
+    }
+
+    /** 读取模板可选字段（create/update 共用）：端点/限参/定价/思考配置 */
+    private function templateInput(): array
+    {
+        $endpointId = trim((string) $this->request->post('provider_endpoint_id', ''));
+        return [
+            $endpointId !== '' ? $endpointId : null,
+            $this->nullableInt('max_tokens'),
+            $this->nullableInt('context_window_tokens'),
+            $this->nullableFloat('input_price_per_token'),
+            $this->nullableFloat('output_price_per_token'),
+            ThinkingConfig::fromRequest($this->request),
+        ];
+    }
+
     /** GET /api/v1/dashboard/models/key-options —— 可挂映射的 active 上游 key */
     public function keyOptions()
     {

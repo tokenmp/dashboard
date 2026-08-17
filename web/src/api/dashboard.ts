@@ -293,6 +293,56 @@ export async function deleteModelMappingApi(mid: string): Promise<{ id: string }
   const res = await client.delete<ApiResponse<{ id: string }>>(`/dashboard/models/mappings/${mid}`);
   return res.data.data;
 }
+// ── 供应商模型模板（无 Key 映射定义：管理端目录，用户自带 Key 激活） ──
+export interface ProviderModelTemplateItem {
+  id: string;
+  provider_id: string;
+  model_id: string;
+  upstream_model_name: string;
+  provider_endpoint_id: string | null;
+  input_price_per_token: number | null;
+  output_price_per_token: number | null;
+  max_tokens: number | null;
+  context_window_tokens: number | null;
+  thinking: { supported_efforts?: string[] | null; default_effort?: string | null } | null;
+  status: string;
+  created_at: string;
+  updated_at: string;
+  provider_name: string;
+  provider_display_name: string | null;
+  provider_logo_url: string | null;
+  provider_logo_svg: string | null;
+  endpoint_protocol: string | null;
+  endpoint_path: string | null;
+}
+export interface TemplatePayload {
+  provider_id: string;
+  upstream_model_name: string;
+  provider_endpoint_id?: string | null;
+  input_price_per_token?: number | null;
+  output_price_per_token?: number | null;
+  max_tokens?: number | null;
+  context_window_tokens?: number | null;
+  status?: 'active' | 'disabled';
+  supported_efforts?: string[] | null;
+  default_effort?: string | null;
+}
+export async function getModelTemplatesApi(modelId: string): Promise<ProviderModelTemplateItem[]> {
+  const res = await client.get<ApiResponse<ProviderModelTemplateItem[]>>(`/dashboard/models/${modelId}/templates`);
+  return res.data.data;
+}
+export async function createModelTemplateApi(modelId: string, payload: TemplatePayload): Promise<{ id: string }> {
+  const res = await client.post<ApiResponse<{ id: string }>>(`/dashboard/models/${modelId}/templates`, payload);
+  return res.data.data;
+}
+export async function updateModelTemplateApi(tid: string, payload: TemplatePayload): Promise<{ id: string }> {
+  const res = await client.put<ApiResponse<{ id: string }>>(`/dashboard/models/templates/${tid}`, payload);
+  return res.data.data;
+}
+export async function deleteModelTemplateApi(tid: string): Promise<{ id: string }> {
+  const res = await client.delete<ApiResponse<{ id: string }>>(`/dashboard/models/templates/${tid}`);
+  return res.data.data;
+}
 export async function getModelKeyOptionsApi(keyword?: string): Promise<UpstreamKeyOption[]> {
   const res = await client.get<ApiResponse<UpstreamKeyOption[]>>('/dashboard/models/key-options', {
     params: keyword ? { keyword } : {},
