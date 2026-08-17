@@ -28,6 +28,7 @@ import PanelModels from '@/pages/panel/Models';
 import PanelRequests from '@/pages/panel/Requests';
 import PanelUsage from '@/pages/panel/Usage';
 import PanelKeys from '@/pages/panel/Keys';
+import PanelUpstream from '@/pages/panel/Upstream';
 import PanelRedemptions from '@/pages/panel/Redemptions';
 import PanelNotices from '@/pages/panel/Notices';
 import PanelReleases from '@/pages/panel/Releases';
@@ -118,6 +119,7 @@ export const router = createBrowserRouter([
       { path: 'requests', element: <PanelRequests /> },
       { path: 'usage', element: <PanelUsage /> },
       { path: 'keys', element: <PanelKeys /> },
+      { path: 'upstream', element: <PanelUpstream /> },
       { path: 'redemptions', element: <PanelRedemptions /> },
       { path: 'notices', element: <PanelNotices /> },
       { path: 'releases', element: <PanelReleases /> },

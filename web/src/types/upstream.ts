@@ -53,6 +53,8 @@ export interface UpstreamKeyItem {
   notes: string | null;
   owner_user_id: string | null;
   source_type: string;
+  /** key 级计费模式：plan=照常扣套餐；free=仅用户自有 key 免扣（executor 000074） */
+  billing_mode: string;
   visibility: string;
   review_status: string;
   market_status: string;
@@ -238,4 +240,43 @@ export interface UpstreamQuery {
   from?: string;
   to?: string;
   sort?: string;
+}
+
+/** 自建上游 create-options：可选供应商（带模板模型数） */
+export interface UpstreamProviderOption {
+  id: string;
+  name: string;
+  display_name: string | null;
+  logo_url: string | null;
+  logo_svg: string | null;
+  model_count: number;
+}
+
+/** 自建上游 create-options：供应商下可选模型（来自平台模板映射） */
+export interface UpstreamModelOption {
+  id: string;
+  name: string;
+  display_name: string | null;
+  capabilities: string[];
+  billing_mode: string;
+  upstream_model_name: string | null;
+  max_tokens: number | null;
+  context_window_tokens: number | null;
+}
+
+/** create-options 响应：无 provider_id 时返回 providers，有则返回 provider+models */
+export interface UpstreamCreateOptionsResult {
+  providers?: UpstreamProviderOption[];
+  provider?: { id: string; name: string; display_name: string | null };
+  models?: UpstreamModelOption[];
+}
+
+/** 探测结果 */
+export interface UpstreamProbeResult {
+  status: string;
+  http_status: number | null;
+  latency_ms: number;
+  error_code: string;
+  error_message: string;
+  verified_models: string[];
 }
