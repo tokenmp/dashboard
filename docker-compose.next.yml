@@ -14,6 +14,10 @@
 #
 # 部署: v* 标签 → 预览栈（本文件）；发布正式栈 = executor 仓库 prod-v*（promote.yml）
 # ============================================================
+# 独立 compose project——与同目录正式栈（项目名=目录名）彻底隔离，
+# 避免同服务名 up 时把正式容器顶掉（2026-08-17 事故根因）
+name: tokenmp-next
+
 services:
   tokenmp-next-dashboard:
     image: tokenmp-dashboard:${DASHBOARD_VERSION:-latest}
