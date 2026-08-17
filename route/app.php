@@ -210,8 +210,14 @@ Route::group('api/v1', function () {
                         Route::delete(':mid', 'dashboard/Model/deleteMapping')->pattern(['mid' => '[\w\-]+']);
                         Route::post(':mid/status', 'dashboard/Model/updateMappingStatus')->pattern(['mid' => '[\w\-]+']);
                     });
+                    Route::group('templates', function () {
+                        Route::put(':tid', 'dashboard/Model/updateTemplate')->pattern(['tid' => '[\w\-]+']);
+                        Route::delete(':tid', 'dashboard/Model/deleteTemplate')->pattern(['tid' => '[\w\-]+']);
+                    });
                     Route::get(':id/mappings', 'dashboard/Model/mappings')->pattern(['id' => '[\w\-]+']);
                     Route::post(':id/mappings', 'dashboard/Model/createMapping')->pattern(['id' => '[\w\-]+']);
+                    Route::get(':id/templates', 'dashboard/Model/templates')->pattern(['id' => '[\w\-]+']);
+                    Route::post(':id/templates', 'dashboard/Model/createTemplate')->pattern(['id' => '[\w\-]+']);
                     Route::put(':id/thinking-config', 'dashboard/Model/updateThinkingConfig')->pattern(['id' => '[\w\-]+']);
                     Route::get(':id', 'dashboard/Model/detail')->pattern(['id' => '[\w\-]+']);
                     Route::put(':id', 'dashboard/Model/update')->pattern(['id' => '[\w\-]+']);

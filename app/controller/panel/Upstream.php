@@ -146,9 +146,14 @@ class Upstream extends BaseController
         if ($providerId === '') {
             $providers = $pg->query(
                 "select p.id, p.name, p.display_name, p.logo_url, p.logo_svg,"
-                . " (select count(distinct umm.model_id) from upstream_model_mappings umm"
+                . " (select count(distinct x.model_id) from ("
+                . "   select t.model_id from provider_model_templates t"
+                . "   where t.provider_id = p.id and t.status = 'active'"
+                . "   union"
+                . "   select umm.model_id from upstream_model_mappings umm"
                 . "   " . self::PLATFORM_TEMPLATE_JOIN
-                . "   where uk.provider_id = p.id and umm.status = 'active') as model_count"
+                . "   where uk.provider_id = p.id and umm.status = 'active'"
+                . " ) x) as model_count"
                 . " from providers p"
                 . " where p.status = 'active'"
                 . " order by p.display_name nulls last, p.name"
@@ -162,13 +167,17 @@ class Upstream extends BaseController
         }
         $models = $pg->query(
             "select distinct on (m.id) m.id, m.name, m.display_name, m.capabilities, m.billing_mode,"
-            . " umm.upstream_model_name, umm.max_tokens, m.context_window_tokens"
-            . " from upstream_model_mappings umm"
-            . " " . self::PLATFORM_TEMPLATE_JOIN
-            . " join models m on m.id = umm.model_id and m.status = 'active'"
-            . " where uk.provider_id = ? and umm.status = 'active'"
-            . " order by m.id, uk.priority desc",
-            [$providerId]
+            . " COALESCE(t.upstream_model_name, umm.upstream_model_name) as upstream_model_name,"
+            . " COALESCE(t.max_tokens, umm.max_tokens) as max_tokens, m.context_window_tokens"
+            . " from models m"
+            . " left join provider_model_templates t on t.model_id = m.id and t.provider_id = ? and t.status = 'active'"
+            . " left join upstream_model_mappings umm on umm.model_id = m.id and umm.status = 'active'"
+            . "   and exists (select 1 from upstream_keys uk where uk.id = umm.upstream_key_id"
+            . "     and uk.status = 'active' and COALESCE(uk.source_type, 'platform') = 'platform'"
+            . "     and uk.provider_id = ?)"
+            . " where m.status = 'active' and (t.id is not null or umm.id is not null)"
+            . " order by m.id, umm.id",
+            [$providerId, $providerId]
         );
         foreach ($models as &$m) {
             $m['capabilities'] = self::parsePgArray($m['capabilities'] ?? null);
@@ -227,20 +236,8 @@ class Upstream extends BaseController
             throw new HttpException(400, '自有上游 Key 数量已达上限（' . self::MAX_OWN_KEYS . ' 个）');
         }
 
-        // 校验所选模型都有该供应商的平台模板
-        $placeholders = implode(',', array_fill(0, count($modelIds), '?'));
-        $validIds = $pg->query(
-            "select distinct umm.model_id from upstream_model_mappings umm"
-            . " " . self::PLATFORM_TEMPLATE_JOIN
-            . " where uk.provider_id = ? and umm.status = 'active' and umm.model_id in ($placeholders)",
-            array_merge([$providerId], $modelIds)
-        );
-        $validIdMap = array_flip(array_column($validIds, 'model_id'));
-        foreach ($modelIds as $mid) {
-            if (!isset($validIdMap[$mid])) {
-                throw new HttpException(400, '所选模型在该供应商下不可用（无平台模板映射）');
-            }
-        }
+        // 校验所选模型在该供应商下有模板（模板表 ∪ 平台 key 映射）
+        $this->assertModelIdsHaveTemplate($pg, $providerId, $modelIds);
 
         $keyId = UpstreamKeyService::genUuid();
         $encrypted = UpstreamKeyService::encryptKey($rawKey);
@@ -315,19 +312,7 @@ class Upstream extends BaseController
                 throw new HttpException(400, '更换供应商时必须重新选择模型');
             }
             $modelIds = array_values(array_unique(array_map('strval', $modelIds)));
-            $placeholders = implode(',', array_fill(0, count($modelIds), '?'));
-            $validIds = $pg->query(
-                "select distinct umm.model_id from upstream_model_mappings umm"
-                . " " . self::PLATFORM_TEMPLATE_JOIN
-                . " where uk.provider_id = ? and umm.status = 'active' and umm.model_id in ($placeholders)",
-                array_merge([$providerId], $modelIds)
-            );
-            $validIdMap = array_flip(array_column($validIds, 'model_id'));
-            foreach ($modelIds as $mid) {
-                if (!isset($validIdMap[$mid])) {
-                    throw new HttpException(400, '所选模型在该供应商下不可用（无平台模板映射）');
-                }
-            }
+            $this->assertModelIdsHaveTemplate($pg, $providerId, $modelIds);
             $sets[] = 'provider_id = ?';
             $args[] = $providerId;
         }
@@ -559,9 +544,67 @@ class Upstream extends BaseController
     }
 
     /**
-     * 以同供应商平台 key 的 active mapping 为模板克隆映射到自有 key：
-     * 复制 upstream_model_name/端点/定价/上下文窗/思考配置，并克隆模板的路由组归属
-     * （无归属时兜底加入 default 组）。重复模型（该 key 已有未删映射）自动跳过。
+     * 校验模型列表在该供应商下均有模板（provider_model_templates ∪ 平台 key 映射）。
+     * 不满足时 400。
+     */
+    private function assertModelIdsHaveTemplate($pg, string $providerId, array $modelIds): void
+    {
+        $placeholders = implode(',', array_fill(0, count($modelIds), '?'));
+        $rows = $pg->query(
+            "select model_id from ("
+            . " select model_id from provider_model_templates"
+            . "   where provider_id = ? and status = 'active' and model_id in ($placeholders)"
+            . " union"
+            . " select umm.model_id from upstream_model_mappings umm"
+            . " " . self::PLATFORM_TEMPLATE_JOIN
+            . " where uk.provider_id = ? and umm.status = 'active' and umm.model_id in ($placeholders)"
+            . ") x",
+            array_merge([$providerId], $modelIds, [$providerId], $modelIds)
+        );
+        $validIdMap = array_flip(array_column($rows, 'model_id'));
+        foreach ($modelIds as $mid) {
+            if (!isset($validIdMap[$mid])) {
+                throw new HttpException(400, '所选模型在该供应商下不可用（无模板）');
+            }
+        }
+    }
+
+    /**
+     * 取某模型在该供应商下的模板行（模板表优先，回落平台 key 的 active mapping——
+     * 优先级最高的平台 key 优先）。字段名与 provider_model_templates 对齐；
+     * template_mapping_id 仅平台映射来源时有值（用于克隆其路由组归属）。
+     */
+    private function templateRowFor($pg, string $providerId, string $modelId): ?array
+    {
+        $tpl = $pg->query(
+            "select id, upstream_model_name, input_price_per_token, output_price_per_token,"
+            . " max_tokens, context_window_tokens, thinking_config::text as thinking_config, provider_endpoint_id"
+            . " from provider_model_templates"
+            . " where provider_id = ? and model_id = ? and status = 'active' limit 1",
+            [$providerId, $modelId]
+        );
+        if (!empty($tpl)) {
+            $row = $tpl[0];
+            $row['template_mapping_id'] = null;
+            return $row;
+        }
+        $platform = $pg->query(
+            "select umm.id as template_mapping_id, umm.upstream_model_name, umm.input_price_per_token, umm.output_price_per_token, umm.max_tokens,"
+            . " umm.context_window_tokens, umm.thinking_config::text as thinking_config, umm.provider_endpoint_id"
+            . " from upstream_model_mappings umm"
+            . " " . self::PLATFORM_TEMPLATE_JOIN
+            . " where uk.provider_id = ? and umm.status = 'active' and umm.model_id = ?"
+            . " order by uk.priority desc, umm.created_at asc limit 1",
+            [$providerId, $modelId]
+        );
+        return $platform[0] ?? null;
+    }
+
+    /**
+     * 按模板克隆映射到自有 key：模板来源 provider_model_templates（管理端无 Key 目录定义）
+     * 或同供应商平台 key 的 active mapping。复制 upstream_model_name/端点/定价/上下文窗/
+     * 思考配置；平台映射来源时克隆其路由组归属（无归属/无来源时兜底 default 组）。
+     * 重复模型（该 key 已有未删映射）自动跳过。
      * $upstreamNames：model_id → 用户指定的上游模型名（覆盖模板值；空串=用模板）。
      */
     private function cloneTemplateMappings($pg, string $keyId, string $providerId, array $modelIds, array $upstreamNames = []): void
@@ -577,20 +620,10 @@ class Upstream extends BaseController
             if (!empty($exists)) {
                 continue;
             }
-            // 模板：该供应商下任一平台 key 对此模型的 active mapping（优先级最高的 key 优先）
-            $tpl = $pg->query(
-                "select umm.id as template_id, umm.upstream_model_name, umm.input_price_per_token, umm.output_price_per_token, umm.max_tokens,"
-                . " umm.context_window_tokens, umm.thinking_config::text as thinking_config, umm.provider_endpoint_id"
-                . " from upstream_model_mappings umm"
-                . " " . self::PLATFORM_TEMPLATE_JOIN
-                . " where uk.provider_id = ? and umm.status = 'active' and umm.model_id = ?"
-                . " order by uk.priority desc, umm.created_at asc limit 1",
-                [$providerId, $modelId]
-            );
-            if (empty($tpl)) {
-                throw new HttpException(400, '所选模型在该供应商下无平台模板映射');
+            $t = $this->templateRowFor($pg, $providerId, $modelId);
+            if ($t === null) {
+                throw new HttpException(400, '所选模型在该供应商下无模板');
             }
-            $t = $tpl[0];
             // 转发名：用户指定 > 模板值
             $upstreamName = self::sanitizeUpstreamModelName($upstreamNames[$modelId] ?? '') ?? $t['upstream_model_name'];
             $mappingId = UpstreamKeyService::genUuid();
@@ -601,15 +634,17 @@ class Upstream extends BaseController
                 [$mappingId, $keyId, $modelId, $upstreamName, $t['input_price_per_token'], $t['output_price_per_token'],
                     $t['max_tokens'], $t['context_window_tokens'], $t['thinking_config'] !== '' ? $t['thinking_config'] : null, $t['provider_endpoint_id']]
             );
-            // 路由组：克隆模板 mapping 的组；无则兜底 default 组
+            // 路由组：平台映射来源时克隆其组；模板表来源/无归属时兜底 default 组
             $groupIds = [];
-            $groups = $pg->query(
-                "select rg.id from upstream_route_group_memberships urgm"
-                . " join route_groups rg on rg.id = urgm.route_group_id and rg.status <> 'deleted'"
-                . " where urgm.upstream_model_mapping_id = ? and urgm.status <> 'deleted'",
-                [$t['template_id']]
-            );
-            $groupIds = array_column($groups, 'id');
+            if (!empty($t['template_mapping_id'])) {
+                $groups = $pg->query(
+                    "select rg.id from upstream_route_group_memberships urgm"
+                    . " join route_groups rg on rg.id = urgm.route_group_id and rg.status <> 'deleted'"
+                    . " where urgm.upstream_model_mapping_id = ? and urgm.status <> 'deleted'",
+                    [$t['template_mapping_id']]
+                );
+                $groupIds = array_column($groups, 'id');
+            }
             if ($groupIds === [] && $defaultGroupId !== null) {
                 $groupIds = [$defaultGroupId];
             }

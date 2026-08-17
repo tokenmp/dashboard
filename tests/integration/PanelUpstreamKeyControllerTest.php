@@ -16,7 +16,7 @@ use think\exception\HttpException;
  */
 final class PanelUpstreamKeyControllerTest extends IntegrationTestCase
 {
-    private const CATALOG_TABLES = 'upstream_key_verifications, upstream_route_group_memberships, upstream_model_mappings, marketplace_listings, upstream_keys, provider_endpoints, providers, models, route_groups, price_multiplier_rules';
+    private const CATALOG_TABLES = 'upstream_key_verifications, upstream_route_group_memberships, upstream_model_mappings, provider_model_templates, marketplace_listings, upstream_keys, provider_endpoints, providers, models, route_groups, price_multiplier_rules';
 
     private bool $truncatedCatalog = false;
 
@@ -468,5 +468,79 @@ final class PanelUpstreamKeyControllerTest extends IntegrationTestCase
         } catch (HttpException $e) {
             $this->assertSame(404, $e->getStatusCode());
         }
+    }
+
+    /* ---------------- 供应商模板（无 Key 目录定义）路径 ---------------- */
+
+    /** 只有无 Key 模板（无平台 key/映射）的供应商也可被自建上游使用 */
+    public function testKeylessTemplateDrivesByokWithoutPlatformKey(): void
+    {
+        $c = $this->conn();
+        $providerId = $this->uuid();
+        $endpointId = $this->uuid();
+        $modelId = $this->uuid();
+        $c->execute("insert into providers (id, name, base_url, status) values (?, 'byok-only-prov', 'http://127.0.0.1:9', 'active')", [$providerId]);
+        $c->execute("insert into provider_endpoints (id, provider_id, protocol, path, kind, status, created_at) values (?, ?, 'openai_chat', '/v1/chat/completions', 'llm.chat', 'active', NOW())", [$endpointId, $providerId]);
+        $c->execute("insert into models (id, name, display_name, status) values (?, 'tpl-model', '模板模型', 'active')", [$modelId]);
+        // 无 Key 模板：无平台 key，仅模板行
+        $c->execute(
+            "insert into provider_model_templates (id, provider_id, model_id, upstream_model_name, provider_endpoint_id, max_tokens, status) values (?, ?, ?, 'up-tpl-model', ?, 2048, 'active')",
+            [$this->uuid(), $providerId, $modelId, $endpointId]
+        );
+
+        $user = $this->uuid();
+        $this->seedUser($user);
+        $this->actingAs($user);
+
+        // default 路由组（模板来源克隆的兜底归属）
+        $c->execute("insert into route_groups (id, name, status) values (?, 'default', 'active')", [$this->uuid()]);
+
+        // create-options：供应商出现且模型来自模板
+        $this->getRequest([]);
+        $providers = $this->body($this->controller()->createOptions())['data']['providers'];
+        $this->assertNotEmpty(array_filter($providers, fn ($p) => $p['id'] === $providerId), '无 Key 模板供应商应可选');
+
+        $this->getRequest(['provider_id' => $providerId]);
+        $models = $this->body($this->controller()->createOptions())['data']['models'];
+        $this->assertCount(1, $models);
+        $this->assertSame('up-tpl-model', $models[0]['upstream_model_name']);
+
+        // 自建 key：克隆自模板（端点/限参生效，路由组兜底 default）
+        $this->postRequest([
+            'provider_id' => $providerId, 'name' => 'byok', 'key' => 'sk-byok-only-9999',
+            'billing_mode' => 'free', 'model_ids' => [$modelId],
+            'upstream_names' => [$modelId => 'my-up-name'],
+        ]);
+        $keyId = $this->body($this->controller()->createKey())['data']['id'];
+
+        $m = $this->rows("select upstream_model_name, provider_endpoint_id, max_tokens from upstream_model_mappings where upstream_key_id = ? and status <> 'deleted'", [$keyId]);
+        $this->assertCount(1, $m);
+        $this->assertSame('my-up-name', $m[0]['upstream_model_name'], '用户指定名应覆盖模板值');
+        $this->assertSame($endpointId, $m[0]['provider_endpoint_id'], '端点应来自模板');
+        $this->assertSame(2048, (int) $m[0]['max_tokens'], '限参应来自模板');
+        $g = $this->rows(
+            "select rg.name from upstream_route_group_memberships urgm join route_groups rg on rg.id = urgm.route_group_id"
+            . " where urgm.upstream_model_mapping_id = (select id from upstream_model_mappings where upstream_key_id = ? limit 1) and urgm.status <> 'deleted'",
+            [$keyId]
+        );
+        $this->assertNotEmpty($g, '模板来源应兜底加入 default 路由组');
+    }
+
+    /** 模板与平台映射并存时模板优先 */
+    public function testTemplateTakesPrecedenceOverPlatformMapping(): void
+    {
+        $cat = $this->seedCatalog();
+        $c = $this->conn();
+        $c->execute(
+            "insert into provider_model_templates (id, provider_id, model_id, upstream_model_name, status) values (?, ?, ?, 'up-from-template', 'active')",
+            [$this->uuid(), $cat['providerId'], $cat['modelId']]
+        );
+
+        $user = $this->uuid();
+        $this->seedUser($user);
+        $this->actingAs($user);
+        $this->getRequest(['provider_id' => $cat['providerId']]);
+        $models = $this->body($this->controller()->createOptions())['data']['models'];
+        $this->assertSame('up-from-template', $models[0]['upstream_model_name'], '模板应优先于平台映射');
     }
 }

@@ -13,6 +13,7 @@ import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
 import { SearchableSelect } from '@/components/ui/searchable-select';
 import { ThinkingConfigDialog } from '@/components/ThinkingConfigDialog';
+import { ProviderTemplatesSection } from './ProviderTemplatesSection';
 import { updateModelMappingApi as _updateMappingForThinking } from '@/api/dashboard';
 import { MultiSelect } from '@/components/ui/multi-select';
 import { EmptyState } from '@/components/EmptyState';
@@ -251,6 +252,8 @@ export function MappingManagePage() {
       ) : (
         <DataTable columns={columns} data={mappings} emptyComponent={<EmptyState className="mx-4 my-6" title="暂无映射" />} />
       )}
+
+      {id && <ProviderTemplatesSection modelId={id} model={model} />}
 
       <Dialog open={!!editing} onOpenChange={(o) => !o && setEditing(null)}>
         <DialogContent className="sm:max-w-2xl">
