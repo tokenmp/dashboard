@@ -9,9 +9,9 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Switch } from '@/components/ui/switch';
-import { formatDate } from '@/utils/format';
+import { formatDate, formatDateTime } from '@/utils/format';
 import type { UpstreamKeyItem } from '@/types/upstream';
-import { BillingModeBadge, VerifiedCell, CreateUpstreamKeyDialog, EditUpstreamKeyDialog, UpstreamKeyDetailDialog } from './Upstream.shared';
+import { BillingModeBadge, CreateUpstreamKeyDialog, EditUpstreamKeyDialog, UpstreamKeyDetailDialog } from './Upstream.shared';
 
 /** 「我的上游」移动视图：卡片流 + 复用桌面版共享对话框 */
 export function UpstreamMobile() {
@@ -72,7 +72,9 @@ export function UpstreamMobile() {
                   <PlugZap className="h-4 w-4 shrink-0 text-muted-foreground" />
                 </button>
                 <div className="flex items-center justify-between gap-2 px-4 py-2.5">
-                  <VerifiedCell row={k} />
+                  <span className="text-xs text-muted-foreground">
+                    30 天 {k.usage_30d ? `${k.usage_30d.ok}/${k.usage_30d.attempts}` : '0/0'} · {k.last_used_at ? `最近 ${formatDateTime(k.last_used_at)}` : '未使用'}
+                  </span>
                   <div className="flex items-center gap-3">
                     <span className="text-xs text-muted-foreground">{formatDate(k.created_at)}</span>
                     <Switch checked={k.status === 'active'} onCheckedChange={() => onToggle(k)} aria-label="启停" />

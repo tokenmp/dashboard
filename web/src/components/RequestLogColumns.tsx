@@ -57,6 +57,11 @@ export const REQUEST_LOG_COLUMNS: RequestLogColumn[] = [
       <div className="flex items-center gap-1.5">
         <ModelIcon id={r.model_name ?? ''} displayName={r.model_name ?? undefined} size={20} />
         <span className="max-w-[220px] truncate">{r.model_name || '—'}</span>
+        {r.own_upstream_key_name && (
+          <Badge variant="outline" className="border-emerald-200 bg-emerald-50 px-1.5 py-0 text-[10px] font-normal text-emerald-700" title={`此请求由你的自有上游 Key「${r.own_upstream_key_name}」出站`}>
+            自有 Key
+          </Badge>
+        )}
       </div>
     ),
   },

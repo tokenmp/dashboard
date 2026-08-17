@@ -12,7 +12,7 @@ import { StatusBadge } from '@/components/StatusBadge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
-import { formatDate } from '@/utils/format';
+import { formatDateTime } from '@/utils/format';
 import { type ColumnDef } from '@tanstack/react-table';
 import { DataTable } from '@/components/ui/data-table';
 import { DataTableColumnHeader } from '@/components/ui/data-table-column-header';
@@ -94,10 +94,20 @@ function UpstreamDesktop() {
       cell: ({ row }) => <VerifiedCell row={row.original} />,
     },
     {
-      accessorKey: 'created_at',
-      meta: { className: 'w-[11%]' },
-      header: ({ column }) => <DataTableColumnHeader column={column} title="创建时间" />,
-      cell: ({ row }) => <span className="font-mono text-xs text-muted-foreground">{formatDate(row.original.created_at)}</span>,
+      id: 'usage',
+      meta: { className: 'w-[14%]' },
+      header: () => <span className="text-xs font-medium text-muted-foreground">用量(30天)</span>,
+      cell: ({ row }) => {
+        const u = row.original.usage_30d;
+        return (
+          <div className="leading-tight">
+            <span className="text-xs tabular-nums">{u ? `${u.ok}/${u.attempts}` : '0/0'}</span>
+            <span className="block text-[10px] text-muted-foreground">
+              {row.original.last_used_at ? `最近 ${formatDateTime(row.original.last_used_at)}` : '未使用'}
+            </span>
+          </div>
+        );
+      },
     },
     {
       id: 'action',

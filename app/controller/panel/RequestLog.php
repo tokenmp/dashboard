@@ -10,6 +10,7 @@ use app\model\RequestLogEvent;
 use app\service\DataScope;
 use app\support\Pagination;
 use think\exception\HttpException;
+use think\facade\Db;
 
 /**
  * 用户面：我的请求日志（panel，自取）
@@ -104,6 +105,28 @@ class RequestLog extends BaseController
         $list = $list->each(function ($item) {
             $item['api_key_name'] = $item->userApiKey?->name;
             unset($item->userApiKey);
+            return $item;
+        });
+
+        // 标注该请求是否由用户自有上游 key 出站（该请求存在 2xx attempt 命中自己的 key）
+        $logIds = $list->column('id');
+        $ownKeyNames = [];
+        if (!empty($logIds)) {
+            $in = implode(',', array_fill(0, count($logIds), '?'));
+            $rows = Db::connect('pgsql')->query(
+                "select distinct on (ra.request_log_id) ra.request_log_id, uk.name as own_key_name"
+                . " from request_attempts ra"
+                . " join upstream_keys uk on uk.id = ra.upstream_key_id and uk.owner_user_id = ?"
+                . " where ra.request_log_id in ($in) and ra.status_code >= 200 and ra.status_code < 400"
+                . " order by ra.request_log_id, ra.created_at desc",
+                array_merge([$ctx->userId()], $logIds)
+            );
+            foreach ($rows as $r) {
+                $ownKeyNames[$r['request_log_id']] = $r['own_key_name'];
+            }
+        }
+        $list = $list->each(function ($item) use ($ownKeyNames) {
+            $item['own_upstream_key_name'] = $ownKeyNames[$item->id] ?? null;
             return $item;
         });
 

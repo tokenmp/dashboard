@@ -64,6 +64,9 @@ export interface UpstreamKeyItem {
   last_validation_error: string | null;
   total_attempts: number | string;
   total_success_attempts: number | string;
+  /** 近 30 天调用量（attempt 维度，panel 列表附带） */
+  usage_30d?: { attempts: number; ok: number; requests: number };
+  last_used_at?: string | null;
   created_at: string;
   updated_at: string;
   provider?: { id: string; name: string; display_name: string | null; logo_url?: string | null; logo_svg?: string | null } | null;
@@ -76,6 +79,18 @@ export interface UpstreamKeyDetailResult {
   mappings: UpstreamModelMappingItem[];
   routeGroups: { id: string; name: string; display_name: string | null; is_system: boolean; status: string }[];
   verifications: UpstreamKeyVerificationItem[];
+  /** 最近经此 key 出站的请求（panel 详情附带） */
+  recentRequests?: {
+    id: string;
+    created_at: string;
+    model_name: string;
+    success: boolean;
+    final_status_code: number | null;
+    total_tokens: number;
+    billing_plan: string | null;
+    billing_source: string;
+    error_code: string;
+  }[];
 }
 
 /** 模型映射（含模型名、端点、单价） */

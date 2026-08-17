@@ -496,6 +496,26 @@ export function UpstreamKeyDetailDialog({ keyId, onClose, onChanged }: {
               )}
             </div>
 
+            {/* 最近调用（经此 key 出站的请求） */}
+            <div className="space-y-2">
+              <span className="text-sm font-medium">最近调用</span>
+              <div className="divide-y rounded-md border">
+                {(data.recentRequests ?? []).map((r) => (
+                  <div key={r.id} className="flex items-center justify-between gap-2 px-3 py-2 text-xs">
+                    <div className="flex min-w-0 items-center gap-1.5">
+                      <span className={r.success ? 'text-emerald-600' : 'text-destructive'}>{r.success ? '成功' : `失败${r.error_code ? ` ${r.error_code}` : ''}`}</span>
+                      <span className="truncate font-medium">{r.model_name}</span>
+                      {r.billing_source === 'user_key' && <Badge variant="outline" className="border-emerald-200 bg-emerald-50 px-1 text-[10px] text-emerald-700">免扣</Badge>}
+                    </div>
+                    <span className="shrink-0 font-mono text-muted-foreground">
+                      {r.total_tokens > 0 ? `${r.total_tokens} tok · ` : ''}{formatDateTime(r.created_at)}
+                    </span>
+                  </div>
+                ))}
+                {(data.recentRequests ?? []).length === 0 && <div className="px-3 py-4 text-center text-xs text-muted-foreground">此 Key 尚未被调用</div>}
+              </div>
+            </div>
+
             {/* 校验记录 */}
             <div className="space-y-2">
               <span className="text-sm font-medium">探测记录</span>
