@@ -53,14 +53,15 @@ class Upstream extends BaseController
         Pagination::applySort($query, $this->request, ['created_at', 'updated_at'], '-created_at');
         $providers = $query->page($page, $size)->select();
 
-        // 注入 endpoint 与 upstream_key 计数
+        // 注入 endpoint 与 upstream_key 计数 + 已配置端点协议（列表标签展示用）
         $ids = $providers->column('id');
         $counts = [];
         if (!empty($ids)) {
             $rows = Db::connect('pgsql')->query(
                 "select p.id as provider_id,"
                 . " count(distinct pe.id) as endpoint_count,"
-                . " count(distinct uk.id) as key_count"
+                . " count(distinct uk.id) as key_count,"
+                . " COALESCE(array_agg(distinct pe.protocol) filter (where pe.protocol is not null), '{}') as protocols"
                 . " from providers p"
                 . " left join provider_endpoints pe on pe.provider_id = p.id and pe.status <> 'deleted'"
                 . " left join upstream_keys uk on uk.provider_id = p.id and uk.status <> 'deleted'"
@@ -68,17 +69,22 @@ class Upstream extends BaseController
                 . " group by p.id"
             );
             foreach ($rows as $r) {
-                $counts[$r['provider_id']] = ['endpoints' => (int) $r['endpoint_count'], 'keys' => (int) $r['key_count']];
+                $counts[$r['provider_id']] = [
+                    'endpoints' => (int) $r['endpoint_count'],
+                    'keys' => (int) $r['key_count'],
+                    'protocols' => self::parsePgArray($r['protocols'] ?? null),
+                ];
             }
         }
 
         $list = $providers->each(function ($p) use ($counts) {
-            $c = $counts[$p->id] ?? ['endpoints' => 0, 'keys' => 0];
+            $c = $counts[$p->id] ?? ['endpoints' => 0, 'keys' => 0, 'protocols' => []];
             $p->endpoint_count = $c['endpoints'];
             $p->key_count = $c['keys'];
+            $p->protocols = $c['protocols'];
             return $p;
         })->visible([
-            'id', 'name', 'display_name', 'base_url', 'status', 'logo_url', 'logo_svg', 'endpoint_count', 'key_count', 'thinking_config', 'created_at', 'updated_at',
+            'id', 'name', 'display_name', 'base_url', 'status', 'logo_url', 'logo_svg', 'endpoint_count', 'key_count', 'protocols', 'thinking_config', 'created_at', 'updated_at',
         ])->toArray();
         foreach ($list as &$pv) {
             $pv['thinking'] = ThinkingConfig::parse($pv['thinking_config'] ?? null);
@@ -328,18 +334,62 @@ class Upstream extends BaseController
         return success(['id' => $id]);
     }
 
-    /** PUT /api/v1/dashboard/upstream/providers/:id —— 目前支持编辑品牌 Logo（外链 / 上传 SVG） */
+    /**
+     * PUT /api/v1/dashboard/upstream/providers/:id
+     * 支持编辑：name / display_name / base_url（仅显式传参的字段更新），
+     * 以及品牌 Logo（logo_url / logo_svg 任一显式传参时才更新，避免误清除）。
+     */
     public function updateProvider($id)
     {
         $exists = Provider::where('id', $id)->where('status', '<>', 'deleted')->find();
         if ($exists === null) {
             throw new HttpException(404, '供应商不存在');
         }
-        [$logoUrl, $logoSvg] = $this->logoInput();
-        Db::connect('pgsql')->execute(
-            'UPDATE providers SET logo_url = ?, logo_svg = ?, updated_at = NOW() WHERE id = ?',
-            [$logoUrl, $logoSvg, $id]
-        );
+
+        $sets = [];
+        $args = [];
+        $name = trim((string) $this->request->post('name', ''));
+        if ($name !== '') {
+            if ($name !== $exists->name) {
+                $dup = Db::connect('pgsql')->query(
+                    "select 1 from providers where name = ? and id <> ? and status <> 'deleted' limit 1",
+                    [$name, $id]
+                );
+                if (!empty($dup)) {
+                    throw new HttpException(400, '供应商 name 已存在');
+                }
+            }
+            $sets[] = 'name = ?';
+            $args[] = $name;
+        }
+        if ($this->request->has('display_name')) {
+            $displayName = trim((string) $this->request->post('display_name', ''));
+            $sets[] = 'display_name = ?';
+            $args[] = $displayName !== '' ? $displayName : null;
+        }
+        if ($this->request->has('base_url')) {
+            $baseUrl = trim((string) $this->request->post('base_url', ''));
+            if ($baseUrl !== '' && !preg_match('#^https?://#i', $baseUrl)) {
+                throw new HttpException(400, 'base_url 必须是 http(s):// 开头');
+            }
+            $sets[] = 'base_url = ?';
+            $args[] = $baseUrl;
+        }
+        // Logo：任一 logo 字段显式传参才更新（编辑弹窗不带 logo 字段时保持原值）
+        if ($this->request->has('logo_url') || $this->request->has('logo_svg')) {
+            [$logoUrl, $logoSvg] = $this->logoInput();
+            $sets[] = 'logo_url = ?';
+            $args[] = $logoUrl;
+            $sets[] = 'logo_svg = ?';
+            $args[] = $logoSvg;
+        }
+        if ($sets !== []) {
+            $args[] = $id;
+            Db::connect('pgsql')->execute(
+                'UPDATE providers SET ' . implode(', ', $sets) . ', updated_at = NOW() WHERE id = ?',
+                $args
+            );
+        }
         return success(['id' => $id]);
     }
 
