@@ -75,6 +75,36 @@ class Upstream extends BaseController
         Pagination::applySort($query, $this->request, ['created_at', 'priority'], '-created_at');
         $list = $query->page($page, $size)->select();
 
+        // 调用概况（近 30 天，按 attempt 维度）：让用户看到自己的 key 被使用的情况
+        $keyIds = $list->column('id');
+        $usage = [];
+        if (!empty($keyIds)) {
+            $in = implode(',', array_fill(0, count($keyIds), '?'));
+            $rows = Db::connect('pgsql')->query(
+                "select upstream_key_id, count(*) as attempts_30d,"
+                . " count(*) filter (where status_code >= 200 and status_code < 400) as ok_30d,"
+                . " count(distinct request_log_id) as requests_30d,"
+                . " max(created_at) as last_used_at"
+                . " from request_attempts"
+                . " where upstream_key_id in ($in) and created_at >= now() - interval '30 days'"
+                . " group by upstream_key_id",
+                $keyIds
+            );
+            foreach ($rows as $r) {
+                $usage[$r['upstream_key_id']] = $r;
+            }
+        }
+        $list = $list->each(function ($k) use ($usage) {
+            $u = $usage[$k->id] ?? null;
+            $k->usage_30d = $u ? [
+                'attempts' => (int) $u['attempts_30d'],
+                'ok' => (int) $u['ok_30d'],
+                'requests' => (int) $u['requests_30d'],
+            ] : ['attempts' => 0, 'ok' => 0, 'requests' => 0];
+            $k->last_used_at = $u['last_used_at'] ?? null;
+            return $k;
+        });
+
         // 脱敏：去掉 encrypted_key / encryption_version；保留 key_prefix/key_suffix
         $list->hidden(['encrypted_key', 'encryption_version']);
 
@@ -118,11 +148,24 @@ class Upstream extends BaseController
             ->limit(10)
             ->select();
 
+        // 最近经此 key 出站的请求（用户自己的请求日志，便于看到 key 被调用的情况）
+        $recentRequests = Db::connect('pgsql')->query(
+            "select rl.id, rl.created_at, rl.model_name, rl.success, rl.final_status_code,"
+            . " rl.total_tokens, rl.billing_plan, coalesce(rl.billing_source, '') as billing_source,"
+            . " coalesce(rl.error_code, '') as error_code"
+            . " from request_logs rl"
+            . " where rl.user_id = ?"
+            . " and exists (select 1 from request_attempts ra where ra.request_log_id = rl.id and ra.upstream_key_id = ?)"
+            . " order by rl.created_at desc limit 10",
+            [$ctx->userId(), $id]
+        );
+
         return success([
             'key'           => $key,
             'mappings'      => $mappings,
             'routeGroups'   => $routeGroups,
             'verifications' => $verifications,
+            'recentRequests' => $recentRequests,
         ]);
     }
 

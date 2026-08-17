@@ -10,6 +10,8 @@ export interface RequestLogItem {
   user_email: string | null;
   /** 使用的 API Key 名称（列表 join user_api_keys） */
   api_key_name: string | null;
+  /** 该请求由用户自有上游 Key 出站时的 key 名（panel 列表附带；null=走平台渠道） */
+  own_upstream_key_name?: string | null;
   request_id: string | null;
   trace_id: string | null;
   model_name: string | null;
