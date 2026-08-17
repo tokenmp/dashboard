@@ -210,7 +210,7 @@ function TemplateEditDialog({ state, model, existing, onClose, onSaved }: {
                 {providers.map((p) => <SelectItem key={p.id} value={p.id}>{p.display_name || p.name}</SelectItem>)}
               </SelectContent>
             </Select>
-            {dup && <p className="text-xs text-destructive">该供应商已有模板</p>}
+            {dup && <p className="text-xs text-destructive">该供应商对「{model?.name ?? '此模型'}」已有模板——同一供应商 × 模型仅一条，可直接编辑上方已有条目</p>}
           </div>
           <div className="space-y-1">
             <Label>上游模型名 *</Label>
