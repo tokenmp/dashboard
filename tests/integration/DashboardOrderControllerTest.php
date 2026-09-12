@@ -116,6 +116,35 @@ final class DashboardOrderControllerTest extends IntegrationTestCase
         $this->assertSame(100.0, (float) $this->rows('SELECT balance_cny FROM wallets WHERE user_id = ?', [$user])[0]['balance_cny']);
     }
 
+    /**
+     * 幂等键必须按用户隔离：两个用户用同一个 key 时各自独立建单，不得返回他人订单、也不得 500。
+     *
+     * 背景：orders.idempotency_key 全局唯一。若预检只按 key 查（不限定 user_id），
+     * 第二用户会直接拿到**第一个用户的订单**（跨用户数据泄漏）；若落库用裸 key 则撞唯一约束 500。
+     */
+    public function testCreateIdempotencyKeyIsScopedToUser(): void
+    {
+        $userA = $this->uuid();
+        $this->seedUser($userA);
+        $userB = $this->uuid();
+        $this->seedUser($userB);
+
+        $this->postRequest(['user_id' => $userA, 'amount_cny' => 10, 'idempotency_key' => 'shared-key']);
+        $orderA = $this->body($this->controller()->create())['data'];
+
+        $this->postRequest(['user_id' => $userB, 'amount_cny' => 20, 'idempotency_key' => 'shared-key']);
+        $orderB = $this->body($this->controller()->create())['data'];
+
+        $this->assertNotSame($orderA['id'], $orderB['id'], '不同用户不得复用同一订单');
+        $this->assertSame($userA, $orderA['user_id']);
+        $this->assertSame($userB, $orderB['user_id']);
+        $this->assertSame(2, $this->orderCount());
+
+        // 各自钱包只入账自己的金额
+        $this->assertSame(10.0, (float) $this->rows('SELECT balance_cny FROM wallets WHERE user_id = ?', [$userA])[0]['balance_cny']);
+        $this->assertSame(20.0, (float) $this->rows('SELECT balance_cny FROM wallets WHERE user_id = ?', [$userB])[0]['balance_cny']);
+    }
+
     public function testCreateWithBonusWritesSeparateBonusLedgerRow(): void
     {
         $user = $this->uuid();

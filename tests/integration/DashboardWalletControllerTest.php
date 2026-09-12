@@ -190,33 +190,34 @@ final class DashboardWalletControllerTest extends IntegrationTestCase
     }
 
     /**
-     * 幂等键必须按用户隔离：同 key 命中他人流水时不得把他人账目返回给当前用户。
+     * 幂等键必须按用户隔离：两个用户用同一个 key 时，各自独立成功，互不串账、也不撞唯一约束。
      *
-     * wallet_ledger.idempotency_key 全局唯一，故修复后跨用户复用会以唯一约束冲突失败
-     * （修复前会静默返回他人流水且自己的余额不变）。本用例守住「不返回他人流水」。
+     * 背景：wallet_ledger.idempotency_key 是全局唯一。若直接把调用方给的裸 key 落库，
+     * 第二个用户必然 500（唯一冲突）；若预检不限定 user_id，则会把他人流水当成本次结果返回。
+     * 正确做法是落库前按 user_id scope 化键。
      */
     public function testAdjustIdempotencyKeyIsScopedToUser(): void
     {
         $other = $this->uuid();
+        $this->seedUser($other);
         $this->seedWallet($other, 0);
-        $this->seedWalletLedger($other, ['idempotency_key' => 'shared-key', 'amount_cny' => 5, 'balance_after' => 5]);
+        $this->postRequest(['amount_cny' => 5, 'idempotency_key' => 'shared-key']);
+        $otherData = $this->body($this->controller($other)->adjust($other))['data'];
+        $this->assertSame(5.0, (float) $otherData['wallet']['balance_cny']);
 
         $user = $this->uuid();
+        $this->seedUser($user);
         $this->seedWallet($user, 0);
-
         $this->postRequest(['amount_cny' => 100, 'idempotency_key' => 'shared-key']);
-        try {
-            $data = $this->body($this->controller()->adjust($user))['data'];
-            // 若成功返回，流水必须是当前用户自己的，绝不能是他人记录
-            $this->assertSame($user, $data['ledger']['user_id']);
-        } catch (HttpException $e) {
-            $this->fail('不应把他人类幂等命中当成本用户结果: ' . $e->getMessage());
-        } catch (\Throwable $e) {
-            // 命中他人幂等键 → 全局唯一约束冲突，事务回滚；
-            // 关键是未把他人流水返回，且当前用户无新增流水
-            $this->assertSame(5.0, (float) $this->rows('SELECT amount_cny FROM wallet_ledger WHERE idempotency_key = ?', ['shared-key'])[0]['amount_cny']);
-            $this->assertSame(0, $this->ledgerCount($user));
-        }
+        $data = $this->body($this->controller($user)->adjust($user))['data'];
+
+        // 当前用户拿到的是自己的流水与余额，绝不是他人的
+        $this->assertSame($user, $data['ledger']['user_id']);
+        $this->assertSame(100.0, (float) $data['wallet']['balance_cny']);
+        $this->assertSame(100.0, (float) $data['ledger']['amount_cny']);
+        // 两个用户各留一行，键在库里互不冲突
+        $this->assertSame(1, $this->ledgerCount($user));
+        $this->assertSame(1, $this->ledgerCount($other));
     }
 
     public function testAdjustRejectsZeroAmount(): void
