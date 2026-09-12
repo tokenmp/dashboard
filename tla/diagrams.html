@@ -1,0 +1,245 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>TokenMP 计费重设计 · TLA+ 验证图（tldraw）</title>
+<link rel="stylesheet" href="https://unpkg.com/tldraw@5.4.2/tldraw.css"/>
+<style>html,body,#root{height:100%;margin:0;background:#f8f9fa}#err{position:fixed;z-index:99;left:8px;bottom:8px;background:#fee;color:#900;font:12px/1.4 monospace;padding:6px 8px;border-radius:6px;max-width:60vw;white-space:pre-wrap;display:none}</style>
+<script type="importmap">
+{
+  "imports": {
+    "react": "https://esm.sh/react@19.3.0",
+    "react-dom": "https://esm.sh/react-dom@19.3.0",
+    "react-dom/client": "https://esm.sh/react-dom@19.3.0/client",
+    "react/jsx-runtime": "https://esm.sh/react@19.3.0/jsx-runtime",
+    "tldraw": "https://esm.sh/tldraw@5.4.2?external=react,react-dom"
+  }
+}
+</script>
+</head>
+<body>
+<div id="root"></div>
+<div id="err"></div>
+<script type="module">
+import React from 'react'
+import { createRoot } from 'react-dom/client'
+import { Tldraw, createShapeId, toRichText } from 'tldraw'
+
+const errEl = document.getElementById('err')
+const fail = (e) => { errEl.style.display='block'; errEl.textContent += (e && e.stack || e) + '\n'; window.__error = String(e) }
+window.addEventListener('error', (e)=>fail(e.error||e.message))
+window.addEventListener('unhandledrejection', (e)=>fail(e.reason))
+
+const COLORS = { blue:'blue', green:'green', red:'red', orange:'orange', violet:'violet', grey:'grey', black:'black', yellow:'yellow',
+  lblue:'light-blue', lgreen:'light-green', lred:'light-red', lorange:'orange', lviolet:'light-violet', lyellow:'yellow', lgrey:'grey' }
+const col = c => COLORS[c] || c
+
+function Box(id, x, y, w, h, text, color='blue', fill='solid', geo='rectangle', size='m', font='sans') {
+  return { id, type:'geo', x, y, props:{ geo, w, h, color:col(color), fill, dash:'solid', size, font, align:'middle', verticalAlign:'middle', richText: toRichText(text) } }
+}
+function Note(id, x, y, w, h, text, color='grey', fill='semi') {
+  return { id, type:'geo', x, y, props:{ geo:'rectangle', w, h, color:col(color), fill, dash:'dashed', size:'s', font:'mono', align:'start', verticalAlign:'start', richText: toRichText(text) } }
+}
+function Label(id, x, y, text, size='m', color='black') {
+  return { id, type:'text', x, y, props:{ richText: toRichText(text), size, font:'sans', color:col(color), textAlign:'start', autoSize:true } }
+}
+function Arrow(id, x1, y1, x2, y2, text='', color='black', dash='solid') {
+  return { id, type:'arrow', x:x1, y:y1, props:{ start:{x:0,y:0}, end:{x:x2-x1,y:y2-y1}, color:col(color), dash, size:'m', arrowheadStart:'none', arrowheadEnd:'arrow', richText: toRichText(text), labelPosition:0.5, font:'sans' } }
+}
+
+const S = []
+const push = (...xs) => xs.forEach(x => S.push(x))
+
+// ═════════════ 标题 ═════════════
+push(
+  Label('t0', 0, -140, 'TokenMP 计费 / 定价 / 充值重设计 —— TLA+ 形式化验证逻辑图', 'xl', 'black'),
+  Label('t1', 0, -60, '11 个模型 · 30 组配置 · TLC 穷举；红=原稿被反驳，绿=修订通过', 'm', 'grey'),
+)
+
+// ═════════════ A. 双轨计费状态机 ═════════════
+push(
+  Label('a0', 0, 20, 'A · 双轨计费状态机（Wallet.tla）', 'l', 'black'),
+  Note('a-track1', 0, 90, 640, 60, '订阅轨 coding：计量=请求次数，扣 request_weight × multiplier', 'violet'),
+  Box('a-idle1', 20, 190, 130, 90, 'idle', 'grey'),
+  Box('a-res1', 220, 190, 180, 90, 'reserved\n(冻结次数)', 'violet'),
+  Box('a-done1', 480, 150, 180, 80, 'done\nfinalize → 计入 subUsed', 'green'),
+  Box('a-rel1', 480, 270, 180, 80, 'released\nrelease → 退冻结', 'orange'),
+  Arrow('ar1', 150, 235, 220, 235, 'reserve'),
+  Arrow('ar2', 400, 215, 480, 190, ''),
+  Arrow('ar3', 400, 255, 480, 310, ''),
+
+  Note('a-track2', 760, 90, 760, 60, '按量轨 wallet：计量=人民币元，扣 Σ(tokens × 矩阵单价) × multiplier', 'blue'),
+  Box('a-idle2', 760, 190, 130, 90, 'idle', 'grey'),
+  Box('a-res2', 960, 190, 200, 90, 'reserved\n(balance→frozen)', 'blue'),
+  Box('a-done2', 1240, 150, 200, 80, 'done\nfinalize → 销毁 frozen', 'green'),
+  Box('a-rel2', 1240, 270, 200, 80, 'released\nrelease → frozen→balance', 'orange'),
+  Arrow('ar4', 890, 235, 960, 235, 'reserve'),
+  Arrow('ar5', 1160, 215, 1240, 190, ''),
+  Arrow('ar6', 1160, 255, 1240, 310, ''),
+
+  Note('a-inv', 0, 380, 1760, 720,
+`不变式（TLC 已验证）
+  NoOverdraft             balance_cny ≥ 0 ∧ frozen_cny ≥ 0
+  NoOversell              subUsed + subHold ≤ 限额
+  HoldCoversReservation   未结清钱包预留 ≤ frozen_cny
+  Conservation            balance + frozen + spent = 初始总额
+  ChargeIdempotent        同一请求不重复扣费
+  ReservationsResolved    每个 reserved 最终 done 或 released（活性）
+
+反例（原稿）
+  W1_naive        ❌ NoOverdraft    预留 est=0 → 结算 actual=3 → balance = -1
+  W2_walletOnly   ❌ NoOversell     reserve 权重 1 → finalize 权重 3 → 4 > 3
+  L_no_expire     ❌ 时序性质        复核拒绝的预留永久悬挂
+
+修订规则
+  ① 钱包结算复核：balance + 本预留冻结额 ≥ 实际金额                      （§3.2）
+  ② 权重 / 倍率在 reserve 时快照（或结算按时点口径复核）                 （§3.1）
+  ③ 结算复核必须配 TTL 过期释放，否则预留永久泄漏                        （§6.3）
+  ④ 冻结语义：balance=可用 / frozen=预扣；预留=搬运、结算=销毁、释放=回搬  （§3.2）`, 'grey'),
+)
+
+// ═════════════ B. 定价解析链 ═════════════
+push(
+  Label('b0', 2020, 20, 'B · 定价解析链（三层）', 'l', 'black'),
+  Box('b-matrix', 2020, 90, 440, 120, 'L1  套餐×模型矩阵\nmodel_prices  (plan_id NOT NULL)\n次数权重 / 元·token 单价', 'green'),
+  Box('b-plat',   2020, 300, 440, 110, 'L2  平台默认价\nmodel_prices  (plan_id IS NULL)', 'yellow'),
+  Box('b-reject', 2020, 500, 440, 90, '无价 → 拒绝计费（不得静默免费）', 'red'),
+  Box('b-route',  2560, 90, 400, 120, 'L3  路由成本价\nupstream_model_mappings\n（仅毛利核算，不参与扣费）', 'grey'),
+  Box('b-mult',   2560, 300, 400, 110, 'price_multiplier_rules\nside=user → × 基础价\nside=upstream → 仅报表', 'orange'),
+  Arrow('br1', 2240, 210, 2240, 300, '矩阵未覆盖'),
+  Arrow('br2', 2240, 410, 2240, 500, '平台价也无'),
+  Arrow('br3', 2460, 150, 2560, 150, ''),
+  Arrow('br4', 2760, 210, 2760, 300, ''),
+  Note('b-note', 2020, 630, 940, 300,
+`最终扣费
+  订阅轨： request_weight(矩阵) × multiplier
+  钱包轨： Σ(tokens × 矩阵单价) × multiplier
+
+倍率分工（决策 D9）
+  矩阵 / 平台价  = 基础价（稳定）
+  倍率            = 时段 / 活动 / 渠道调整（动态）
+  路由成本价      = 只做毛利核算，绝不参与用户扣费
+
+解析链： L1 命中 → 用 L1；缺失 → L2；L1/L2 都缺 → 拒绝计费`, 'grey'),
+)
+
+// ═════════════ C. 充值 / 订单 ═════════════
+push(
+  Label('c0', 0, 1220, 'C · 充值 / 订单状态机（Topup.tla）', 'l', 'black'),
+  Box('c-none',    20,  1300, 140, 90, 'none', 'grey'),
+  Box('c-pending', 230, 1300, 170, 90, 'pending\n(下单)', 'lblue'),
+  Box('c-paid',    470, 1300, 170, 90, 'paid\n(回调成功)', 'green'),
+  Box('c-credit',  710, 1300, 230, 90, '已入账\nwallet_ledger(+amount)', 'lgreen'),
+  Box('c-refund',  1010,1300, 170, 90, 'refunded\n(退款)', 'orange'),
+  Arrow('cr1', 160, 1345, 230, 1345, 'create'),
+  Arrow('cr2', 400, 1345, 470, 1345, 'pay'),
+  Arrow('cr3', 640, 1345, 710, 1345, 'credit'),
+  Arrow('cr4', 940, 1345, 1010, 1345, 'refund'),
+  Note('c-idem', 230, 1440, 700, 320,
+`幂等守卫
+  orders.status = 'paid'
+  + payment_transactions(gateway, gateway_txn_id) UNIQUE
+  + wallet_ledger.idempotency_key UNIQUE
+
+幂等键
+  order:{id}:credit   order:{id}:refund   req:{id}:charge
+
+反例  T1_naive  ❌ NoNegativeBalance
+  入账 2 → 消费 2 → 退款 2 → balance = -2
+
+规则：退款有界（只退未消费部分）`, 'grey'),
+  Box('c-bad', 1010, 1440, 340, 320, '重复回调\n\n必须是幂等空操作\n\n不得重复入账', 'lred'),
+)
+
+// ═════════════ D. 跨账本原子性 ═════════════
+push(
+  Label('d0', 2020, 1000, 'D · 跨账本原子性（CrossLedger.tla）', 'l', 'black'),
+  Box('d-consumer', 2020, 1080, 320, 110, '消费者钱包\nwallet_ledger(charge)', 'blue'),
+  Box('d-holding',  2440, 1080, 280, 110, '平台 holding\n(中间态)', 'lorange'),
+  Box('d-supplier', 2820, 1080, 320, 110, '供应商入账\nmarketplace_settlement', 'green'),
+  Arrow('dr1', 2340, 1135, 2440, 1135, '扣款'),
+  Arrow('dr2', 2720, 1135, 2820, 1135, '放款'),
+  Note('d-note', 2020, 1230, 1120, 380,
+`现状：请求完成路径分 3 次独立写，不在同一事务
+  ① FinalizeReservation        → usage_ledger(charge)          消费者扣
+  ② UpdateRequestLog           → request_logs 终态
+  ③ FinalizeMarketplaceSettlement → 供应商入账
+
+反例  X_separate  ❌ LedgerPairing
+  消费者已扣、供应商未入账 → 供应者被短付
+
+⚠️ 全局资金守恒仍成立（钱卡在 platform holding），常规对账监控发现不了
+
+规则：消费者扣款 + 供应商入账必须同一事务（或 outbox）
+      对账补偿 worker 只能做 eventual 修复，不得作为唯一保障`, 'grey'),
+)
+
+// ═════════════ E. 验证矩阵 ═════════════
+push(Label('e0', 0, 1780, 'E · TLA+ 验证矩阵（11 模型 / 30 配置）', 'l', 'black'))
+const matrix = [
+  ['Wallet',           '双轨预留/结算/释放 + 并发',    'W1_naive ❌NoOverdraft · W2_walletOnly ❌NoOversell',   'W3_recheck · W4_snapshot ✅'],
+  ['Topup',            '订单 / 回调 / 退款',            'T1_naive ❌NoNegativeBalance',                          'T2_safe ✅'],
+  ['Fallback',         '候选回退原子性 (P5)',            'F_leaky ❌NoLeak',                                      'F_atomic ✅'],
+  ['Windows',          '四维窗口 + 短期窗重置',          'N_buggy ❌ConsumedWithinTotal',                         'N_correct ✅'],
+  ['Liveness',         '预留活性 + TTL 兜底',            'L_no_expire ❌时序性质',                                'L_expire ✅'],
+  ['QuotaDisplay',     '展示口径 vs 放行口径',           'Q_cycle_first ❌DisplayAccurate',                       'Q_min ✅'],
+  ['MarketSettlement', '市场分账 / 放款 / 提现 / 回滚',  'M_dup ❌SettlementOnce · M_reversal ❌NoNegativeAvail', 'M_safe ✅'],
+  ['WindowModels',     '独立窗口 vs 周期套住短窗',       'WM_samecapacity ❌（证明容量不同）',                     'WM_independent · WM_nested ✅'],
+  ['Exempt',           '免费模型 / 自有 Key 免扣',       'E_leak ❌FreeNotFrozen · E_late ❌Conservation',        'E_safe ✅'],
+  ['CrossLedger',      '消费者扣款 vs 供应商入账',       'X_separate ❌LedgerPairing',                            'X_atomic ✅（对账仅 eventual）'],
+  ['Rounding',         '预留 / 结算取整方向',            'R_up_down ❌NoUndercharge · R_down_up ❌NoOverdraft',   'R_up_up · R_down_up_recheck ✅'],
+]
+let y = 1860
+for (const [m, what, bad, good] of matrix) {
+  push(
+    Box('e-m-'+m, 0,    y, 210, 64, m, 'blue', 'solid', 'rectangle', 's', 'mono'),
+    Box('e-w-'+m, 220,  y, 430, 64, what, 'grey', 'semi', 'rectangle', 's'),
+    Box('e-b-'+m, 660,  y, 590, 64, bad, 'lred', 'solid', 'rectangle', 's'),
+    Box('e-g-'+m, 1260, y, 560, 64, good, 'lgreen', 'solid', 'rectangle', 's'),
+  )
+  y += 76
+}
+
+// ═════════════ F. 强制规则 ═════════════
+push(
+  Label('f0', 0, y + 70, 'F · 由反例提炼的强制规则（已写入设计文档）', 'l', 'black'),
+  Note('f-note', 0, y + 150, 1820, 560,
+`§3.1  订阅权重 / 倍率在 reserve 时快照（或结算按时点口径复核）              ← W2_walletOnly
+§3.1  短期窗重置只影响 5h/周；周期与总量用单调累计约束                      ← N_buggy
+§3.2  钱包结算前复核 balance + 本预留冻结额 ≥ 实际金额                      ← W1_naive
+§3.2  冻结语义：balance=可用 / frozen=预扣；预留=搬运、结算=销毁、释放=回搬   ← 定义
+§6.1  候选回退每次尝试必须单事务原子，失败不留痕                            ← F_leaky
+§6.2  消费者扣款与供应商入账必须同事务（或 outbox）                          ← X_separate
+§6.3  结算复核必须配 TTL 过期释放，否则预留永久泄漏                          ← L_no_expire
+§6.4  免扣路径仅在未结算时生效 + 必须释放预留 + 已结算幂等不退款              ← E_leak / E_late
+§7.4  退款有界：只退未消费部分                                              ← T1_naive
+§7.5  幂等键规范  req:{id}:charge / order:{id}:credit 等
+§7.6  市场结算 UNIQUE(request_log_id) 承载性；回滚只回滚未提现部分           ← M_dup / M_reversal
+§8    展示口径 = 四维窗口剩余最小值（不得默认取 windows[0]）                 ← Q_cycle_first
+§3.1  窗口语义必须定死一种并写入代码注释                                    ← WM_samecapacity
+§3.1  预留向上取整、结算按精确值；不得预留向下 + 结算向上而无复核            ← R_up_down / R_down_up`, 'grey'),
+)
+
+// ═════════════ 渲染 ═════════════
+const allShapes = S.map((s, i) => ({ ...s, id: createShapeId(s.id || ('s'+i)) }))
+
+function App () {
+  const onMount = React.useCallback((editor) => {
+    try {
+      editor.createShapes(allShapes)
+      editor.zoomToFit({ animation:{ duration:0 } })
+      window.editor = editor
+      window.focusRect = (x, y, w, h) => editor.zoomToBounds({ x, y, w, h }, { animation:{ duration:0 }, inset: 40 })
+      window.__ready = true
+    } catch (e) { fail(e) }
+  }, [])
+  return React.createElement('div', { style:{ position:'fixed', inset:0 } },
+    React.createElement(Tldraw, { onMount }))
+}
+
+try { createRoot(document.getElementById('root')).render(React.createElement(App)) }
+catch (e) { fail(e) }
+</script>
+</body>
+</html>
