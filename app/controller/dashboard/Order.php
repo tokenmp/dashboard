@@ -94,14 +94,18 @@ class Order extends BaseController
 
         $orderId = $this->genUuid();
         $orderNo = $this->genOrderNo();
-        $orderKey = $clientKey ?? "manual:{$orderId}";
+        // 幂等键落库前按用户 scope：orders.idempotency_key 全局唯一，裸 key 会让
+        // 两个用户用同一个 key 时后者撞唯一约束（500）或（预检不隔离时）拿到他人订单。
+        $orderKey = $clientKey === null ? "manual:{$orderId}" : "manual:{$userId}:{$clientKey}";
 
         $result = Db::connect('pgsql')->transaction(function () use ($userId, $amount, $bonus, $orderId, $orderNo, $orderKey, $clientKey) {
             $db = Db::connect('pgsql');
 
-            // 幂等：同客户端幂等键的订单已存在 → 原样返回
+            // 幂等：同客户端幂等键的订单已存在 → 原样返回。
+            // 必须限定 user_id：orders.idempotency_key 全局唯一，若只按 key 查，
+            // 另一用户用过同 key 时会把**他人订单**返回给当前用户（跨用户数据泄漏）。
             if ($clientKey !== null) {
-                $dup = $db->query('SELECT id FROM orders WHERE idempotency_key = ?', [$clientKey]);
+                $dup = $db->query('SELECT id FROM orders WHERE idempotency_key = ? AND user_id = ?::uuid', [$orderKey, $userId]);
                 if (!empty($dup)) {
                     return $this->fetchOrder((string) $dup[0]['id']);
                 }

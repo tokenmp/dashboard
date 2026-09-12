@@ -91,11 +91,17 @@ class Wallet extends BaseController
             $reason = '管理员手工调账';
         }
 
-        $result = Db::connect('pgsql')->transaction(function () use ($userId, $amount, $key, $reason) {
+        // 幂等键按用户 scope 化后再落库：wallet_ledger.idempotency_key 是**全局唯一**，
+        // 若直接存调用方给的裸 key，两个用户用同一个 key 时后者必然撞唯一约束（500）。
+        // 加 adjust:{user_id}: 前缀后，同一 key 在不同用户下互不干扰，语义与执行器的
+        // wallet:{reservation}:{event} 一致。
+        $scopedKey = 'adjust:' . $userId . ':' . $key;
+
+        $result = Db::connect('pgsql')->transaction(function () use ($userId, $amount, $scopedKey, $reason) {
             $db = Db::connect('pgsql');
 
-            // 幂等：同 key 的流水已存在 → 直接返回既有记录，不再改余额
-            $existing = $db->query('SELECT * FROM wallet_ledger WHERE idempotency_key = ?', [$key]);
+            // 幂等：同 key 的流水已存在 → 直接返回既有记录，不再改余额。
+            $existing = $db->query('SELECT * FROM wallet_ledger WHERE idempotency_key = ? AND user_id = ?::uuid', [$scopedKey, $userId]);
             if (!empty($existing)) {
                 return [
                     'wallet'     => $this->walletPayload($this->fetchWallet($userId)),
@@ -145,7 +151,7 @@ class Wallet extends BaseController
             $db->execute(
                 "INSERT INTO wallet_ledger (id, user_id, entry_type, amount_cny, balance_after, currency, reason, idempotency_key, metadata) "
                 . "VALUES (?, ?::uuid, 'adjustment', ?, ?, 'CNY', ?, ?, '{}'::jsonb)",
-                [$ledgerId, $userId, $amount, $after, $reason, $key]
+                [$ledgerId, $userId, $amount, $after, $reason, $scopedKey]
             );
 
             return [

@@ -13,12 +13,15 @@ use think\Request;
  * 隔离策略:每个测试方法 setUp 时 TRUNCATE 涉及的表(干净起点),测试自行 seed。
  * DB 不可达时整类跳过(本地能跑、CI 无 PG 不报红)。
  *
- * seed 助手覆盖 plans / user_plans / usage_ledger / quota_reservations / redeem_codes。
+ * seed 助手覆盖 plans / user_plans / usage_ledger / quota_reservations / redeem_codes /
+ * models / wallets / wallet_ledger / orders / model_prices。
  */
 abstract class IntegrationTestCase extends TestCase
 {
-    /** 每个测试前置清空的核心表(CASCADE 处理外键依赖)。 */
+    /** 每个测试前置清空的核心表(CASCADE 处理外键依赖;子表在前)。 */
     private const TRUNCATE_TABLES = [
+        'wallet_ledger', 'payment_transactions', 'orders', 'wallets',
+        'model_prices', 'models',
         'redeem_code_redemptions', 'redeem_codes',
         'quota_reservations', 'usage_ledger',
         'user_plans', 'plans',
@@ -222,7 +225,103 @@ abstract class IntegrationTestCase extends TestCase
             'reserved_requests' => $o['reserved_requests'] ?? 0,
             'expires_at'        => $o['expires_at'] ?? (date('Y-m-d H:i:s', strtotime('+1 hour'))),
         ];
+        if (isset($o['user_plan_id'])) {
+            $row['user_plan_id'] = $o['user_plan_id'];
+        }
         $this->insertRow('quota_reservations', $row);
+        return $id;
+    }
+
+    /** 建一个 model(默认 active/billable)。返回 model id。 */
+    protected function seedModel(array $o = []): string
+    {
+        $id  = $o['id'] ?? $this->uuid();
+        $row = [
+            'id'           => $id,
+            'name'         => $o['name'] ?? ('model-' . substr($id, 0, 8)),
+            'capabilities' => $o['capabilities'] ?? '{text}',
+            'status'       => $o['status'] ?? 'active',
+            'billing_mode' => $o['billing_mode'] ?? 'billable',
+        ];
+        $this->insertRow('models', $row);
+        return $id;
+    }
+
+    /** 建一个 wallets 行(余额/冻结)。返回 user id。 */
+    protected function seedWallet(string $userId, $balance = 0, $frozen = 0): string
+    {
+        $this->seedUser($userId);
+        $this->insertRow('wallets', [
+            'user_id'     => $userId,
+            'balance_cny' => $balance,
+            'frozen_cny'  => $frozen,
+            'version'     => 0,
+            'currency'    => 'CNY',
+        ]);
+        return $userId;
+    }
+
+    /** 写一条 wallet_ledger(默认 adjustment)。返回 ledger id。 */
+    protected function seedWalletLedger(string $userId, array $o = []): string
+    {
+        $this->seedUser($userId);
+        $id  = $o['id'] ?? $this->uuid();
+        $row = [
+            'id'            => $id,
+            'user_id'       => $userId,
+            'entry_type'    => $o['entry_type'] ?? 'adjustment',
+            'amount_cny'    => $o['amount_cny'] ?? 0,
+            'balance_after' => $o['balance_after'] ?? 0,
+            'currency'      => $o['currency'] ?? 'CNY',
+            'reason'        => $o['reason'] ?? 'test',
+        ];
+        foreach (['order_id', 'request_log_id', 'idempotency_key', 'created_at'] as $col) {
+            if (isset($o[$col])) {
+                $row[$col] = $o[$col];
+            }
+        }
+        $this->insertRow('wallet_ledger', $row);
+        return $id;
+    }
+
+    /** 建一条 orders(默认 kind=topup/method=manual/status=paid)。返回 order id。 */
+    protected function seedOrder(string $userId, array $o = []): string
+    {
+        $this->seedUser($userId);
+        $id  = $o['id'] ?? $this->uuid();
+        $row = [
+            'id'         => $id,
+            'order_no'   => $o['order_no'] ?? ('OD' . strtoupper(bin2hex(random_bytes(6)))),
+            'user_id'    => $userId,
+            'kind'       => $o['kind'] ?? 'topup',
+            'amount_cny' => $o['amount_cny'] ?? 100,
+            'bonus_cny'  => $o['bonus_cny'] ?? 0,
+            'method'     => $o['method'] ?? 'manual',
+            'status'     => $o['status'] ?? 'paid',
+        ];
+        foreach (['plan_id', 'redeem_code_id', 'idempotency_key', 'created_at', 'paid_at', 'expires_at'] as $col) {
+            if (isset($o[$col])) {
+                $row[$col] = $o[$col];
+            }
+        }
+        $this->insertRow('orders', $row);
+        return $id;
+    }
+
+    /** 建一条 model_prices(plan_id=null 为平台默认价)。返回 model_price id。 */
+    protected function seedModelPrice(?string $planId, string $modelId, $inputPrice = null, $outputPrice = null, string $status = 'active'): string
+    {
+        $id  = $this->uuid();
+        $row = [
+            'id'                     => $id,
+            'plan_id'                => $planId,
+            'model_id'               => $modelId,
+            'input_price_per_token'  => $inputPrice,
+            'output_price_per_token' => $outputPrice,
+            'currency'               => 'CNY',
+            'status'                 => $status,
+        ];
+        $this->insertRow('model_prices', $row);
         return $id;
     }
 

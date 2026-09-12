@@ -39,6 +39,34 @@ jobs:
   backend:
     name: Backend (composer + tests)
     runs-on: ubuntu-latest
+    # 集成测试（tests/integration）在 PG 不可达时会整体跳过，于是配额/钱包/定价 SQL 行为
+    # 在 CI 上零执行。这里起真实 PG，并用 executor 仓库（迁移唯一源）的 migrations 建 schema。
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: tokenmp_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d tokenmp_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+    env:
+      # executor 为私有仓库：checkout 需要具备读权限的 PAT（见 README / 仓库 Secrets）。
+      EXECUTOR_MIGRATIONS_REPO: tokenmp/executor
+      # 本次计费重设计的迁移（000076-000082）位于 executor 的该分支；合并到 main 后改为 main。
+      EXECUTOR_MIGRATIONS_REF: feat/billing-redesign-v2
+      DATABASE_URL: postgres://postgres:postgres@127.0.0.1:5432/tokenmp_test?sslmode=disable
+      # tests/bootstrap.php 读的是 TEST_PG_* 环境变量
+      TEST_PG_HOST: 127.0.0.1
+      TEST_PG_PORT: 5432
+      TEST_PG_DB: tokenmp_test
+      TEST_PG_USER: postgres
+      TEST_PG_PASS: postgres
     steps:
       - uses: actions/checkout@v4
 
@@ -56,5 +84,37 @@ jobs:
       - name: Smoke test (app boots & routes resolve)
         run: php think route:list
 
+      # 迁移唯一源在 executor 仓库（私有），额外 checkout 到 ./executor。
+      # 需要 Secret EXECUTOR_READ_TOKEN（对 tokenmp/executor 具备 contents:read 的 PAT）。
+      # 未配置时（含 fork PR）降级为「跳过集成套件 + warning」，不让 CI 变红。
+      - name: Detect executor read token
+        id: executor_token
+        env:
+          HAS_EXECUTOR_TOKEN: ${{ secrets.EXECUTOR_READ_TOKEN != '' }}
+        run: echo "available=$HAS_EXECUTOR_TOKEN" >> "$GITHUB_OUTPUT"
+
+      - name: Checkout executor migrations (private repo)
+        if: steps.executor_token.outputs.available == 'true'
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ env.EXECUTOR_MIGRATIONS_REPO }}
+          ref: ${{ env.EXECUTOR_MIGRATIONS_REF }}
+          token: ${{ secrets.EXECUTOR_READ_TOKEN }}
+          path: executor
+
+      - name: Apply migrations (executor scripts/migrate.sh)
+        if: steps.executor_token.outputs.available == 'true'
+        run: bash executor/scripts/migrate.sh
+
       - name: PHPUnit (unit suite)
         run: composer test:unit
+
+      - name: PHPUnit (integration suite, real PG)
+        if: steps.executor_token.outputs.available == 'true'
+        run: composer test:integration
+
+      - name: Integration suite skipped (no EXECUTOR_READ_TOKEN)
+        if: steps.executor_token.outputs.available != 'true'
+        run: |
+          echo "::warning::EXECUTOR_READ_TOKEN 未配置 —— 集成测试（配额/钱包/定价的 SQL 行为）未在 CI 运行。"
+          echo "配置对 tokenmp/executor 具备 contents:read 的 PAT 后即可让该门禁生效。"

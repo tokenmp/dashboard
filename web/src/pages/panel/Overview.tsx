@@ -212,21 +212,33 @@ function EmptyPlanCard({ type }: { type: CorePlanType }) {
 function QuotaStatCard({ q }: { q: QuotaItem }) {
   const name = q.planName || planLabel(q.billingPlan);
   if (q.mode === 'window') {
-    // 首个窗口为主额度（周期/月 或 周），次窗口作 hint
+    // 展示口径 = 放行口径（设计 §8）：优先用后端给的 availableRemaining
+    // （四维窗口剩余的最小值，且已减在途预扣），它才是网关真正会放行的额度。
+    // 退化路径才用 windows[0]——旧行为在短窗耗尽时会夸大剩余（实测 16～22 倍）。
     const main = q.windows?.[0];
     const sub = q.windows?.[1];
-    if (!main) {
+    const hasAvailable = typeof q.availableRemaining === 'number';
+    if (!main && !hasAvailable) {
       return <StatCard label={name} value="—" icon={<Gauge className="h-4 w-4" />} />;
     }
-    const limit = main.limit;
-    const capped = limit != null;
-    const remaining = capped ? Math.max(0, limit - main.used) : 0;
+    const capped = hasAvailable || main?.limit != null;
+    const remaining = hasAvailable
+      ? Math.max(0, q.availableRemaining as number)
+      : Math.max(0, (main?.limit ?? 0) - (main?.used ?? 0));
+    const bindingLabel = q.bindingWindow
+      ? q.windows?.find((w) => w.key === q.bindingWindow)?.label
+      : undefined;
+    const headline = hasAvailable
+      ? `${bindingLabel ?? '额度'}剩余`
+      : main?.limit != null
+        ? `${main.label}剩余`
+        : (main?.label ?? '额度');
     const subStr = sub
       ? `${sub.label} 已用 ${formatNumber(sub.used)}${sub.limit ? ` / ${formatNumber(sub.limit)}` : ' · 不限'}`
       : undefined;
     return (
       <StatCard
-        label={`${name} · ${capped ? `${main.label}剩余` : main.label}`}
+        label={`${name} · ${capped ? headline : (main?.label ?? '额度')}`}
         value={capped ? formatNumber(remaining) : '不限'}
         hint={subStr}
         icon={<Gauge className="h-4 w-4" />}
