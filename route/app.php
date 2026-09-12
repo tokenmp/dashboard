@@ -159,6 +159,10 @@ Route::group('api/v1', function () {
                     Route::post(':id/reset-password', 'dashboard/User/resetPassword')->pattern(['id' => '[\w\-]+']);
                     Route::get(':id/notifications', 'dashboard/Notification/forUser')->pattern(['id' => '[\w\-]+']);
 
+                    // 用户钱包：余额/流水查询 + 管理员手工调账
+                    Route::get(':userId/wallet', 'dashboard/Wallet/show')->pattern(['userId' => '[\w\-]+']);
+                    Route::post(':userId/wallet/adjust', 'dashboard/Wallet/adjust')->pattern(['userId' => '[\w\-]+']);
+
                     // 用户套餐：发放 / 续期 / 停用（planId = user_plan.id）
                     Route::post(':userId/plans', 'dashboard/UserPlan/grant')->pattern(['userId' => '[\w\-]+']);
                     Route::post(':userId/plans/:planId/renew', 'dashboard/UserPlan/renew')->pattern(['userId' => '[\w\-]+', 'planId' => '[\w\-]+']);
@@ -172,6 +176,22 @@ Route::group('api/v1', function () {
                     Route::post('', 'dashboard/Plan/create');
                     Route::put(':id/status', 'dashboard/Plan/updateStatus')->pattern(['id' => '[\w\-]+']);
                     Route::put(':id', 'dashboard/Plan/update')->pattern(['id' => '[\w\-]+']);
+                });
+
+                // 定价矩阵（model_prices）：plan_id 为空 = 平台默认价（L2）
+                Route::group('model-prices', function () {
+                    Route::get('', 'dashboard/ModelPrice/list');
+                    Route::post('', 'dashboard/ModelPrice/create');
+                    Route::put(':id', 'dashboard/ModelPrice/update')->pattern(['id' => '[\w\-]+']);
+                    Route::post(':id/status', 'dashboard/ModelPrice/updateStatus')->pattern(['id' => '[\w\-]+']);
+                    Route::post(':id/delete', 'dashboard/ModelPrice/delete')->pattern(['id' => '[\w\-]+']);
+                });
+
+                // 订单：列表 / 手工建单（method=manual，直接入账）/ 退款
+                Route::group('orders', function () {
+                    Route::get('', 'dashboard/Order/list');
+                    Route::post('', 'dashboard/Order/create');
+                    Route::post(':id/refund', 'dashboard/Order/refund')->pattern(['id' => '[\w\-]+']);
                 });
 
                 // 上游与模型

@@ -61,6 +61,10 @@ class QuotaService
         if (($i = $this->imageItem($userId, $plans['image'] ?? null, $reserved['image']['tokens'] ?? 0)) !== null) {
             $items[] = $i;
         }
+        // 按量轨：钱包余额（元）
+        if (($w = $this->walletItem($userId)) !== null) {
+            $items[] = $w;
+        }
         return $items;
     }
 
@@ -463,6 +467,33 @@ class QuotaService
             $windows[] = ['key' => 'month', 'label' => $isPermanent ? '总量' : $label, 'limit' => null, 'used' => max(0, $isPermanent ? $totalUsed : $monthUsed), 'usedRequests' => $isPermanent ? $totalActual : $monthActual];
         }
 
+        // 展示口径 = 放行口径（设计文档 §8）：执行器取四维窗口剩余的**最小值**放行，
+        // 面板不得默认取 windows[0]（会在短窗耗尽时夸大剩余）。
+        // 仅统计有上限（limit > 0）的窗口；全部不限时无约束，两者均为 null。
+        // bindingWindow 指出当前“约束窗”的 key（并列时更短的窗优先：h5 → week → month → total）。
+        $remaining = [
+            'h5'    => $h5Limit > 0 ? max(0.0, (float) $h5Limit - $h5Used) : null,
+            'week'  => $weekLimit > 0 ? max(0.0, (float) $weekLimit - $weekUsed) : null,
+            'month' => (!$isPermanent && $cycleLimit !== null && $cycleLimit > 0) ? max(0.0, (float) $cycleLimit - max(0.0, $monthUsed)) : null,
+            'total' => ($totalLimit !== null && $totalLimit > 0) ? max(0.0, (float) $totalLimit - $totalUsed) : null,
+        ];
+        $availableRemaining = null;
+        $bindingWindow      = null;
+        foreach (['h5', 'week', 'month', 'total'] as $key) {
+            if ($remaining[$key] === null) {
+                continue;
+            }
+            if ($availableRemaining === null || $remaining[$key] < $availableRemaining) {
+                $availableRemaining = $remaining[$key];
+                $bindingWindow      = $key;
+            }
+        }
+
+        // 与执行器放行口径完全对齐：执行器是 LEAST(四维剩余) - 在途预留。
+        if ($availableRemaining !== null) {
+            $availableRemaining = max(0.0, $availableRemaining - (float) $reserved);
+        }
+
         return [
             'billingPlan'  => 'coding',
             'planName'     => $plan['name'],
@@ -471,6 +502,9 @@ class QuotaService
             'billingModel' => $billingModel,
             'total'        => null, // 不再单独渲染「总额」行，由各窗口自行展示已用/剩余
             'windows'      => $windows,
+            // 新增：四维窗口剩余最小值（= 执行器放行口径）与当前约束窗 key；既有字段不变
+            'availableRemaining' => $availableRemaining,
+            'bindingWindow'      => $bindingWindow,
             'reserved'     => $reserved,
         ];
     }
@@ -549,6 +583,40 @@ class QuotaService
             'used'        => $used,
             'reserved'    => $reserved,
             'available'   => $available,
+        ];
+    }
+
+    /**
+     * wallet（按量轨）：人民币元钱包。
+     *
+     * balance_cny = 可用余额；frozen_cny = 预扣冻结（请求进行中）；
+     * 总额 = 两者之和。与执行器 wallets 表同口径。
+     */
+    private function walletItem(string $userId): ?array
+    {
+        // 迁移 000077 建表；若 dashboard 先于迁移上线，此处降级为「无钱包」而不是 500
+        $exists = Db::connect('pgsql')->query("select to_regclass('public.wallets') as t")[0]['t'] ?? null;
+        if ($exists === null) {
+            return null;
+        }
+        $rows = Db::connect('pgsql')->query(
+            'select balance_cny, frozen_cny from wallets where user_id = ?::uuid',
+            [$userId]
+        );
+        if (empty($rows)) {
+            return null; // 无钱包不展示（从未充值也不会有预扣）
+        }
+        $balance = (float) $rows[0]['balance_cny'];
+        $frozen  = (float) $rows[0]['frozen_cny'];
+        return [
+            'billingPlan' => 'wallet',
+            'planName'    => '钱包',
+            'unit'        => 'CNY',
+            'mode'        => 'balance',
+            'balance'     => $balance,
+            'reserved'    => $frozen,
+            'available'   => $balance,
+            'total'       => $balance + $frozen,
         ];
     }
 
