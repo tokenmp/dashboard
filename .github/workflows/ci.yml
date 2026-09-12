@@ -3,8 +3,8 @@ name: CI
 on:
   push:
     branches: [main]
+  # 不限制 base 分支：stacked PR（如 test/* → feat/*）也要跑 CI
   pull_request:
-    branches: [main]
 
 # 同一分支新推送取消旧的运行，节省额度
 concurrency:
