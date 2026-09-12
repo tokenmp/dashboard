@@ -646,6 +646,40 @@ ReservationsResolved      每个 reserved 最终 done 或 released（活性）
 
 ---
 
+## 12.1 实施记录（E3 / E4 已落地）
+
+本节记录与上文设计的**实际取舍差异**，避免后来者按设计逐条对照时误判。
+
+### 钱包轨（E3）
+
+| 设计条目 | 落地做法 | 理由 |
+|---|---|---|
+| §4.3 金额 × 倍率 | **暂未接入钱包轨**，仅 `用量 × 快照单价` | 预留估算拿不到路由维度的倍率（路由尚未选定），若只在结算乘倍率会造成系统性「预留不足 → 触发坏账」。倍率接入需同时改预留估算口径，单开一轮。 |
+| wallet 插入 coding/token 回退链 | **只做 opt-in**：`users.preferred_billing='wallet'` 才有 `[wallet, coding]` | 反向插入会让任何用户耗完套餐就被自动切到「从人民币余额扣钱」，属非预期扣费。 |
+| 灰度开关 `system_config.wallet_billing_enabled` | **未加**，以 per-user opt-in 代替 | 止损只需一条 `UPDATE users SET preferred_billing='coding'`，不需要回滚镜像。 |
+| §3.2 复核不足的处理 | **有界坏账**：收满「可用余额 + 本预留冻结额」，余额落到 0 且永不为负，差额在 `wallet_ledger.reason` 留 `capped` | 预留发生在上游调用之前、结算发生在服务完成之后，此时「拒绝」= 用户白用；直接静默 release 更是免单。设计原文只写了「不得为负」，此处补上「不得免单」。 |
+| §3.1 价格在 reserve 时快照 | 已落地：`quota_reservations` 新增 5 个价格列（迁移 000083），预留时写死，结算只折算不再查 `model_prices` | 中途改价/矩阵下架不会让同一请求的预扣与实扣用两套单价。 |
+
+**登录口径**：钱包轨 `billing_plan='wallet'`、`billing_source='wallet'`；
+`request_logs.billing_amount_cny` 必须非 0（为 0 即代表金额未接线 = 免费通道）。
+
+### 市场分账（E4）
+
+设计 §7.6 的三跳现已全部落地（`executor/internal/postgres/marketplace_payout.go`）：
+
+| 环节 | 实现 | 幂等保证 |
+|---|---|---|
+| 分账 | 请求成功 → `marketplace_request_settlements(pending)` + `supplier_reward_pending`（`available_at = +7d`） | `UNIQUE(request_log_id)` |
+| 放款 | `available_at` 到期后 pending → available，写 `supplier_reward_available`，settlement 置 `available` + `settled_at` | `idempotency_key='supplier_reward_available:<settlement_id>'`（TLA+ `SettlementOnce`） |
+| 提现 | 写 `withdrawal` 负数流水，锁内校验余额 | 幂等键先查后写 + `pg_advisory_xact_lock(user)`（TLA+ `NoNegativeAvail`） |
+
+触发方式：执行器内部端点 `POST /internal/v1/executor/runtime/payout`（适合挂定时任务）、
+`POST /internal/v1/executor/marketplace/withdrawal`、`GET /internal/v1/executor/marketplace/balance`。
+**控制面（dashboard）的提现页面 / 审批流尚未接**，当前仅供运维与自动化调用。
+
+仍待办：`supplier_reward_reversal`（争议回滚，需定义「只回滚未提现部分」）、
+`platform_fee` 独立流水（目前只是 settlement 上的一个数）。
+
 ## 13. 附：术语
 
 | 词 | 含义 |
