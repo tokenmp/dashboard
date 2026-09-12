@@ -9,7 +9,7 @@ export interface PageResult<T> {
 }
 
 /**
- * 分页/筛选查询参数（统一约定，见 docs/dashboard-api-plan.md §2.2）
+ * 分页/筛选查询参数（统一约定，见 docs/backend-conventions.md §2）
  */
 export interface PageQuery {
   page?: number;

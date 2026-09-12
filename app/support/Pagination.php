@@ -9,7 +9,7 @@ use think\Request;
 /**
  * 分页与查询参数解析工具
  *
- * 统一约定（见 docs/dashboard-api-plan.md §2.2）：
+ * 统一约定（见 docs/backend-conventions.md §2）：
  * - 入参：page（默认 1）、size（默认 20，上限 100）、sort（如 -created_at）、from / to（ISO 8601）
  * - 分页响应：data => { list, page, size, total }
  *
