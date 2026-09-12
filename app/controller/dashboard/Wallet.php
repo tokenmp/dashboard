@@ -94,8 +94,9 @@ class Wallet extends BaseController
         $result = Db::connect('pgsql')->transaction(function () use ($userId, $amount, $key, $reason) {
             $db = Db::connect('pgsql');
 
-            // 幂等：同 key 的流水已存在 → 直接返回既有记录，不再改余额
-            $existing = $db->query('SELECT * FROM wallet_ledger WHERE idempotency_key = ?', [$key]);
+            // 幂等：同 key 的流水已存在 → 直接返回既有记录，不再改余额。
+            // 必须限定 user_id：否则同 key 的他人流水会被当成本次调账结果返回（串账）。
+            $existing = $db->query('SELECT * FROM wallet_ledger WHERE idempotency_key = ? AND user_id = ?::uuid', [$key, $userId]);
             if (!empty($existing)) {
                 return [
                     'wallet'     => $this->walletPayload($this->fetchWallet($userId)),

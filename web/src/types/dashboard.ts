@@ -77,6 +77,14 @@ export interface QuotaItem {
   used?: number;
   /** capped / balance 模式：可用 / 剩余 */
   available?: number;
+  /**
+   * 四维窗口剩余的最小值（已减在途预扣）= 网关实际放行口径。
+   * 仅 window 模式且套餐至少有一个维度设了上限时存在；全部不限时为 null。
+   * 展示应以它为准，不要用 windows[0] 的剩余（历史上会夸大 16～22 倍）。
+   */
+  availableRemaining?: number | null;
+  /** 当前约束窗的 key（h5/week/month/total），与 availableRemaining 配对 */
+  bindingWindow?: string | null;
   /** 窗口重置倒计时（秒）；仅 window 模式 */
   chargedIn?: number;
 }

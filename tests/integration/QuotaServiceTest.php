@@ -158,6 +158,99 @@ final class QuotaServiceTest extends IntegrationTestCase
         $this->assertSame(3, $monthWin['usedRequests']);     // 实际 3 个请求
     }
 
+    /* -------------------- coding: availableRemaining 口径回归 -------------------- */
+
+    /**
+     * 历史 bug 守卫：availableRemaining 必须取「四维窗口剩余的最小值」（对齐执行器放行口径），
+     * 而不是 windows[0]（周期窗）的剩余——否则短窗耗尽时面板会夸大剩余 16~22 倍。
+     */
+    public function testCodingAvailableRemainingBindsToShortestWindow(): void
+    {
+        $user = $this->uuid();
+        // 周期限额极大、近 5 小时限额很小 → 约束窗应为 h5
+        $plan = $this->seedPlan(['plan_type' => 'coding', 'cycle_limit' => 10000, 'rolling_5h_limit' => 10, 'cycle_days' => 30]);
+        $binding = $this->seedUserPlan($user, $plan, ['plan_type' => 'coding', 'activated_at' => date('Y-m-d H:i:s', strtotime('-10 days'))]);
+        // 近 5 小时内扣 4 次 → h5 剩余 6、周期剩余 9996
+        $this->seedLedger($user, ['ledger_type' => 'charge', 'billing_plan' => 'coding', 'request_delta' => -4, 'user_plan_id' => $binding]);
+
+        $item = $this->findItem($this->service->summary($user), 'coding');
+
+        $this->assertNotNull($item);
+        $this->assertSame('h5', $item['bindingWindow']);
+        $this->assertSame(6.0, $item['availableRemaining']);
+
+        // windows[0] 是周期窗（夸大剩余）：二者必须不同，防止退回旧 bug
+        $this->assertSame('month', $item['windows'][0]['key']);
+        $cycleRemaining = (float) $item['windows'][0]['limit'] - (float) $item['windows'][0]['used'];
+        $this->assertNotSame($cycleRemaining, $item['availableRemaining']);
+        $this->assertSame(9996.0, $cycleRemaining);
+    }
+
+    /** availableRemaining 还要减去在途预留（与执行器 LEAST(剩余) - reserved 对齐）。 */
+    public function testCodingAvailableRemainingSubtractsInFlightReservation(): void
+    {
+        $user = $this->uuid();
+        $plan = $this->seedPlan(['plan_type' => 'coding', 'cycle_limit' => 10000, 'rolling_5h_limit' => 10, 'cycle_days' => 30]);
+        $binding = $this->seedUserPlan($user, $plan, ['plan_type' => 'coding', 'activated_at' => date('Y-m-d H:i:s', strtotime('-10 days'))]);
+        $this->seedLedger($user, ['ledger_type' => 'charge', 'billing_plan' => 'coding', 'request_delta' => -4, 'user_plan_id' => $binding]);
+        // 在途预留必须带 user_plan_id 才计入逐套餐口径
+        $this->seedReservation($user, ['billing_plan' => 'coding', 'reserved_requests' => 2, 'user_plan_id' => $binding]);
+
+        $item = $this->findItem($this->service->summary($user), 'coding');
+
+        $this->assertNotNull($item);
+        $this->assertSame('h5', $item['bindingWindow']);
+        $this->assertSame(2, $item['reserved']);
+        $this->assertSame(4.0, $item['availableRemaining'], 'h5 剩余 6 - 预留 2 = 4');
+    }
+
+    /** 剩余并列时取更短的窗：h5 → week → month → total。 */
+    public function testCodingAvailableRemainingTieBreaksToShorterWindow(): void
+    {
+        // 周与周期限额相等、无 5h 限额 → 约束窗应为 week（比 month 短）
+        $user = $this->uuid();
+        $plan = $this->seedPlan(['plan_type' => 'coding', 'cycle_limit' => 100, 'weekly_limit' => 100, 'cycle_days' => 30]);
+        $this->seedUserPlan($user, $plan, ['plan_type' => 'coding', 'activated_at' => date('Y-m-d H:i:s', strtotime('-10 days'))]);
+
+        $item = $this->findItem($this->service->summary($user), 'coding');
+        $this->assertNotNull($item);
+        $this->assertSame('week', $item['bindingWindow']);
+        $this->assertSame(100.0, $item['availableRemaining']);
+
+        // 三维并列时取最短的 h5
+        $user2 = $this->uuid();
+        $plan2 = $this->seedPlan(['plan_type' => 'coding', 'cycle_limit' => 100, 'weekly_limit' => 100, 'rolling_5h_limit' => 100, 'cycle_days' => 30]);
+        $this->seedUserPlan($user2, $plan2, ['plan_type' => 'coding', 'activated_at' => date('Y-m-d H:i:s', strtotime('-10 days'))]);
+
+        $item2 = $this->findItem($this->service->summary($user2), 'coding');
+        $this->assertNotNull($item2);
+        $this->assertSame('h5', $item2['bindingWindow']);
+    }
+
+    /* ----------------------------- wallet 钱包 ----------------------------- */
+
+    public function testWalletItemExposesBalanceAndFrozen(): void
+    {
+        $user = $this->uuid();
+        $this->seedWallet($user, 50, 10);
+
+        $item = $this->findItem($this->service->summary($user), 'wallet');
+
+        $this->assertNotNull($item);
+        $this->assertSame('wallet', $item['billingPlan']);
+        $this->assertSame('CNY', $item['unit']);
+        $this->assertSame('balance', $item['mode']);
+        $this->assertSame(50.0, $item['available']);
+        $this->assertSame(50.0, $item['balance']);
+        $this->assertSame(10.0, $item['reserved']);
+        $this->assertSame(60.0, $item['total']);
+    }
+
+    public function testWalletAbsentForUserWithoutWalletRow(): void
+    {
+        $this->assertNull($this->findItem($this->service->summary($this->uuid()), 'wallet'));
+    }
+
     /* ----------------------------- legacyUsage ----------------------------- */
 
     public function testLegacyUsageFlattensByBillingPlan(): void

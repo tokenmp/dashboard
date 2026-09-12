@@ -173,7 +173,16 @@ final class RedeemServiceTest extends IntegrationTestCase
         $this->seedRedeemCode($code, ['coding_plan_id' => $plan, 'duration_days' => 30]);
 
         $result = $this->service->redeem($user, $code);
-        $this->assertSame('plan_renew', $result['redemption']['coding_plan_id'] ? 'plan_renew' : '');
+        // 续期复用同一条 user_plan 行：返回的 coding_user_plan_id 必须指向既有的 $upId
+        $this->assertSame($upId, $result['redemption']['coding_user_plan_id']);
+        $this->assertSame($plan, $result['redemption']['coding_plan_id']);
+        // 事务内写入的发放流水类型为 plan_renew
+        $grant = $this->rows(
+            "SELECT ledger_type FROM usage_ledger WHERE user_id = ? AND billing_plan = 'coding'",
+            [$user]
+        );
+        $this->assertCount(1, $grant);
+        $this->assertSame('plan_renew', $grant[0]['ledger_type']);
 
         // 续期:仍是同一条 user_plan,active,且过期时间被延后(原 +5d → 约 +35d)
         $rows = $this->rows("SELECT id, status, expires_at FROM user_plans WHERE user_id = ? AND plan_type = 'coding'", [$user]);
