@@ -106,6 +106,13 @@ PHP PDO 返回 `text[]` / `integer[]` 时会得到 **`{a,b}` 形式的字符串*
 - KPI 与趋势一律以**数据库会话时区**为准。
 - 5h / 周 / 周期窗口的算法要**与 executor 对齐**（`internal/postgres/quota*.go`、`plan_strategy.go`）。
 
+> ⚠️ 库名是 `tokenmp`。`tokenmp_prod` 是已废弃的「蓝栈」旧库，正在下线 ——
+> `.example.env` 里的模板值曾经指向它，已更正。
+
+> ⚠️ 连接驱动有两个名字：`DB_DRIVER` 决定**默认连接**（应为 `pgsql`），`DB_TYPE` 是
+> `mysql` 连接自己的 type。两者并存容易搞混；`.example.env` 已把 `DB_DRIVER` 显式写成 `pgsql`，
+> 防止漏网的 `Db::` 查询打到 MySQL。
+
 > ⚠️ 面板配额展示与 executor 的放行口径在「周期套餐套住 5h/周窗口」时存在**已知差异**
 > （`app/service/QuotaService.php` 内有注释说明）。改配额展示前先确认是否要一并修口径。
 
